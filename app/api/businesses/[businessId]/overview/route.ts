@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseServer";
 
 type TierRow = {
@@ -55,11 +56,15 @@ function computeCurrentAndNextTier(tiers: TierRow[], visitCount: number) {
   return { currentTier, nextTier, progressToNextPercent };
 }
 
+/**
+ * Next.js 16 (as deployed on Vercel) types route handler context.params as a Promise.
+ * So we accept `params` as a Promise and await it.
+ */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { businessId: string } }
-) {
-  const { businessId } = params;
+  context: { params: Promise<{ businessId: string }> }
+): Promise<Response> {
+  const { businessId } = await context.params;
 
   // 1) Load the business basic info
   const { data: business, error: businessError } = await supabase
@@ -71,21 +76,16 @@ export async function GET(
     .single();
 
   if (businessError || !business) {
-    return NextResponse.json(
-      { error: "Business not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Business not found" }, { status: 404 });
   }
 
-  // 2) Count user visits
+  // 2) Count user visits in the window (demo user for now)
   const userId = "demo-user-123";
   const windowDays = 30;
   const now = new Date();
-  const fromDate = new Date(
-    now.getTime() - windowDays * 24 * 60 * 60 * 1000
-  )
+  const fromDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000)
     .toISOString()
-    .slice(0, 10);
+    .slice(0, 10); // YYYY-MM-DD
 
   const { count: visitCount, error: visitError } = await supabase
     .from("receipts")
@@ -95,15 +95,12 @@ export async function GET(
     .gte("visit_date", fromDate);
 
   if (visitError) {
-    return NextResponse.json(
-      { error: "Failed to load visits" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to load visits" }, { status: 500 });
   }
 
   const visits = visitCount ?? 0;
 
-  // 3) Load payout tiers
+  // 3) Load all payout tiers for this business
   const { data: tiers, error: tiersError } = await supabase
     .from("business_payout_tiers")
     .select("tier_index, min_visits, max_visits, percent_bps, label")
