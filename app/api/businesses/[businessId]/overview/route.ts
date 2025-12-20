@@ -1,5 +1,4 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseServer";
 
 type TierRow = {
@@ -56,15 +55,11 @@ function computeCurrentAndNextTier(tiers: TierRow[], visitCount: number) {
   return { currentTier, nextTier, progressToNextPercent };
 }
 
-/**
- * Next.js 15/16 Route Handlers type `params` as async (Promise) in RouteContext.
- * So we await ctx.params to satisfy the build-time types on Vercel.
- */
 export async function GET(
   _req: NextRequest,
-  ctx: { params: Promise<{ businessId: string }> }
+  { params }: { params: { businessId: string } }
 ) {
-  const { businessId } = await ctx.params;
+  const { businessId } = params;
 
   // 1) Load the business basic info
   const { data: business, error: businessError } = await supabase
@@ -76,18 +71,21 @@ export async function GET(
     .single();
 
   if (businessError || !business) {
-    console.error("overview: business error", businessError);
-    return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Business not found" },
+      { status: 404 }
+    );
   }
 
-  // 2) Count user visits in the window
-  // (for now we’re still using the demo user)
+  // 2) Count user visits
   const userId = "demo-user-123";
   const windowDays = 30;
   const now = new Date();
-  const fromDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000)
+  const fromDate = new Date(
+    now.getTime() - windowDays * 24 * 60 * 60 * 1000
+  )
     .toISOString()
-    .slice(0, 10); // YYYY-MM-DD
+    .slice(0, 10);
 
   const { count: visitCount, error: visitError } = await supabase
     .from("receipts")
@@ -97,13 +95,15 @@ export async function GET(
     .gte("visit_date", fromDate);
 
   if (visitError) {
-    console.error("overview: visit count error", visitError);
-    return NextResponse.json({ error: "Failed to load visits" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load visits" },
+      { status: 500 }
+    );
   }
 
   const visits = visitCount ?? 0;
 
-  // 3) Load all payout tiers for this business
+  // 3) Load payout tiers
   const { data: tiers, error: tiersError } = await supabase
     .from("business_payout_tiers")
     .select("tier_index, min_visits, max_visits, percent_bps, label")
@@ -111,7 +111,6 @@ export async function GET(
     .order("tier_index", { ascending: true });
 
   if (tiersError) {
-    console.error("overview: tiers error", tiersError);
     return NextResponse.json(
       { error: "Failed to load payout tiers" },
       { status: 500 }
