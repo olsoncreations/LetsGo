@@ -633,11 +633,11 @@ const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 
 {GMAPS_KEY ? (
-  <Script
-    src={`https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=places&v=weekly&loading=async`}
-    strategy="afterInteractive"
-    onLoad={() => setMapsLoaded(true)}
-  />
+<Script
+  src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&v=weekly`}
+  strategy="afterInteractive"
+  onLoad={() => setMapsLoaded(true)}
+/>
 ) : (
   <div className="error-banner" role="alert">
     <strong>Missing Google Maps API Key:</strong> NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set for this build.
@@ -1040,17 +1040,14 @@ useEffect(() => {
 
   const g = (window as any).google;
 
-  if (!g?.maps?.places?.Autocomplete) {
-    console.warn("❌ Google Places still NOT available (unexpected)");
-    return;
-  }
+  // Only proceed when the Places namespace exists (no console spam).
+  if (!g?.maps?.places) return;
 
   const autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
     types: ["address"],
     fields: ["address_components", "formatted_address"],
   });
 
-  // ✅ Allows picking long_name vs short_name (we need short for state)
   const getComponent = (
     components: any[],
     type: string,
@@ -1072,7 +1069,6 @@ useEffect(() => {
       getComponent(comps, "sublocality") ||
       getComponent(comps, "postal_town");
 
-    // ✅ THIS is the fix: use short_name so it becomes "NE"
     const state = getComponent(comps, "administrative_area_level_1", "short_name");
     const zip = getComponent(comps, "postal_code");
 
@@ -1085,7 +1081,7 @@ useEffect(() => {
       ...p,
       streetAddress,
       city: city || p.city,
-      state: state || p.state, // now matches your dropdown values
+      state: state || p.state,
       zip: zip || p.zip,
     }));
   });
