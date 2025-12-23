@@ -468,6 +468,8 @@ export default function PartnerOnboardingPage() {
   const [data, setData] = useState<OnboardingData>(initialData());
   const [error, setError] = useState<string>("");
   const [completed, setCompleted] = useState<boolean>(false);
+const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 
   const [mapsLoaded, setMapsLoaded] = useState(false);
 
@@ -629,11 +631,18 @@ export default function PartnerOnboardingPage() {
   return (
     <div className="container">
 
-<Script
-  src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&v=weekly`}
-  strategy="afterInteractive"
-  onLoad={() => setMapsLoaded(true)}
-/>
+
+{GMAPS_KEY ? (
+  <Script
+    src={`https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=places&v=weekly&loading=async`}
+    strategy="afterInteractive"
+    onLoad={() => setMapsLoaded(true)}
+  />
+) : (
+  <div className="error-banner" role="alert">
+    <strong>Missing Google Maps API Key:</strong> NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set for this build.
+  </div>
+)}
       <Header />
       <Progress step={step} />
 
@@ -1031,7 +1040,6 @@ useEffect(() => {
 
   const g = (window as any).google;
 
-  // With `&libraries=places`, this is the object we expect.
   if (!g?.maps?.places?.Autocomplete) {
     console.warn("❌ Google Places still NOT available (unexpected)");
     return;
@@ -1042,9 +1050,14 @@ useEffect(() => {
     fields: ["address_components", "formatted_address"],
   });
 
-  const getComponent = (components: any[], type: string) => {
+  // ✅ Allows picking long_name vs short_name (we need short for state)
+  const getComponent = (
+    components: any[],
+    type: string,
+    which: "long_name" | "short_name" = "long_name"
+  ) => {
     const hit = components?.find((c: any) => c.types?.includes(type));
-    return hit?.long_name ?? "";
+    return hit?.[which] ?? "";
   };
 
   const listener = autocomplete.addListener("place_changed", () => {
@@ -1059,7 +1072,8 @@ useEffect(() => {
       getComponent(comps, "sublocality") ||
       getComponent(comps, "postal_town");
 
-    const state = getComponent(comps, "administrative_area_level_1");
+    // ✅ THIS is the fix: use short_name so it becomes "NE"
+    const state = getComponent(comps, "administrative_area_level_1", "short_name");
     const zip = getComponent(comps, "postal_code");
 
     const streetAddress =
@@ -1071,7 +1085,7 @@ useEffect(() => {
       ...p,
       streetAddress,
       city: city || p.city,
-      state: state || p.state,
+      state: state || p.state, // now matches your dropdown values
       zip: zip || p.zip,
     }));
   });
@@ -1079,7 +1093,6 @@ useEffect(() => {
   console.log("✅ Places Autocomplete attached");
 
   return () => {
-    // remove the listener + allow GC cleanup
     if (listener?.remove) listener.remove();
   };
 }, [mapsLoaded, setData]);
@@ -1103,11 +1116,13 @@ useEffect(() => {
   ref={addressInputRef}
   value={data.streetAddress}
   onChange={(e) => setData((p) => ({ ...p, streetAddress: e.target.value }))}
+  onInput={(e) =>
+    setData((p) => ({ ...p, streetAddress: (e.target as HTMLInputElement).value }))
+  }
   placeholder="123 Main Street"
   required
   autoComplete="off"
 />
-
         </div>
 
         <div className="form-row-3">
