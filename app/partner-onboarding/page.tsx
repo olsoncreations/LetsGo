@@ -1,11 +1,17 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import "./onboarding.css";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, DEFAULT_PRESET_BPS, type VisitThreshold } from "@/lib/platformSettings";
 import type { User } from "@supabase/supabase-js";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 declare global {
   interface Window {
@@ -110,15 +116,9 @@ type OnboardingData = {
 
   // Step 5
   paymentMethod: PaymentMethod;
-  bankName: string;
-  routingNumber: string;
-  accountNumber: string;
-  accountType: "" | "checking" | "savings";
-
-  cardName: string;
-  cardNumber: string;
-  cardExp: string;
-  cardCvv: string;
+  stripeCustomerId: string;
+  stripePaymentMethodId: string;
+  stripeSetupComplete: boolean;
 
   billingSameAsBusiness: boolean;
   billingStreet: string;
@@ -225,16 +225,10 @@ function initialData(): OnboardingData {
     autoApprovalEnabled: true,
     autoApprovalMax: 50,
 
-    paymentMethod: "bank",
-    bankName: "",
-    routingNumber: "",
-    accountNumber: "",
-    accountType: "",
-
-    cardName: "",
-    cardNumber: "",
-    cardExp: "",
-    cardCvv: "",
+    paymentMethod: "card",
+    stripeCustomerId: "",
+    stripePaymentMethodId: "",
+    stripeSetupComplete: false,
 
     billingSameAsBusiness: true,
     billingStreet: "",
@@ -377,18 +371,7 @@ function validateStep(step: number, d: OnboardingData, authUserEmail?: string): 
 
   if (step === 5) {
     if (!d.authorizeCharges) return { ok: false, message: "You must authorize charges to continue." };
-
-    if (d.paymentMethod === "bank") {
-      if (!d.bankName.trim()) return { ok: false, message: "Bank Name is required." };
-      if (onlyDigits(d.routingNumber).length !== 9) return { ok: false, message: "Routing Number must be 9 digits." };
-      if (onlyDigits(d.accountNumber).length < 4) return { ok: false, message: "Account Number is required." };
-      if (!d.accountType) return { ok: false, message: "Please select an Account Type." };
-    } else {
-      if (!d.cardName.trim()) return { ok: false, message: "Name on Card is required." };
-      if (onlyDigits(d.cardNumber).length < 12) return { ok: false, message: "Card Number looks incomplete." };
-      if (!/^\d{2}\/\d{2}$/.test(d.cardExp.trim())) return { ok: false, message: "Expiration must be MM/YY." };
-      if (onlyDigits(d.cardCvv).length < 3) return { ok: false, message: "CVV is required." };
-    }
+    if (!d.stripeSetupComplete) return { ok: false, message: "Please complete payment setup before continuing." };
 
     if (!d.billingSameAsBusiness) {
       if (!d.billingStreet.trim()) return { ok: false, message: "Billing street is required." };
@@ -2075,19 +2058,56 @@ function Step5({
 }) {
   const bankActive = data.paymentMethod === "bank";
   const cardActive = data.paymentMethod === "card";
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState("");
+
+  // Fetch a SetupIntent when payment method type changes (or on first render)
+  const fetchSetupIntent = useCallback(async () => {
+    if (!data.email && !data.businessName) return;
+    setStripeLoading(true);
+    setStripeError("");
+    try {
+      const res = await fetch("/api/stripe/create-setup-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: data.businessName,
+          email: data.email,
+          paymentMethodType: bankActive ? "us_bank_account" : "card",
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setStripeError(err.error || "Failed to initialize payment setup.");
+        return;
+      }
+      const { clientSecret: cs, customerId } = await res.json();
+      setClientSecret(cs);
+      setData((p) => ({ ...p, stripeCustomerId: customerId, stripeSetupComplete: false, stripePaymentMethodId: "" }));
+    } catch {
+      setStripeError("Failed to connect to payment provider. Please try again.");
+    } finally {
+      setStripeLoading(false);
+    }
+  }, [data.email, data.businessName, bankActive, setData]);
+
+  useEffect(() => {
+    fetchSetupIntent();
+  }, [fetchSetupIntent]);
 
   return (
     <form onSubmit={(e) => e.preventDefault()}>
       <div className="security-badge">
         <span className="security-icon">🔒</span>
-        <span>Your payment information is encrypted and secure. We never store full card details.</span>
+        <span>Your payment information is securely handled by Stripe. We never see or store your card details.</span>
       </div>
 
       <div className="payment-method-selector">
         <button
           type="button"
           className={`payment-method-card ${bankActive ? "selected" : ""}`}
-          onClick={() => setData((p) => ({ ...p, paymentMethod: "bank" }))}
+          onClick={() => setData((p) => ({ ...p, paymentMethod: "bank", stripeSetupComplete: false, stripePaymentMethodId: "" }))}
         >
           <div className="payment-badge">Recommended</div>
           <div className="payment-icon">🏛️</div>
@@ -2098,7 +2118,7 @@ function Step5({
         <button
           type="button"
           className={`payment-method-card ${cardActive ? "selected" : ""}`}
-          onClick={() => setData((p) => ({ ...p, paymentMethod: "card" }))}
+          onClick={() => setData((p) => ({ ...p, paymentMethod: "card", stripeSetupComplete: false, stripePaymentMethodId: "" }))}
         >
           <div className="payment-icon">💳</div>
           <div className="payment-name">Credit/Debit Card</div>
@@ -2106,136 +2126,56 @@ function Step5({
         </button>
       </div>
 
-      <div className={`payment-details ${bankActive ? "active" : ""}`}>
-        <div className="form-section">
-          <div className="section-title">
-            <div className="section-icon">🏦</div>
-            Bank Account Information
-          </div>
-
-          <div className="form-group">
-            <label>
-              Bank Name <span className="required">*</span>
-            </label>
-            <input
-              value={data.bankName}
-              onChange={(e) => setData((p) => ({ ...p, bankName: e.target.value }))}
-              placeholder="Chase Bank"
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>
-                Routing Number <span className="required">*</span>
-              </label>
-              <input
-                value={data.routingNumber}
-                onChange={(e) => setData((p) => ({ ...p, routingNumber: onlyDigits(e.target.value).slice(0, 9) }))}
-                placeholder="9 digits"
-                inputMode="numeric"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>
-                Account Number <span className="required">*</span>
-              </label>
-              <input
-                value={data.accountNumber}
-                onChange={(e) => setData((p) => ({ ...p, accountNumber: onlyDigits(e.target.value).slice(0, 17) }))}
-                placeholder="Account number"
-                inputMode="numeric"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>
-              Account Type <span className="required">*</span>
-            </label>
-            <select
-              value={data.accountType}
-              onChange={(e) => setData((p) => ({ ...p, accountType: e.target.value as any }))}
-            >
-              <option value="">Select account type</option>
-              <option value="checking">Checking</option>
-              <option value="savings">Savings</option>
-            </select>
-          </div>
+      {/* Stripe Payment Element */}
+      <div className="form-section">
+        <div className="section-title">
+          <div className="section-icon">{bankActive ? "🏦" : "💳"}</div>
+          {bankActive ? "Bank Account Setup" : "Card Setup"}
         </div>
-      </div>
 
-      <div className={`payment-details ${cardActive ? "active" : ""}`}>
-        <div className="form-section">
-          <div className="section-title">
-            <div className="section-icon">💳</div>
-            Card Information
+        {stripeError && (
+          <div style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#fca5a5", fontSize: "0.85rem", marginBottom: "1rem" }}>
+            {stripeError}
           </div>
+        )}
 
-          <div className="form-group">
-            <label>
-              Name on Card <span className="required">*</span>
-            </label>
-            <input
-              value={data.cardName}
-              onChange={(e) => setData((p) => ({ ...p, cardName: e.target.value }))}
-              placeholder="John Smith"
+        {stripeLoading && (
+          <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-medium)" }}>
+            Loading payment form...
+          </div>
+        )}
+
+        {clientSecret && stripePromise && !stripeLoading && (
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret,
+              appearance: {
+                theme: "night",
+                variables: {
+                  colorPrimary: "#ff6b35",
+                  colorBackground: "#fafbfc",
+                  colorText: "#1a2332",
+                  colorDanger: "#ff6b6b",
+                  borderRadius: "10px",
+                  fontFamily: "Inter, system-ui, sans-serif",
+                },
+              },
+            }}
+          >
+            <StripePaymentForm
+              data={data}
+              setData={setData}
+              bankActive={bankActive}
             />
-          </div>
+          </Elements>
+        )}
 
-          <div className="form-group">
-            <label>
-              Card Number <span className="required">*</span>
-            </label>
-            <input
-              value={data.cardNumber}
-              onChange={(e) => {
-                const digits = onlyDigits(e.target.value).slice(0, 16);
-                const grouped = digits.replace(/(\d{4})(?=\d)/g, "$1 ");
-                setData((p) => ({ ...p, cardNumber: grouped }));
-              }}
-              placeholder="1234 5678 9012 3456"
-              inputMode="numeric"
-            />
+        {!stripePromise && (
+          <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-medium)" }}>
+            Payment setup is not configured. Please contact support.
           </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>
-                Expiration Date <span className="required">*</span>
-              </label>
-              <input
-                value={data.cardExp}
-                onChange={(e) => {
-                  let v = e.target.value.replace(/[^\d/]/g, "");
-                  v = v.replace("//", "/");
-                  v = v.slice(0, 5);
-                  if (v.length === 2 && !v.includes("/")) v = `${v}/`;
-                  setData((p) => ({ ...p, cardExp: v }));
-                }}
-                placeholder="MM/YY"
-                inputMode="numeric"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>
-                CVV <span className="required">*</span>
-              </label>
-              <input
-                value={data.cardCvv}
-                onChange={(e) => setData((p) => ({ ...p, cardCvv: onlyDigits(e.target.value).slice(0, 4) }))}
-                placeholder="123"
-                inputMode="numeric"
-              />
-            </div>
-          </div>
-
-          <div className="helper-text">
-            {bpsToStr(ccFeeBps)} processing fee applies to credit/debit card payments (waived for ACH/Bank).
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="form-section">
@@ -2319,10 +2259,10 @@ function Step5({
           onChange={(e) => setData((p) => ({ ...p, authorizeCharges: e.target.checked }))}
         />
         <label htmlFor="authorize">
-          <strong>I authorize Let’sGo to charge the following:</strong>
+          <strong>I authorize LetsGo to charge the following:</strong>
           <ul className="authorization-list">
             <li>
-              <strong>Progressive User Payouts:</strong> Based on the business’s agreed upon tier structure
+              <strong>Progressive User Payouts:</strong> Based on the business&apos;s agreed upon tier structure
             </li>
             <li>
               <strong>Platform Fee (Basic Package):</strong> {bpsToStr(feeBps)} of subtotal or {centsToStr(feeCapCents)} maximum per redeemed receipt
@@ -2340,6 +2280,93 @@ function Step5({
         </label>
       </div>
     </form>
+  );
+}
+
+// Inner component that has access to Stripe hooks (must be inside <Elements>)
+function StripePaymentForm({
+  data,
+  setData,
+  bankActive,
+}: {
+  data: OnboardingData;
+  setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
+  bankActive: boolean;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleConfirmSetup = async () => {
+    if (!stripe || !elements) return;
+    setConfirming(true);
+    setError("");
+
+    try {
+      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+        confirmParams: {
+          return_url: window.location.href,
+        },
+      });
+
+      if (confirmError) {
+        setError(confirmError.message || "Payment setup failed. Please try again.");
+      } else if (setupIntent && setupIntent.status === "succeeded") {
+        const pmId = typeof setupIntent.payment_method === "string"
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id || "";
+        setData((p) => ({
+          ...p,
+          stripePaymentMethodId: pmId,
+          stripeSetupComplete: true,
+          paymentMethod: bankActive ? "bank" : "card",
+        }));
+      } else if (setupIntent && setupIntent.status === "requires_action") {
+        // Bank account verification may require additional steps
+        setError("Additional verification required. Please follow the prompts.");
+      }
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: "1rem" }}>
+        <PaymentElement
+          options={{
+            layout: "tabs",
+          }}
+        />
+      </div>
+
+      {error && (
+        <div style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#fca5a5", fontSize: "0.85rem", marginBottom: "1rem" }}>
+          {error}
+        </div>
+      )}
+
+      {data.stripeSetupComplete ? (
+        <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#6ee7b7", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span>✓</span> Payment method saved successfully
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={handleConfirmSetup}
+          disabled={!stripe || confirming}
+          className="btn btn-primary"
+          style={{ width: "100%", marginTop: "0.5rem" }}
+        >
+          {confirming ? "Verifying..." : "Save Payment Method"}
+        </button>
+      )}
+    </div>
   );
 }
 

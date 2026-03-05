@@ -1026,6 +1026,19 @@ export default function OnboardingPage() {
         return;
       }
 
+      // Copy Stripe payment IDs from submission payload to the new business record
+      const businessId = data as string;
+      const payload = selected.payload as Record<string, unknown>;
+      if (businessId && (payload.stripeCustomerId || payload.stripePaymentMethodId)) {
+        await supabaseBrowser
+          .from("business")
+          .update({
+            stripe_customer_id: (payload.stripeCustomerId as string) || null,
+            stripe_payment_method_id: (payload.stripePaymentMethodId as string) || null,
+          })
+          .eq("id", businessId);
+      }
+
       logAudit({
         action: "approve_onboarding",
         tab: AUDIT_TABS.ONBOARDING,
