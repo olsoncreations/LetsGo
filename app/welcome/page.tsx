@@ -343,6 +343,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [showEmailSent, setShowEmailSent] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Influencer referral code
@@ -380,6 +381,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
     setMode(initialMode);
     setError("");
     setMessage("");
+    setShowEmailSent(false);
   }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
@@ -480,7 +482,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
       }
 
       if (data.user && !data.session) {
-        setMessage("Check your email for a confirmation link to complete your registration.");
+        setShowEmailSent(true);
       } else if (data.session) {
         onSuccess(data.user!.id);
       }
@@ -584,6 +586,37 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
           flexShrink: 0,
         }}
       >
+        {showEmailSent ? (
+          <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>✉️</div>
+            <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "white", marginBottom: "0.75rem" }}>
+              Signup Submitted!
+            </h2>
+            <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, marginBottom: "1.5rem" }}>
+              Please check your email for a verification link to complete your registration.
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)", marginBottom: "1.5rem" }}>
+              Don&apos;t see it? Check your spam or junk folder.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setShowEmailSent(false); setMode("signin"); }}
+              style={{
+                width: "100%",
+                padding: "0.85rem",
+                background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+                border: "none",
+                borderRadius: "12px",
+                color: "white",
+                fontWeight: 700,
+                fontSize: "1rem",
+                cursor: "pointer",
+              }}
+            >
+              Got it — Sign In
+            </button>
+          </div>
+        ) : (<>
         <h2 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.5rem", color: "white", textAlign: "center" }}>
           {type === "business" ? "Business Portal" : "Explorer Account"}
         </h2>
@@ -886,6 +919,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         >
           Cancel
         </button>
+        </>)}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { getDistanceBetweenZips, ZIP_COORDS, haversineDistance } from "@/lib/zipUtils";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import NotificationBell from "@/components/NotificationBell";
@@ -1270,9 +1271,11 @@ const FiltersPanel = ({
 // MAIN EVENTS PAGE
 // ═══════════════════════════════════════════════════════════════
 export default function EventsPage() {
+  const router = useRouter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const [filters, setFilters] = useState<Filters>({
     category: "all", date: "all", dateFrom: "", dateTo: "", price: "all", distance: "all",
@@ -1296,6 +1299,17 @@ export default function EventsPage() {
   const [savedEventIds, setSavedEventIds] = useState<Set<string>>(new Set());
   const [saveToast, setSaveToast] = useState<string | null>(null);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
+
+  // Redirect unauthenticated users to Welcome page
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session) { router.replace("/welcome"); return; }
+        setAuthChecked(true);
+      } catch { router.replace("/welcome"); }
+    })();
+  }, [router]);
 
   // Dynamic payout levels from platform_settings
   const [payoutLevels, setPayoutLevels] = useState(DEFAULT_PAYOUT_LEVELS);
@@ -1714,6 +1728,8 @@ export default function EventsPage() {
       default: return 0;
     }
   });
+
+  if (!authChecked) return <div style={{ minHeight: "100vh", background: BG }} />;
 
   return (
     <>

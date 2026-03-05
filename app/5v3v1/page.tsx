@@ -2861,6 +2861,18 @@ function FiveThreeOne() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [visitThresholds, setVisitThresholds] = useState<VisitThreshold[]>(DEFAULT_VISIT_THRESHOLDS);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Redirect unauthenticated users to Welcome page
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session) { router.replace("/welcome"); return; }
+        setAuthChecked(true);
+      } catch { router.replace("/welcome"); }
+    })();
+  }, [router]);
 
   useEffect(() => {
     fetchPlatformTierConfig(supabaseBrowser).then((cfg) => setVisitThresholds(cfg.visitThresholds));
@@ -3223,6 +3235,8 @@ function FiveThreeOne() {
     selectedFriend ? `${selectedFriend.name} chose 3 — your turn` : "",
     "",
   ];
+
+  if (!authChecked) return <div style={{ minHeight: "100vh", background: COLORS.darkBg }} />;
 
   return (
     <div style={{

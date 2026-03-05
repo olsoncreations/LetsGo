@@ -581,6 +581,7 @@ export default function HomePage() {
   const [userZip, setUserZip] = useState<string | null>(null);
   const [incomingGameCount, setIncomingGameCount] = useState(0);
   const [activeGroupGameCount, setActiveGroupGameCount] = useState(0);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Onboarding tour
   const homeTourSteps: TourStep[] = useMemo(() => [
@@ -606,6 +607,22 @@ export default function HomePage() {
     <ProfileAnim key="p" />,
   ], []);
   const tour = useOnboardingTour("home", homeTourSteps, 800);
+
+  // Redirect unauthenticated users to Welcome page
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session) {
+          router.replace("/welcome");
+          return;
+        }
+        setAuthChecked(true);
+      } catch {
+        router.replace("/welcome");
+      }
+    })();
+  }, [router]);
 
   useEffect(() => {
     setTime(new Date());
@@ -703,6 +720,10 @@ export default function HomePage() {
     await supabaseBrowser.auth.signOut();
     router.push("/welcome");
   };
+
+  if (!authChecked) {
+    return <div style={{ minHeight: "100vh", background: "#000" }} />;
+  }
 
   return (
     <>

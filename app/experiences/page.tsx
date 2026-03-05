@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
@@ -2510,8 +2511,10 @@ function FeedTabs({
 // ═══════════════════════════════════════════════════
 
 export default function ExperiencesPage() {
+  const router = useRouter();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedTab>("foryou");
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
@@ -2528,6 +2531,17 @@ export default function ExperiencesPage() {
   const [payoutModalBiz, setPayoutModalBiz] = useState<{ id: string; name: string } | null>(null);
   const [payoutRates, setPayoutRates] = useState<number[]>([]);
   const [payoutLoading, setPayoutLoading] = useState(false);
+
+  // Redirect unauthenticated users to Welcome page
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session) { router.replace("/welcome"); return; }
+        setAuthChecked(true);
+      } catch { router.replace("/welcome"); }
+    })();
+  }, [router]);
 
   useEffect(() => {
     if (!payoutModalBiz) return;
@@ -2987,6 +3001,8 @@ export default function ExperiencesPage() {
       </div>
     );
   }
+
+  if (!authChecked) return <div style={{ minHeight: "100vh", background: COLORS.darkBg }} />;
 
   return (
     <div

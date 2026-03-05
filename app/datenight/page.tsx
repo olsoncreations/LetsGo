@@ -1338,6 +1338,7 @@ export default function DateNightPage() {
   const [view, setView] = useState<DateNightView>("hub");
   const [showKey, setShowKey] = useState(0);
   const [timeStr, setTimeStr] = useState("");
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Onboarding tour
   const dateTourSteps: TourStep[] = useMemo(() => [
@@ -1350,6 +1351,17 @@ export default function DateNightPage() {
   ], []);
   const tour = useOnboardingTour("datenight", dateTourSteps, 800);
 
+  // Redirect unauthenticated users to Welcome page
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session) { router.replace("/welcome"); return; }
+        setAuthChecked(true);
+      } catch { router.replace("/welcome"); }
+    })();
+  }, [router]);
+
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -1361,6 +1373,8 @@ export default function DateNightPage() {
   }, []);
 
   const goHome = () => setView("hub");
+
+  if (!authChecked) return <div style={{ minHeight: "100vh", background: BG }} />;
 
   return (
     <>

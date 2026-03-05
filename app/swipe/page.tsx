@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from "react";
 import Script from "next/script";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
@@ -1105,10 +1105,12 @@ export default function DiscoveryPageWrapper() {
 }
 
 function DiscoveryPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const spotlightId = searchParams.get("spotlight");
   const [businesses, setBusinesses] = useState<DiscoveryBusiness[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -1140,6 +1142,17 @@ function DiscoveryPage() {
     <ScrollIndicatorAnim key="si" />,
   ], []);
   const tour = useOnboardingTour("swipe", swipeTourSteps, 1200);
+
+  // Redirect unauthenticated users to Welcome page
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session) { router.replace("/welcome"); return; }
+        setAuthChecked(true);
+      } catch { router.replace("/welcome"); }
+    })();
+  }, [router]);
 
   const getUserId = useCallback((): string | null => {
     try {
@@ -1441,6 +1454,8 @@ function DiscoveryPage() {
     const { scrollTop, clientHeight } = verticalRef.current;
     setCurrentBiz(Math.round(scrollTop / clientHeight));
   }, []);
+
+  if (!authChecked) return <div style={{ minHeight: "100vh", background: COLORS.darkBg }} />;
 
   return (
     <div style={{

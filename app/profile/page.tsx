@@ -566,7 +566,7 @@ export default function LetsGoProfile() {
     let cancelled = false;
     (async () => {
       const { data: { session } } = await supabaseBrowser.auth.getSession();
-      if (!session?.access_token || !session?.user?.id) { router.push("/"); return; }
+      if (!session?.access_token || !session?.user?.id) { router.replace("/welcome"); return; }
       const tk = session.access_token;
       const uid = session.user.id;
       if (cancelled) return;
@@ -1230,7 +1230,7 @@ export default function LetsGoProfile() {
                 style={{ width: 38, height: 38, borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.2s ease" }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = `rgba(${NEON.pinkRGB},0.3)`; e.currentTarget.style.background = `rgba(${NEON.pinkRGB},0.06)`; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.background = "transparent"; }}
-                onClick={async () => { await supabaseBrowser.auth.signOut(); router.push("/"); }}
+                onClick={async () => { await supabaseBrowser.auth.signOut(); router.push("/welcome"); }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><polyline points="16 17 21 12 16 7" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><line x1="21" y1="12" x2="9" y2="12" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </div>
