@@ -383,22 +383,34 @@ function PerimeterBulbs() {
   const [bulbs, setBulbs] = useState<Array<{ x: number; y: number; i: number }>>([]);
 
   useEffect(() => {
-    if (!ref.current) return;
-    const el = ref.current.parentElement;
+    const container = ref.current;
+    if (!container) return;
+    const el = container.parentElement;
     if (!el) return;
-    const W = el.offsetWidth;
-    const H = el.offsetHeight;
-    const pad = 15;
-    const spacing = 17;
-    const pts: Array<{ x: number; y: number; i: number }> = [];
-    let idx = 0;
 
-    for (let x = pad; x <= W - pad; x += spacing) pts.push({ x, y: pad, i: idx++ });
-    for (let y = pad + spacing; y <= H - pad; y += spacing) pts.push({ x: W - pad, y, i: idx++ });
-    for (let x = W - pad - spacing; x >= pad; x -= spacing) pts.push({ x, y: H - pad, i: idx++ });
-    for (let y = H - pad - spacing; y >= pad + spacing; y -= spacing) pts.push({ x: pad, y, i: idx++ });
+    function calcBulbs() {
+      if (!el) return;
+      const W = el.offsetWidth;
+      const H = el.offsetHeight;
+      if (W === 0 || H === 0) return;
+      const pad = 15;
+      const spacing = 17;
+      const pts: Array<{ x: number; y: number; i: number }> = [];
+      let idx = 0;
 
-    setBulbs(pts);
+      for (let x = pad; x <= W - pad; x += spacing) pts.push({ x, y: pad, i: idx++ });
+      for (let y = pad + spacing; y <= H - pad; y += spacing) pts.push({ x: W - pad, y, i: idx++ });
+      for (let x = W - pad - spacing; x >= pad; x -= spacing) pts.push({ x, y: H - pad, i: idx++ });
+      for (let y = H - pad - spacing; y >= pad + spacing; y -= spacing) pts.push({ x: pad, y, i: idx++ });
+
+      setBulbs(pts);
+    }
+
+    calcBulbs();
+
+    const ro = new ResizeObserver(calcBulbs);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const total = bulbs.length || 1;
@@ -773,8 +785,8 @@ export default function HomePage() {
           .lg-marquee-wrap { margin: 0 -16px 24px; }
           .lg-spotlight-inner { flex-direction: column; }
           .lg-spotlight-carousel { width: 100%; min-height: 200px; }
-          .lg-spotlight-spacer { width: 16px; }
-          .lg-spotlight-pad-y { height: 16px; }
+          .lg-spotlight-spacer { width: 30px; }
+          .lg-spotlight-pad-y { height: 30px; }
           .lg-spotlight-text { padding: 18px 16px; }
           .lg-spotlight-title { font-size: 20px; }
           .lg-spotlight-desc { font-size: 12px; }
@@ -783,8 +795,8 @@ export default function HomePage() {
 
         @media (max-width: 480px) {
           .lg-std-grid { grid-template-columns: 1fr; }
-          .lg-spotlight-spacer { width: 10px; }
-          .lg-spotlight-pad-y { height: 10px; }
+          .lg-spotlight-spacer { width: 26px; }
+          .lg-spotlight-pad-y { height: 26px; }
         }
       `}</style>
 
@@ -1021,7 +1033,7 @@ export default function HomePage() {
                   borderRadius: 8,
                   background: "#0a0a12",
                   position: "relative",
-                  overflow: "hidden",
+                  overflow: "visible",
                 }}
               >
                 <PerimeterBulbs />
