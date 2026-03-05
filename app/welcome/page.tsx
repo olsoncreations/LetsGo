@@ -562,10 +562,12 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         background: "rgba(0,0,0,0.8)",
         backdropFilter: "blur(8px)",
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
         zIndex: 1000,
         padding: "1rem",
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch",
       }}
     >
       <div
@@ -573,11 +575,13 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         style={{
           width: "100%",
           maxWidth: "420px",
+          margin: "auto 0",
           background: "linear-gradient(135deg, #0d0015 0%, #1a0a2e 100%)",
           border: `1px solid ${colors.primary}40`,
           borderRadius: "20px",
           padding: "2rem",
           boxShadow: `0 0 60px ${colors.primary}30`,
+          flexShrink: 0,
         }}
       >
         <h2 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.5rem", color: "white", textAlign: "center" }}>
@@ -917,9 +921,16 @@ export default function WelcomePage() {
       .catch(() => {});
   }, []);
 
-  // Check if already logged in
+  // Check if already logged in (skip if ?new is in URL — allows fresh signups)
   useEffect(() => {
     async function checkSession() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("new")) {
+        // Sign out any existing session so a new user can sign up
+        await supabaseBrowser.auth.signOut();
+        return;
+      }
+
       const { data } = await supabaseBrowser.auth.getSession();
       if (data.session) {
         // Check user type and redirect accordingly
