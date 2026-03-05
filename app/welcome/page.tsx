@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
@@ -1102,21 +1103,13 @@ export default function WelcomePage() {
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
         }}
       >
-        <span
-          style={{
-            fontFamily: "'Outfit', sans-serif",
-            fontSize: "1.8rem",
-            fontWeight: 900,
-            background: "linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcb77, #00bfff, #8a2be2)",
-            backgroundSize: "200% 200%",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            animation: "border-dance 4s ease infinite",
-          }}
-        >
-          LetsGo
-        </span>
+        <Image
+          src="/lg-logo.png"
+          alt="Let's Go"
+          width={140}
+          height={42}
+          priority
+        />
       </div>
 
       {/* Map Section - 60% of viewport */}
