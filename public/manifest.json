@@ -1,7 +1,7 @@
 {
-  "name": "Let's Go",
+  "name": "LetsGo",
   "short_name": "LetsGo",
-  "description": "Go. Play. Eat. Get paid to live life. Discover restaurants and activities, earn progressive cash-back rewards.",
+  "description": "Go. Play. Eat. Get paid to live your best life. Discover restaurants and activities, earn progressive cash-back rewards.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

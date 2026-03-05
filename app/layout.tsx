@@ -23,9 +23,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Let's Go — Get Paid to Live Life",
+  title: "LetsGo — Get Paid to Live Your Best Life",
   description:
-    "Discover restaurants and activities, earn progressive cash-back rewards for repeat visits. Go. Play. Eat. Get paid to live life.",
+    "Discover restaurants and activities, earn progressive cash-back rewards for repeat visits. Go. Play. Eat. Get paid to live your best life.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -40,10 +40,10 @@ export const metadata: Metadata = {
     title: "LetsGo",
   },
   openGraph: {
-    title: "Let's Go — Get Paid to Live Life",
+    title: "LetsGo — Get Paid to Live Your Best Life",
     description:
       "Discover restaurants and activities, earn progressive cash-back rewards for repeat visits.",
-    siteName: "Let's Go",
+    siteName: "LetsGo",
     type: "website",
   },
 };
