@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense, type CSSProperties, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
@@ -2849,7 +2849,15 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
 // ═══════════════════════════════════════════════════
 // MAIN PAGE CONTROLLER
 // ═══════════════════════════════════════════════════
-export default function FiveThreeOne() {
+export default function FiveThreeOnePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a14]" />}>
+      <FiveThreeOne />
+    </Suspense>
+  );
+}
+
+function FiveThreeOne() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [visitThresholds, setVisitThresholds] = useState<VisitThreshold[]>(DEFAULT_VISIT_THRESHOLDS);
