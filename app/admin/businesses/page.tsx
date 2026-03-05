@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
@@ -116,7 +116,15 @@ interface Business {
 
 type StatusFilter = "all" | "active" | "paused" | "suspended" | "submitted";
 
-export default function BusinessesPage() {
+export default function BusinessesPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0f0f1a]" />}>
+      <BusinessesPage />
+    </Suspense>
+  );
+}
+
+function BusinessesPage() {
   const searchParams = useSearchParams();
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from "react";
 import Script from "next/script";
 import { useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
@@ -1096,7 +1096,15 @@ function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, follow
 // MAIN DISCOVERY PAGE
 // ═══════════════════════════════════════════════════
 
-export default function DiscoveryPage() {
+export default function DiscoveryPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-b from-black via-slate-950 to-slate-900" />}>
+      <DiscoveryPage />
+    </Suspense>
+  );
+}
+
+function DiscoveryPage() {
   const searchParams = useSearchParams();
   const spotlightId = searchParams.get("spotlight");
   const [businesses, setBusinesses] = useState<DiscoveryBusiness[]>([]);
