@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /businessprofile-v2/
+Disallow: /businessprofile/
+
+Sitemap: https://www.useletsgo.com/sitemap.xml

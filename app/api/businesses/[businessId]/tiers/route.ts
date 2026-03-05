@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseServer";
+import { supabaseServer as supabase } from "@/lib/supabaseServer";
 
 /**
  * Next.js 16 (as deployed on Vercel) types route handler context.params as a Promise.

@@ -1,7 +1,12 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Script from "next/script";
+import { useRouter } from "next/navigation";
 import "./onboarding.css";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, DEFAULT_PRESET_BPS, type VisitThreshold } from "@/lib/platformSettings";
+import type { User } from "@supabase/supabase-js";
+
 declare global {
   interface Window {
     google?: any;
@@ -149,42 +154,20 @@ type OnboardingData = {
 };
 
 const STORAGE_KEY = "letsgo_partner_onboarding_v1";
+// Using supabaseBrowser from @/lib/supabaseBrowser
 
 // ✅ Correct logo path (place file at: /public/lg-logo.png)
 const LOGO_SRC = "/lg-logo.png";
 
-const ADS: AdOption[] = [
-  {
-    id: "ad_1day",
-    title: "1-Day Spotlight",
-    desc: "Featured at top of Discovery feed for 1 day in your category (within 20 miles of your business zip code)",
-    price: 99,
-  },
-  {
-    id: "ad_7day",
-    title: "7-Day Spotlight",
-    desc: "Featured at top of Discovery feed for 7 days in your category (within 50 miles of your zip code)",
-    price: 599,
-  },
-  {
-    id: "ad_14day",
-    title: "14-Day Spotlight",
-    desc: "Featured at top of Discovery feed for 14 days in your category (within 50 miles of your zip code)",
-    price: 999,
-  },
-  {
-    id: "ad_100mile",
-    title: "100 Mile Wide Push",
-    desc: "Promoted to all users within 100 miles of your business zip code with push notifications for 7 days straight and top priority placement on Discovery page",
-    price: 2599,
-  },
-  {
-    id: "ad_tourwide",
-    title: "Tour Wide Push",
-    desc: "Promoted to all users within 100 miles of your business zip code with push notifications for 14 days total (split in 60-day range) and top priority placement on Discovery page for 7 days (priority days may be split up)",
-    price: 4599,
-  },
-];
+// ADS pricing is now fetched from platform_settings inside the component (dynamicAds)
+
+// Formatting helpers (module-level so Step functions can use them)
+function centsToStr(c: number) {
+  return `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+function bpsToStr(b: number) {
+  return `${(b / 100).toFixed(1)}%`;
+}
 
 function defaultHours(): Record<DayKey, HoursDay> {
   return {
@@ -343,16 +326,17 @@ function validateEmail(s: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 }
 
-function validateStep(step: number, d: OnboardingData): { ok: boolean; message?: string } {
+function validateStep(step: number, d: OnboardingData, authUserEmail?: string): { ok: boolean; message?: string } {
   if (step === 1) {
     if (!d.businessName.trim()) return { ok: false, message: "Business Name is required." };
     if (!d.businessType) return { ok: false, message: "Please select a Business Type." };
     if (!d.fullName.trim()) return { ok: false, message: "Full Name is required." };
-    if (!validateEmail(d.email)) return { ok: false, message: "A valid Email is required." };
+    // Email comes from auth - use authUserEmail as fallback
+    const emailToValidate = d.email || authUserEmail || "";
+    if (!validateEmail(emailToValidate)) return { ok: false, message: "A valid Email is required." };
     if (onlyDigits(d.phone).length < 10) return { ok: false, message: "A valid Phone Number is required." };
     if (!d.role) return { ok: false, message: "Please select your Role/Title." };
-    if ((d.password || "").length < 8) return { ok: false, message: "Password must be at least 8 characters." };
-    if (d.password !== d.confirmPassword) return { ok: false, message: "Passwords do not match." };
+    // Password no longer required - user already authenticated via /welcome
     return { ok: true };
   }
 
@@ -434,58 +418,176 @@ function validateStep(step: number, d: OnboardingData): { ok: boolean; message?:
   return { ok: true };
 }
 
-// ✅ Updated presets (match Claude-style “realistic ladder”)
-function applyPayoutPreset(preset: PayoutPreset): number[] {
-  // Claude-style: smooth progression and consistent rounding for the UI.
-  // 100 bps = 1.00%
-  if (preset === "conservative") return [300, 400, 500, 600, 700, 850, 1000]; // 3% → 10%
-  if (preset === "standard") return [800, 900, 1000, 1100, 1200, 1350, 1500]; // 8% → 15%
-  if (preset === "aggressive") return [1300, 1450, 1550, 1650, 1750, 1850, 2000]; // 13% → 20%
-  return [800, 900, 1000, 1100, 1200, 1350, 1500];
+// Applies preset BPS from platform_settings (falls back to DEFAULT_PRESET_BPS)
+function applyPayoutPreset(preset: PayoutPreset, presetBps: Record<string, number[]>): number[] {
+  return presetBps[preset] || presetBps.standard || DEFAULT_PRESET_BPS.standard;
 }
 
 function planTitle(plan: Plan) {
   return plan === "basic" ? "Basic Package" : "Premium Package";
 }
 
-function monthlyFee(d: OnboardingData) {
-  if (d.plan === "basic") return 0;
-
-  // Premium base $100 + addons
-  let fee = 100;
-  if (d.premiumAddons.videoAddon) fee += 50;
-  if (d.premiumAddons.liveAddon15) fee += 50;
-  if (d.premiumAddons.liveAddon30) fee += 100;
-  return fee;
-}
-
-function selectedAdsList(d: OnboardingData) {
-  return ADS.filter((a) => d.selectedAds[a.id]);
-}
+// monthlyFee and selectedAdsList moved inside component to use dynamic pricing
 
 export default function PartnerOnboardingPage() {
+  const router = useRouter();
   const [step, setStep] = useState<number>(1);
   const [data, setData] = useState<OnboardingData>(initialData());
   const [error, setError] = useState<string>("");
   const [completed, setCompleted] = useState<boolean>(false);
-const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const [mapsLoaded, setMapsLoaded] = useState(false);
 
+  // Pricing from platform_settings (fetched on mount, falls back to defaults)
+  const [pkgPricing, setPkgPricing] = useState({
+    basic_monthly_cents: 0,
+    premium_monthly_cents: 10000,
+    addon_video_5_monthly_cents: 5000,
+    addon_live_15_monthly_cents: 5000,
+    addon_live_30_monthly_cents: 10000,
+    tpms_monthly_cents: 20000,
+  });
+  const [adPricing, setAdPricing] = useState({
+    spotlight_1day_cents: 9900,
+    spotlight_7day_cents: 59900,
+    spotlight_14day_cents: 99900,
+    push_100mile_cents: 259900,
+    push_tourwide_cents: 459900,
+  });
+  const [feeBps, setFeeBps] = useState(1000); // platform_fee_bps
+  const [feeCapCents, setFeeCapCents] = useState(500); // platform_fee_cap_cents
+  const [ccFeeBps, setCcFeeBps] = useState(300); // cc_processing_fee_bps
+
+  // Dynamic visit thresholds + preset BPS from platform_settings
+  const [visitThresholds, setVisitThresholds] = useState<VisitThreshold[]>(DEFAULT_VISIT_THRESHOLDS);
+  const [presetBps, setPresetBps] = useState<Record<string, number[]>>(DEFAULT_PRESET_BPS);
+  const dynamicTiers = useMemo(() =>
+    visitThresholds.map((t) => ({ level: `Level ${t.level}`, range: getVisitRangeLabel(t) })),
+    [visitThresholds],
+  );
+
+  // Fetch pricing + tier config from platform_settings
+  useEffect(() => {
+    async function fetchPricing() {
+      try {
+        const [pricingRes, tierConfig] = await Promise.all([
+          supabaseBrowser
+            .from("platform_settings")
+            .select("package_pricing, ad_pricing, platform_fee_bps, platform_fee_cap_cents, cc_processing_fee_bps")
+            .eq("id", 1)
+            .maybeSingle(),
+          fetchPlatformTierConfig(supabaseBrowser),
+        ]);
+        const ps = pricingRes.data;
+        if (ps) {
+          if (ps.package_pricing) setPkgPricing(ps.package_pricing);
+          if (ps.ad_pricing) setAdPricing(ps.ad_pricing);
+          if (ps.platform_fee_bps) setFeeBps(ps.platform_fee_bps);
+          if (ps.platform_fee_cap_cents) setFeeCapCents(ps.platform_fee_cap_cents);
+          if (ps.cc_processing_fee_bps) setCcFeeBps(ps.cc_processing_fee_bps);
+        }
+        setVisitThresholds(tierConfig.visitThresholds);
+        setPresetBps(tierConfig.presetBps);
+      } catch (err) {
+        console.error("Error fetching pricing:", err);
+      }
+    }
+    fetchPricing();
+  }, []);
+
+  // Dynamic ADS array from platform_settings
+  const dynamicAds: AdOption[] = useMemo(() => [
+    { id: "ad_1day", title: "1-Day Spotlight", desc: "Featured at top of Discovery feed for 1 day in your category (within 20 miles of your business zip code)", price: adPricing.spotlight_1day_cents / 100 },
+    { id: "ad_7day", title: "7-Day Spotlight", desc: "Featured at top of Discovery feed for 7 days in your category (within 50 miles of your zip code)", price: adPricing.spotlight_7day_cents / 100 },
+    { id: "ad_14day", title: "14-Day Spotlight", desc: "Featured at top of Discovery feed for 14 days in your category (within 50 miles of your zip code)", price: adPricing.spotlight_14day_cents / 100 },
+    { id: "ad_100mile", title: "100 Mile Wide Push", desc: "Promoted to all users within 100 miles of your business zip code with push notifications for 7 days straight and top priority placement on Discovery page", price: adPricing.push_100mile_cents / 100 },
+    { id: "ad_tourwide", title: "Tour Wide Push", desc: "Promoted to all users within 100 miles of your business zip code with push notifications for 14 days total (split in 60-day range) and top priority placement on Discovery page for 7 days (priority days may be split up)", price: adPricing.push_tourwide_cents / 100 },
+  ], [adPricing]);
+
+  // Dynamic monthlyFee using pricing from platform_settings
+  function monthlyFee(d: OnboardingData) {
+    if (d.plan === "basic") return pkgPricing.basic_monthly_cents / 100;
+    let fee = pkgPricing.premium_monthly_cents / 100;
+    if (d.premiumAddons.videoAddon) fee += pkgPricing.addon_video_5_monthly_cents / 100;
+    if (d.premiumAddons.liveAddon15) fee += pkgPricing.addon_live_15_monthly_cents / 100;
+    if (d.premiumAddons.liveAddon30) fee += pkgPricing.addon_live_30_monthly_cents / 100;
+    return fee;
+  }
+
+  function selectedAdsList(d: OnboardingData) {
+    return dynamicAds.filter((a) => d.selectedAds[a.id]);
+  }
+
+  // Check authentication
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const { data: { session }, error } = await supabaseBrowser.auth.getSession();
+        
+        if (error) {
+          console.error("Auth error:", error);
+          setAuthLoading(false);
+          return;
+        }
+        
+        if (!session) {
+          // Not logged in, redirect to welcome page
+          console.log("No session, redirecting to /welcome");
+          router.push("/welcome");
+          return;
+        }
+        
+        setAuthUser(session.user);
+        
+        // Pre-fill email and name from auth user
+        setData((prev) => ({
+          ...prev,
+          email: session.user.email || prev.email,
+          fullName: session.user.user_metadata?.full_name || prev.fullName,
+        }));
+        
+        setAuthLoading(false);
+      } catch (err) {
+        console.error("Auth check failed:", err);
+        setAuthLoading(false);
+      }
+    }
+    checkAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabaseBrowser.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        router.push("/welcome");
+      } else {
+        setAuthUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   useEffect(() => {
+    if (authLoading) return;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as { step?: number; data?: OnboardingData; completed?: boolean };
-      if (parsed?.data) setData(parsed.data);
+      if (parsed?.data) {
+        // Preserve auth email - don't let localStorage overwrite it
+        setData((prev) => ({
+          ...parsed.data!,
+          email: prev.email || parsed.data!.email, // Keep auth email if available
+        }));
+      }
       if (parsed?.step && parsed.step >= 1 && parsed.step <= 7) setStep(parsed.step);
       if (parsed?.completed) setCompleted(true);
     } catch {
       // ignore
     }
-  }, []);
+  }, [authLoading]);
 
   useEffect(() => {
     try {
@@ -496,30 +598,32 @@ const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   }, [step, data, completed]);
 
   const submitDisabled = useMemo(() => {
-    const v = validateStep(7, data);
+    const v = validateStep(7, data, authUser?.email);
     return !v.ok;
-  }, [data]);
+  }, [data, authUser]);
 
   const reviewPlanFees = useMemo(() => {
     const ads = selectedAdsList(data);
     const adsTotal = ads.reduce((s, a) => s + a.price, 0);
+    const ccPct = bpsToStr(ccFeeBps);
     return {
       planName: planTitle(data.plan),
       monthly: monthlyFee(data),
       perVisit:
         data.plan === "basic"
-          ? "Platform fee: 10% of ticket subtotal (pretax) OR $5 max (whichever is less)"
+          ? `Platform fee: ${bpsToStr(feeBps)} of ticket subtotal (pretax) OR ${centsToStr(feeCapCents)} max (whichever is less)`
           : "Platform fee: $0 (Premium package)",
       paymentMethod: data.paymentMethod === "bank" ? "Bank Account (ACH)" : "Credit/Debit Card",
-      processingFee: data.paymentMethod === "bank" ? "$0 (No Fees)" : "3.5% (Credit Card Processing)",
+      processingFee: data.paymentMethod === "bank" ? "$0 (No Fees)" : `${ccPct} (Credit Card Processing)`,
       adsTotal,
       ads,
     };
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, feeBps, feeCapCents, ccFeeBps, adPricing, pkgPricing]);
 
   function goNext() {
     setError("");
-    const v = validateStep(step, data);
+    const v = validateStep(step, data, authUser?.email);
     if (!v.ok) {
       setError(v.message || "Please complete required fields.");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -557,15 +661,71 @@ const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     }
   }
 
-  function completeSignup() {
-    setError("");
-    const v = validateStep(7, data);
-    if (!v.ok) {
-      setError(v.message || "Please complete required fields.");
+async function completeSignup() {
+  setError("");
+  const v = validateStep(7, data, authUser?.email);
+  if (!v.ok) {
+    setError(v.message || "Please complete required fields.");
+    return;
+  }
+
+  if (!authUser) {
+    setError("You must be logged in to submit. Please refresh and try again.");
+    return;
+  }
+
+  try {
+    // Save everything as JSON, plus a few helpful top-level fields
+    const payload = {
+      ...data,
+      email: data.email || authUser.email, // Ensure email is included
+      // optional: include some metadata
+      submittedAt: new Date().toISOString(),
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+    };
+
+    const { error: insertError } = await supabaseBrowser.from("partner_onboarding_submissions").insert([
+      {
+        user_id: authUser.id,
+        status: "submitted",
+        payload,
+        business_name: data.businessName || null,
+        contact_email: data.email || authUser.email || null,
+        contact_phone: data.phone || null,
+      },
+    ]);
+
+    if (insertError) {
+      console.error("Insert error details:", JSON.stringify(insertError, null, 2));
+      console.error("Insert error message:", insertError.message);
+      console.error("Insert error code:", insertError.code);
+      setError(`Could not submit your application: ${insertError.message || "Unknown error"}. Please try again.`);
       return;
     }
+
     setCompleted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (e) {
+    console.error(e);
+    setError("Could not submit your application. Please try again.");
+  }
+}
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="container">
+        <Header />
+        <div className="form-card" style={{ textAlign: "center", padding: "60px 20px" }}>
+          <div style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>
+            Loading...
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.6)" }}>
+            Checking your session
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (completed) {
@@ -590,7 +750,7 @@ const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
               <div className="success-row">
                 <span className="success-check">✓</span>
                 <span>
-                  <strong>You’ll receive:</strong> Login credentials and dashboard access via email
+                  <strong>You’ll receive:</strong> An email notification when your account is approved
                 </span>
               </div>
               <div className="success-row">
@@ -599,18 +759,6 @@ const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
                   <strong>First steps:</strong> Wait for your first customer visit and start earning
                 </span>
               </div>
-            </div>
-
-            <div className="success-actions">
-              <button className="success-btn-primary" onClick={() => alert("Dashboard route TBD")}>
-                Go to Dashboard
-              </button>
-              <button className="success-btn-secondary" onClick={() => alert("Download link TBD")}>
-                Download Business App
-              </button>
-              <button className="success-btn-link" onClick={resetAll}>
-                Start Over
-              </button>
             </div>
 
             <p className="success-help">
@@ -656,13 +804,13 @@ const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
           </div>
         ) : null}
 
-        {step === 1 && <Step1 data={data} setData={setData} onSaveExit={saveAndExit} />}
+        {step === 1 && <Step1 data={data} setData={setData} onSaveExit={saveAndExit} authUserEmail={authUser?.email} />}
         {step === 2 && <Step2 data={data} setData={setData} mapsLoaded={mapsLoaded} />}
-        {step === 3 && <Step3 data={data} setData={setData} />}
-        {step === 4 && <Step4 data={data} setData={setData} />}
-        {step === 5 && <Step5 data={data} setData={setData} />}
-        {step === 6 && <Step6 data={data} setData={setData} />}
-        {step === 7 && <Step7 data={data} setData={setData} reviewPlanFees={reviewPlanFees} />}
+        {step === 3 && <Step3 data={data} setData={setData} pkgPricing={pkgPricing} dynamicAds={dynamicAds} ccFeeBps={ccFeeBps} />}
+        {step === 4 && <Step4 data={data} setData={setData} tiers={dynamicTiers} presetBps={presetBps} />}
+        {step === 5 && <Step5 data={data} setData={setData} ccFeeBps={ccFeeBps} feeBps={feeBps} feeCapCents={feeCapCents} />}
+        {step === 6 && <Step6 data={data} setData={setData} pkgPricing={pkgPricing} />}
+        {step === 7 && <Step7 data={data} setData={setData} reviewPlanFees={reviewPlanFees} feeBps={feeBps} feeCapCents={feeCapCents} ccFeeBps={ccFeeBps} pkgPricing={pkgPricing} tiers={dynamicTiers} />}
 
         <div className="button-group">
           <button type="button" className="btn btn-secondary" onClick={goBack} disabled={step === 1}>
@@ -783,11 +931,14 @@ function Step1({
   data,
   setData,
   onSaveExit,
+  authUserEmail,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   onSaveExit: () => void;
+  authUserEmail?: string;
 }) {
+  const displayEmail = data.email || authUserEmail || "";
   return (
     <form onSubmit={(e) => e.preventDefault()}>
       <div className="form-section">
@@ -878,13 +1029,13 @@ function Step1({
               Email <span className="required">*</span>
             </label>
             <input
-              value={data.email}
-              onChange={(e) => setData((p) => ({ ...p, email: e.target.value }))}
-              placeholder="john@business.com"
-              required
+              value={displayEmail}
+              readOnly
+              disabled
+              style={{ backgroundColor: "rgba(255,255,255,0.05)", cursor: "not-allowed" }}
               type="email"
             />
-            <div className="helper-text">This will be your login username</div>
+            <div className="helper-text">From your account (cannot be changed here)</div>
           </div>
 
           <div className="form-group">
@@ -942,46 +1093,6 @@ function Step1({
         </div>
       </div>
 
-      <div className="form-section">
-        <div className="section-title">
-          <div className="section-icon">🔐</div>
-          Create Password
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>
-              Password <span className="required">*</span>
-            </label>
-            <input
-              value={data.password}
-              onChange={(e) => setData((p) => ({ ...p, password: e.target.value }))}
-              placeholder="Min. 8 characters"
-              required
-              type="password"
-            />
-            <div className="helper-text">Must be at least 8 characters</div>
-          </div>
-
-          <div className="form-group">
-            <label>
-              Confirm Password <span className="required">*</span>
-            </label>
-            <input
-              value={data.confirmPassword}
-              onChange={(e) => setData((p) => ({ ...p, confirmPassword: e.target.value }))}
-              placeholder="Re-enter password"
-              required
-              type="password"
-              className={data.confirmPassword && data.password !== data.confirmPassword ? "input-error" : ""}
-            />
-            {data.confirmPassword && data.password !== data.confirmPassword ? (
-              <div className="inline-error">Passwords do not match</div>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
       <div className="button-row-split">
         <button type="button" className="btn btn-secondary small" onClick={onSaveExit}>
           ← Save & Exit
@@ -1032,16 +1143,73 @@ function Step2({
   mapsLoaded: boolean;
 }) {
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const placesElementHostRef = useRef<HTMLDivElement | null>(null);
+
   
+function stateNameToAbbrev(name: string) {
+  const n = (name || "").toUpperCase().trim();
+  const map: Record<string, string> = {
+    ALABAMA: "AL",
+    ALASKA: "AK",
+    ARIZONA: "AZ",
+    ARKANSAS: "AR",
+    CALIFORNIA: "CA",
+    COLORADO: "CO",
+    CONNECTICUT: "CT",
+    DELAWARE: "DE",
+    FLORIDA: "FL",
+    GEORGIA: "GA",
+    HAWAII: "HI",
+    IDAHO: "ID",
+    ILLINOIS: "IL",
+    INDIANA: "IN",
+    IOWA: "IA",
+    KANSAS: "KS",
+    KENTUCKY: "KY",
+    LOUISIANA: "LA",
+    MAINE: "ME",
+    MARYLAND: "MD",
+    MASSACHUSETTS: "MA",
+    MICHIGAN: "MI",
+    MINNESOTA: "MN",
+    MISSISSIPPI: "MS",
+    MISSOURI: "MO",
+    MONTANA: "MT",
+    NEBRASKA: "NE",
+    NEVADA: "NV",
+    "NEW HAMPSHIRE": "NH",
+    "NEW JERSEY": "NJ",
+    "NEW MEXICO": "NM",
+    "NEW YORK": "NY",
+    "NORTH CAROLINA": "NC",
+    "NORTH DAKOTA": "ND",
+    OHIO: "OH",
+    OKLAHOMA: "OK",
+    OREGON: "OR",
+    PENNSYLVANIA: "PA",
+    "RHODE ISLAND": "RI",
+    "SOUTH CAROLINA": "SC",
+    "SOUTH DAKOTA": "SD",
+    TENNESSEE: "TN",
+    TEXAS: "TX",
+    UTAH: "UT",
+    VERMONT: "VT",
+    VIRGINIA: "VA",
+    WASHINGTON: "WA",
+    "WEST VIRGINIA": "WV",
+    WISCONSIN: "WI",
+    WYOMING: "WY",
+  };
+  return map[n] || name;
+}
+
 
 useEffect(() => {
   if (!mapsLoaded) return;
   if (!addressInputRef.current) return;
 
   const g = (window as any).google;
-
-  // Only proceed when the Places namespace exists (no console spam).
-  if (!g?.maps?.places) return;
+  if (!g?.maps?.places?.Autocomplete) return;
 
   const autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
     types: ["address"],
@@ -1069,7 +1237,7 @@ useEffect(() => {
       getComponent(comps, "sublocality") ||
       getComponent(comps, "postal_town");
 
-    const state = getComponent(comps, "administrative_area_level_1", "short_name");
+    const state = getComponent(comps, "administrative_area_level_1", "short_name"); // "NE"
     const zip = getComponent(comps, "postal_code");
 
     const streetAddress =
@@ -1085,8 +1253,6 @@ useEffect(() => {
       zip: zip || p.zip,
     }));
   });
-
-  console.log("✅ Places Autocomplete attached");
 
   return () => {
     if (listener?.remove) listener.remove();
@@ -1112,9 +1278,6 @@ useEffect(() => {
   ref={addressInputRef}
   value={data.streetAddress}
   onChange={(e) => setData((p) => ({ ...p, streetAddress: e.target.value }))}
-  onInput={(e) =>
-    setData((p) => ({ ...p, streetAddress: (e.target as HTMLInputElement).value }))
-  }
   placeholder="123 Main Street"
   required
   autoComplete="off"
@@ -1361,9 +1524,15 @@ function RadioCard({
 function Step3({
   data,
   setData,
+  pkgPricing,
+  dynamicAds,
+  ccFeeBps,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
+  pkgPricing: { basic_monthly_cents: number; premium_monthly_cents: number; addon_video_5_monthly_cents: number; addon_live_15_monthly_cents: number; addon_live_30_monthly_cents: number; tpms_monthly_cents: number };
+  dynamicAds: AdOption[];
+  ccFeeBps: number;
 }) {
   const isPremium = data.plan === "premium";
 
@@ -1377,76 +1546,91 @@ function Step3({
   return (
     <form onSubmit={(e) => e.preventDefault()}>
       {/* ✅ Claude-style “Packages”: Basic + Premium, plus Advertising as optional package */}
-      <div className="plans-grid">
-        <PlanCard
-          selected={data.plan === "basic"}
-          badgeText=""
-          name="Basic"
-          priceTop="No Upfront Costs"
-          priceBottom="Pay Later"
-          features={[
-            "Get discovered by local users",
-            "Pay only for real customers",
-            "Verified customers via receipt redemption system",
-            "No monthly subscription",
-            "No paying for clicks or views",
-            "Basic analytics",
-            "Zero risk",
-          ]}
-          fees={[
-            {
-              label: "  ** LetsGo Fee",
-              value: "10% of ticket subtotal (pretax) or $5, whichever is less",
-            },
-            {
-              label: "  ** Progressive Payout Fee",
-              value: "Based on Progressive Payout Structure",
-            },
-            {
-              label: "  ** Credit Card Fee",
-              value: "3.5%, no fee if using ACH",
-            },
-          ]}
-          customerNote="Customer will pay full price at business register"
-          onClick={() => setData((p) => ({ ...p, plan: "basic" }))}
-        />
+      <div className="packages-container">
+        {/* Basic Package */}
+        <div className={`package-card ${data.plan === "basic" ? "selected" : ""}`}>
+          <div className="package-header">
+            <h3 className="package-name">Basic</h3>
+            <div className="package-price basic-price">No Upfront Costs</div>
+            <div className="package-price-sub">Pay later</div>
+          </div>
 
-        <PlanCard
-          selected={data.plan === "premium"}
-          badgeText="Most Popular"
-          name="Premium Subscription"
-          priceTop="$100"
-          priceBottom="per month"
-          features={[
-            "Get discovered by local users",
-            "Verified customers via receipt redemption system",
-            "No paying for clicks or views",
-            "No LetsGo fee from Basic section",
-            "Upload 1 video daily",
-            "Up to 5 live videos at once",
-            "Priority placement",
-            "Detailed analytics dashboard",
-            "User experience uploads",
-          ]}
-          fees={[
-            {
-              label: "  ** Progressive Payout Fee",
-              value: "Based on Progressive Payout Structure",
-            },
+          <ul className="package-features">
+            <li><span className="check">✓</span> Get discovered by local users</li>
+            <li><span className="check">✓</span> Pay only for real customers</li>
+            <li><span className="check">✓</span> Verified customers via receipt redemption system</li>
+            <li><span className="check">✓</span> No monthly subscription</li>
+            <li><span className="check">✓</span> No paying for clicks or views</li>
+            <li><span className="check">✓</span> Basic analytics</li>
+            <li><span className="check">✓</span> Zero risk</li>
+          </ul>
 
-            {
-              label: "  **  Premium Subscription Fee & Premium Add-Ons",
-              value: "Based on Premium Package and selected Add-Ons",
-            },
+          <div className="feature-access">
+            <div className="feature-access-title">FEATURE ACCESS</div>
+            <ul className="feature-access-list">
+              <li><span className="check">✓</span> Access to Discovery</li>
+              <li><span className="check">✓</span> Access to 5v3v1</li>
+              <li><span className="check">✓</span> Access to Group Vote</li>
+            </ul>
+          </div>
 
-            {
-              label: "  ** Credit Card Fee",
-              value: "3.5%, no fee if using ACH",
-            },
-          ]}
-          customerNote="Customer will pay full price at business register"
-          onClick={() => setData((p) => ({ ...p, plan: "premium" }))}
-        />
+          <button
+            type="button"
+            className={`package-btn ${data.plan === "basic" ? "current" : ""}`}
+            onClick={() => setData((p) => ({ ...p, plan: "basic" }))}
+          >
+            {data.plan === "basic" ? "Current Plan" : "Switch to Basic"}
+          </button>
+        </div>
+
+        {/* Premium Package */}
+        <div className={`package-card premium ${data.plan === "premium" ? "selected" : ""}`}>
+          <div className="package-badges">
+            <span className="badge-popular">MOST POPULAR</span>
+            {data.plan === "premium" && <span className="badge-current">CURRENT PLAN</span>}
+          </div>
+
+          <div className="package-header">
+            <h3 className="package-name">Premium Subscription</h3>
+            <div className="package-price premium-price">{centsToStr(pkgPricing.premium_monthly_cents)}</div>
+            <div className="package-price-sub">per month</div>
+          </div>
+
+          <ul className="package-features">
+            <li><span className="check">✓</span> Get discovered by local users</li>
+            <li><span className="check">✓</span> Verified customers via receipt redemption system</li>
+            <li><span className="check">✓</span> No paying for clicks or views</li>
+            <li><span className="check">✓</span> No LetsGo fee from Basic section</li>
+            <li><span className="check">✓</span> Upload 1 video daily</li>
+            <li><span className="check">✓</span> Up to 5 live videos at once</li>
+            <li><span className="check">✓</span> Priority placement</li>
+            <li><span className="check">✓</span> Detailed analytics dashboard</li>
+          </ul>
+
+          <div className="feature-access">
+            <div className="feature-access-title">FEATURE ACCESS</div>
+            <ul className="feature-access-list">
+              <li><span className="check">✓</span> Access to Everything in Basic</li>
+              <li><span className="check">✓</span> Access to Events</li>
+              <li><span className="check">✓</span> Access to User Experiences</li>
+              <li><span className="check">✓</span> Access to Date Night Generator</li>
+            </ul>
+          </div>
+
+          <button
+            type="button"
+            className={`package-btn premium-btn ${data.plan === "premium" ? "current" : ""}`}
+            onClick={() => setData((p) => ({ ...p, plan: "premium" }))}
+          >
+            {data.plan === "premium" ? "Current Plan" : "Switch to Premium"}
+          </button>
+        </div>
+      </div>
+
+      {/* Plan change notice */}
+      <div className="plan-notice">
+        <span className="notice-icon">ⓘ</span>
+        <span>Changing from Premium to Basic takes effect at the end of the current billing period. No partial refunds. Premium-only features will stop on the 1st of next month.</span>
       </div>
 
       {/* Premium addons (kept as-is) */}
@@ -1466,7 +1650,7 @@ function Step3({
             }
           />
           <span>Add 5 videos/day</span>
-          <span className="addon-price">+$50/month</span>
+          <span className="addon-price">+{centsToStr(pkgPricing.addon_video_5_monthly_cents)}/month</span>
         </label>
 
         <label className="addon-item">
@@ -1477,12 +1661,16 @@ function Step3({
             onChange={(e) =>
               setData((p) => ({
                 ...p,
-                premiumAddons: { ...p.premiumAddons, liveAddon15: e.target.checked },
+                premiumAddons: { 
+                  ...p.premiumAddons, 
+                  liveAddon15: e.target.checked,
+                  liveAddon30: e.target.checked ? false : p.premiumAddons.liveAddon30, // Uncheck 30 if 15 is selected
+                },
               }))
             }
           />
           <span>Increase live video capacity to 15</span>
-          <span className="addon-price">+$50/month</span>
+          <span className="addon-price">+{centsToStr(pkgPricing.addon_live_15_monthly_cents)}/month</span>
         </label>
 
         <label className="addon-item">
@@ -1493,12 +1681,16 @@ function Step3({
             onChange={(e) =>
               setData((p) => ({
                 ...p,
-                premiumAddons: { ...p.premiumAddons, liveAddon30: e.target.checked },
+                premiumAddons: { 
+                  ...p.premiumAddons, 
+                  liveAddon30: e.target.checked,
+                  liveAddon15: e.target.checked ? false : p.premiumAddons.liveAddon15, // Uncheck 15 if 30 is selected
+                },
               }))
             }
           />
           <span>Increase live video capacity to 30</span>
-          <span className="addon-price">+$100/month</span>
+          <span className="addon-price">+{centsToStr(pkgPricing.addon_live_30_monthly_cents)}/month</span>
         </label>
 
         <div className="helper-text" style={{ marginTop: 8 }}>
@@ -1507,27 +1699,35 @@ function Step3({
       </div>
 
       {/* ✅ Advertising package callout (Claude-style) */}
-      <div className="advertising-section">
+      {/* Advertising section - only available for Premium */}
+      <div className={`advertising-section ${!isPremium ? "locked" : ""}`}>
+        {!isPremium && (
+          <div className="advertising-locked-overlay">
+            <div className="lock-icon">🔒</div>
+            <div className="lock-text">Advertising is available with Premium subscription</div>
+          </div>
+        )}
         <div className="advertising-title">🚀 Boost Your Visibility with Advertising</div>
         <div className="advertising-subtitle">
           Want even more customers? Add targeted advertising campaigns
         </div>
 
         <div className="advertising-options">
-          {ADS.map((ad) => {
+          {dynamicAds.map((ad) => {
             const checked = data.selectedAds[ad.id];
             return (
               <button
                 type="button"
                 key={ad.id}
                 className={`ad-option ${checked ? "selected" : ""}`}
-                onClick={() => toggleAd(ad.id)}
+                onClick={() => isPremium && toggleAd(ad.id)}
+                disabled={!isPremium}
               >
                 <div className="ad-price">{money(ad.price).replace(".00", "")}</div>
                 <div className="ad-duration">{ad.title}</div>
                 <div className="ad-description">{ad.desc}</div>
                 <div className="ad-check">
-                  <input type="checkbox" checked={checked} readOnly />
+                  <input type="checkbox" checked={checked} readOnly disabled={!isPremium} />
                   <span>{checked ? "Selected" : "Select"}</span>
                 </div>
               </button>
@@ -1535,13 +1735,18 @@ function Step3({
           })}
         </div>
 
-        <label className="custom-ad-row">
+        <div className="helper-text" style={{ marginTop: 12, fontSize: "0.8rem", color: "#8892a6", lineHeight: 1.5 }}>
+          Prices shown are base rates. Campaigns scheduled during high-demand dates (Hot Days) may include a surge fee, shown before purchase.
+        </div>
+
+        <label className={`custom-ad-row ${!isPremium ? "disabled" : ""}`}>
           <input
             type="checkbox"
             checked={data.wantsCustomAdsCall}
+            disabled={!isPremium}
             onChange={(e) => setData((p) => ({ ...p, wantsCustomAdsCall: e.target.checked }))}
           />
-          <span>I’d like a Let’sGo rep to contact me about custom advertising plans</span>
+          <span>I'd like a Let'sGo rep to contact me about custom advertising plans</span>
         </label>
       </div>
     </form>
@@ -1607,15 +1812,19 @@ function PlanCard({
 function Step4({
   data,
   setData,
+  tiers,
+  presetBps,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
+  tiers: { level: string; range: string }[];
+  presetBps: Record<string, number[]>;
 }) {
   function setPreset(p: PayoutPreset) {
     setData((prev) => ({
       ...prev,
       payoutPreset: p,
-      payoutBps: p === "custom" ? prev.payoutBps : applyPayoutPreset(p),
+      payoutBps: p === "custom" ? prev.payoutBps : applyPayoutPreset(p, presetBps),
     }));
   }
 
@@ -1697,7 +1906,7 @@ function Step4({
             <div>CUSTOMER SEES</div>
           </div>
 
-          {TIERS.map((t, idx) => (
+          {tiers.map((t, idx) => (
             <div className="table-row" key={t.level}>
               <div className="table-strong">{t.level}</div>
               <div className="table-muted">{t.range}</div>
@@ -1854,9 +2063,15 @@ function PresetCard({
 function Step5({
   data,
   setData,
+  ccFeeBps,
+  feeBps,
+  feeCapCents,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
+  ccFeeBps: number;
+  feeBps: number;
+  feeCapCents: number;
 }) {
   const bankActive = data.paymentMethod === "bank";
   const cardActive = data.paymentMethod === "card";
@@ -1887,7 +2102,7 @@ function Step5({
         >
           <div className="payment-icon">💳</div>
           <div className="payment-name">Credit/Debit Card</div>
-          <div className="payment-fee has-fee">3.5% Processing Fee</div>
+          <div className="payment-fee has-fee">{bpsToStr(ccFeeBps)} Processing Fee</div>
         </button>
       </div>
 
@@ -2018,7 +2233,7 @@ function Step5({
           </div>
 
           <div className="helper-text">
-            3.5% processing fee applies to credit/debit card payments (waived for ACH/Bank).
+            {bpsToStr(ccFeeBps)} processing fee applies to credit/debit card payments (waived for ACH/Bank).
           </div>
         </div>
       </div>
@@ -2110,7 +2325,7 @@ function Step5({
               <strong>Progressive User Payouts:</strong> Based on the business’s agreed upon tier structure
             </li>
             <li>
-              <strong>Platform Fee (Basic Package):</strong> 10% of subtotal or $5 maximum per redeemed receipt
+              <strong>Platform Fee (Basic Package):</strong> {bpsToStr(feeBps)} of subtotal or {centsToStr(feeCapCents)} maximum per redeemed receipt
             </li>
             <li>
               <strong>Monthly Subscription Fees:</strong> If Premium package (and add-ons) selected
@@ -2119,7 +2334,7 @@ function Step5({
               <strong>Advertising Campaigns:</strong> Any campaigns I selected
             </li>
             <li>
-              <strong>Credit Card Processing Fee:</strong> 3.5% if using card payment (waived for ACH/Bank Account)
+              <strong>Credit Card Processing Fee:</strong> {bpsToStr(ccFeeBps)} if using card payment (waived for ACH/Bank Account)
             </li>
           </ul>
         </label>
@@ -2135,9 +2350,11 @@ function Step5({
 function Step6({
   data,
   setData,
+  pkgPricing,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
+  pkgPricing: { tpms_monthly_cents: number };
 }) {
   function onDocFile(file: File | null) {
     if (!file) return;
@@ -2283,6 +2500,11 @@ function Step7({
   data,
   setData,
   reviewPlanFees,
+  feeBps,
+  feeCapCents,
+  ccFeeBps,
+  pkgPricing,
+  tiers: tierDefs,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
@@ -2295,13 +2517,18 @@ function Step7({
     adsTotal: number;
     ads: AdOption[];
   };
+  feeBps: number;
+  feeCapCents: number;
+  ccFeeBps: number;
+  pkgPricing: { tpms_monthly_cents: number };
+  tiers: { level: string; range: string }[];
 }) {
   const tiers = useMemo(() => {
-    return TIERS.map((t, idx) => ({
+    return tierDefs.map((t, idx) => ({
       ...t,
       bps: data.payoutBps[idx],
     }));
-  }, [data.payoutBps]);
+  }, [data.payoutBps, tierDefs]);
 
   return (
     <form onSubmit={(e) => e.preventDefault()}>
@@ -2378,6 +2605,9 @@ function Step7({
                   <span>Total Selected</span>
                   <strong>{money(reviewPlanFees.adsTotal).replace(".00", "")}</strong>
                 </div>
+              </div>
+              <div className="helper-text" style={{ marginTop: 8, fontSize: "0.78rem", color: "#8892a6" }}>
+                Base rates shown. Hot Day surge fees may apply when scheduling during high-demand dates.
               </div>
             </div>
           )}
@@ -2460,11 +2690,9 @@ function Step7({
               }
             />
             <span>
-              <strong>Total Profile Management Services (TPMS) — $200/month.</strong>{" "}
-              We’ll handle receipt reviews and approvals for you, keep your profile updated with fresh uploads, and
-              manage your payout ladder settings for optimal performance. Includes up to{" "}
-              <strong>$1,000 per month</strong> in user payout insurance on disputes and chargebacks related to the
-              Let’sGo program.
+              <strong>Total Profile Management Services (TPMS) — {centsToStr(pkgPricing.tpms_monthly_cents)}/month.</strong>{" "}
+              We&#39;ll handle receipt reviews and approvals for you, keep your profile updated with fresh uploads, and
+              manage your payout ladder settings for optimal performance.
             </span>
           </label>
         </div>
@@ -2485,8 +2713,12 @@ function Step7({
             />
             <span>
               I have read and agree to the{" "}
-              <a href="#" className="agreement-link">
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="agreement-link">
                 Terms of Service
+              </a>{" "}
+              and{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="agreement-link">
+                Privacy Policy
               </a>
             </span>
           </label>
@@ -2499,9 +2731,10 @@ function Step7({
             />
             <span>
               I accept the{" "}
-              <a href="#" className="agreement-link">
+              <a href="/terms#14" target="_blank" rel="noopener noreferrer" className="agreement-link">
                 Business Billing Policy
               </a>
+              , including Hot Day surge pricing on advertising campaigns scheduled during high-demand dates
             </span>
           </label>
 
@@ -2513,7 +2746,7 @@ function Step7({
             />
             <span>
               I understand the{" "}
-              <a href="#" className="agreement-link">
+              <a href="/terms#19" target="_blank" rel="noopener noreferrer" className="agreement-link">
                 Content Policy
               </a>
             </span>
@@ -2626,12 +2859,4 @@ const DAY_LABELS: Record<DayKey, string> = {
   sun: "Sunday",
 };
 
-const TIERS = [
-  { level: "Level 1", range: "1-10 visits" },
-  { level: "Level 2", range: "11-20 visits" },
-  { level: "Level 3", range: "21-30 visits" },
-  { level: "Level 4", range: "31-40 visits" },
-  { level: "Level 5", range: "41-50 visits" },
-  { level: "Level 6", range: "51-60 visits" },
-  { level: "Level 7", range: "61+ visits" },
-];
+// TIERS constant removed — now derived dynamically from platform_settings visit thresholds

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseServer";
+import { supabaseServer as supabase } from "@/lib/supabaseServer";
 
 type TierRow = {
   tier_index: number;
@@ -79,26 +79,39 @@ export async function GET(
     return NextResponse.json({ error: "Business not found" }, { status: 404 });
   }
 
-  // 2) Count user visits in the window (demo user for now)
-  const userId = "demo-user-123";
-  const windowDays = 30;
+  // 2) Resolve user from Bearer token (if provided) and count visits in 365-day window
+  const authHeader = _req.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
+  let userId: string | null = null;
+
+  if (token) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!authError && user) userId = user.id;
+  }
+
+  const windowDays = 365;
   const now = new Date();
   const fromDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10); // YYYY-MM-DD
 
-  const { count: visitCount, error: visitError } = await supabase
-    .from("receipts")
-    .select("id", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .eq("user_id", userId)
-    .gte("visit_date", fromDate);
+  let visits = 0;
 
-  if (visitError) {
-    return NextResponse.json({ error: "Failed to load visits" }, { status: 500 });
+  if (userId) {
+    const { count: visitCount, error: visitError } = await supabase
+      .from("receipts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("user_id", userId)
+      .eq("status", "approved")
+      .gte("visit_date", fromDate);
+
+    if (visitError) {
+      return NextResponse.json({ error: "Failed to load visits" }, { status: 500 });
+    }
+
+    visits = visitCount ?? 0;
   }
-
-  const visits = visitCount ?? 0;
 
   // 3) Load all payout tiers for this business
   const { data: tiers, error: tiersError } = await supabase
