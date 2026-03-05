@@ -243,7 +243,7 @@ const CityMapAnimation = () => {
         </g>
       </g>
 
-      {/* Stop 2: Riverfront Coffee */}
+      {/* Stop 2: Movin Movies */}
       <g transform="translate(250, 180)">
         <g style={getMarkerStyle(2)} filter={activeStop === 2 ? "url(#activeGlow)" : "url(#strongGlow)"}>
           <circle r={activeStop === 2 ? 18 : 14} fill="#00bfff" />
@@ -254,9 +254,9 @@ const CityMapAnimation = () => {
       <g transform="translate(250, 118)">
         <g style={getStopStyle(2)} filter="url(#dropShadow)">
           <rect x="-42" y="-32" width="84" height="62" rx="10" fill="#1a0a2e" stroke="#00bfff" strokeWidth={activeStop === 2 ? 3 : 2} filter={activeStop === 2 ? "url(#activeGlow)" : "url(#neonGlow)"} />
-          <text x="0" y="-4" textAnchor="middle" fontSize="22">☕</text>
-          <text x="0" y="14" textAnchor="middle" fontSize="8" fill="#00bfff" fontFamily="'Outfit', sans-serif" fontWeight="700">RIVERFRONT</text>
-          <text x="0" y="24" textAnchor="middle" fontSize="6" fill="#00bfff" fontFamily="'Outfit', sans-serif" fontWeight="500" opacity="0.85">COFFEE CO.</text>
+          <text x="0" y="-4" textAnchor="middle" fontSize="18">📼🍿</text>
+          <text x="0" y="14" textAnchor="middle" fontSize="8" fill="#00bfff" fontFamily="'Outfit', sans-serif" fontWeight="700">MOVIN&apos;</text>
+          <text x="0" y="24" textAnchor="middle" fontSize="6" fill="#00bfff" fontFamily="'Outfit', sans-serif" fontWeight="500" opacity="0.85">MOVIES</text>
         </g>
       </g>
 
@@ -1037,38 +1037,58 @@ export default function WelcomePage() {
         @media (max-width: 768px) {
           .welcome-container {
             height: auto;
-            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-y: auto;
           }
 
           .map-section {
             height: 35vh;
             min-height: 250px;
-            padding: 60px 5% 15px 5%;
+            padding: 75px 5% 10px 5%;
           }
 
           .signin-section {
             height: auto;
-            min-height: 65vh;
+            min-height: auto;
             flex-direction: column;
+            gap: 0;
+          }
+
+          .signin-side {
+            padding: 1.5rem 1.25rem !important;
           }
 
           .signin-title {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
+            margin-bottom: 0.3rem !important;
           }
 
           .signin-desc {
-            font-size: 0.85rem;
-            max-width: 250px;
+            font-size: 0.8rem;
+            max-width: 260px;
+            margin-bottom: 0.75rem !important;
+            line-height: 1.4 !important;
           }
 
           .signin-btn {
-            padding: 0.75rem 2rem;
-            font-size: 0.95rem;
+            padding: 0.65rem 1.75rem;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem !important;
           }
 
           .signin-secondary {
-            font-size: 0.8rem;
-            padding: 0.4rem 0.85rem;
+            font-size: 0.75rem;
+            padding: 0.35rem 0.8rem;
+          }
+
+          .mobile-logo {
+            top: 0.6rem !important;
+            padding: 0.4rem 1rem !important;
+          }
+
+          .mobile-logo img {
+            max-width: 140px !important;
+            max-height: 44px !important;
           }
 
           .center-divider {
@@ -1086,6 +1106,7 @@ export default function WelcomePage() {
 
       {/* Logo */}
       <div
+        className="mobile-logo"
         style={{
           position: "absolute",
           top: "1.5rem",
@@ -1108,6 +1129,8 @@ export default function WelcomePage() {
           alt="Let's Go"
           width={140}
           height={42}
+          sizes="(max-width: 768px) 100px, 140px"
+          style={{ width: "auto", height: "auto", maxWidth: "140px" }}
           priority
         />
       </div>
@@ -1156,6 +1179,7 @@ export default function WelcomePage() {
 
         {/* Business Side */}
         <div
+          className="signin-side"
           onMouseEnter={() => setHoveredSide("business")}
           onMouseLeave={() => setHoveredSide(null)}
           style={{
@@ -1219,6 +1243,7 @@ export default function WelcomePage() {
 
         {/* User Side */}
         <div
+          className="signin-side"
           onMouseEnter={() => setHoveredSide("user")}
           onMouseLeave={() => setHoveredSide(null)}
           style={{
