@@ -5,7 +5,7 @@ import { BarChart3, CheckCircle, CreditCard, DollarSign, Download, AlertCircle, 
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
@@ -256,6 +256,7 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
 
   // ---------- UPDATE PAYMENT METHOD ----------
   const [updatePmOpen, setUpdatePmOpen] = useState(false);
+  const [updatePmMode, setUpdatePmMode] = useState<"manual" | "link">("manual");
   const [updatePmClientSecret, setUpdatePmClientSecret] = useState<string | null>(null);
   const [updatePmLoading, setUpdatePmLoading] = useState(false);
   const [updatePmError, setUpdatePmError] = useState<string | null>(null);
@@ -1016,11 +1017,32 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
                 alignItems: "center",
                 gap: "0.5rem",
               }}
-              onClick={handleStartPaymentUpdate}
+              onClick={() => { setUpdatePmMode("manual"); handleStartPaymentUpdate(); }}
               disabled={updatePmLoading}
             >
-              <RefreshCw size={14} className={updatePmLoading ? "animate-spin" : ""} />
-              {updatePmLoading ? "Loading..." : "Update Payment Method"}
+              <CreditCard size={14} />
+              {updatePmLoading && updatePmMode === "manual" ? "Loading..." : "Enter Card / Bank Details"}
+            </button>
+            <button
+              style={{
+                padding: "0.75rem 1.25rem",
+                background: "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                borderRadius: "10px",
+                color: "white",
+                fontSize: "0.875rem",
+                fontWeight: 900,
+                cursor: updatePmLoading ? "wait" : "pointer",
+                opacity: updatePmLoading ? 0.6 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+              onClick={() => { setUpdatePmMode("link"); handleStartPaymentUpdate(); }}
+              disabled={updatePmLoading}
+            >
+              <RefreshCw size={14} className={updatePmLoading && updatePmMode === "link" ? "animate-spin" : ""} />
+              {updatePmLoading && updatePmMode === "link" ? "Loading..." : "Use Stripe Link"}
             </button>
           </div>
         ) : (
@@ -1034,26 +1056,47 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.875rem", fontWeight: 900, color: colors.primary }}>
-                Enter New Payment Details
+                {updatePmMode === "manual" ? "Enter New Payment Details" : "Update via Stripe Link"}
               </div>
-              <button
-                onClick={() => { setUpdatePmOpen(false); setUpdatePmClientSecret(null); setUpdatePmError(null); }}
-                style={{
-                  background: "transparent",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  borderRadius: "6px",
-                  color: "rgba(255,255,255,0.4)",
-                  padding: "0.25rem 0.75rem",
-                  fontSize: "0.75rem",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <button
+                  onClick={() => {
+                    const newMode = updatePmMode === "manual" ? "link" : "manual";
+                    setUpdatePmMode(newMode);
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: `1px solid rgba(255,255,255,0.15)`,
+                    borderRadius: "6px",
+                    color: "rgba(255,255,255,0.5)",
+                    padding: "0.25rem 0.75rem",
+                    fontSize: "0.7rem",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  {updatePmMode === "manual" ? "Use Stripe Link instead" : "Enter details manually"}
+                </button>
+                <button
+                  onClick={() => { setUpdatePmOpen(false); setUpdatePmClientSecret(null); setUpdatePmError(null); }}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: "6px",
+                    color: "rgba(255,255,255,0.4)",
+                    padding: "0.25rem 0.75rem",
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
             {updatePmClientSecret && stripePromise ? (
               <Elements
                 stripe={stripePromise}
+                key={updatePmMode}
                 options={{
                   clientSecret: updatePmClientSecret,
                   appearance: {
@@ -1070,6 +1113,8 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
               >
                 <UpdatePaymentForm
                   businessId={businessId}
+                  mode={updatePmMode}
+                  clientSecret={updatePmClientSecret}
                   onSuccess={() => {
                     setUpdatePmOpen(false);
                     setUpdatePmClientSecret(null);
@@ -1384,10 +1429,14 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
 // Separate component for Stripe Elements (must be inside <Elements> provider)
 function UpdatePaymentForm({
   businessId,
+  mode,
+  clientSecret,
   onSuccess,
   onError,
 }: {
   businessId: string;
+  mode: "manual" | "link";
+  clientSecret: string;
   onSuccess: () => void;
   onError: (msg: string) => void;
 }) {
@@ -1396,7 +1445,62 @@ function UpdatePaymentForm({
   const [confirming, setConfirming] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleConfirm = async () => {
+  // Save payment method to DB after Stripe confirms
+  const savePaymentMethod = async (pmId: string) => {
+    const { data: session } = await supabaseBrowser.auth.getSession();
+    const token = session?.session?.access_token;
+    if (!token) { onError("Authentication required"); return; }
+
+    const res = await fetch("/api/stripe/update-payment-method", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ businessId, paymentMethodId: pmId }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: "Failed to save" }));
+      onError(data.error || "Failed to save payment method");
+      return;
+    }
+
+    setSuccess(true);
+    setTimeout(() => onSuccess(), 1500);
+  };
+
+  const handleConfirmManual = async () => {
+    if (!stripe || !elements) return;
+    setConfirming(true);
+    onError("");
+
+    try {
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) { onError("Card form not loaded"); setConfirming(false); return; }
+
+      const { error: confirmError, setupIntent } = await stripe.confirmCardSetup(
+        clientSecret,
+        { payment_method: { card: cardElement } }
+      );
+
+      if (confirmError) {
+        onError(confirmError.message || "Payment setup failed. Please try again.");
+        return;
+      }
+
+      if (setupIntent) {
+        const pmId = typeof setupIntent.payment_method === "string"
+          ? setupIntent.payment_method
+          : (setupIntent.payment_method as { id?: string })?.id || "";
+        if (!pmId) { onError("Could not retrieve payment method."); return; }
+        await savePaymentMethod(pmId);
+      }
+    } catch {
+      onError("An unexpected error occurred. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleConfirmLink = async () => {
     if (!stripe || !elements) return;
     setConfirming(true);
     onError("");
@@ -1416,32 +1520,9 @@ function UpdatePaymentForm({
       if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "requires_action")) {
         const pmId = typeof setupIntent.payment_method === "string"
           ? setupIntent.payment_method
-          : setupIntent.payment_method?.id || "";
-
-        if (!pmId) {
-          onError("Could not retrieve payment method. Please try again.");
-          return;
-        }
-
-        // Save to business table via API
-        const { data: session } = await supabaseBrowser.auth.getSession();
-        const token = session?.session?.access_token;
-        if (!token) { onError("Authentication required"); return; }
-
-        const res = await fetch("/api/stripe/update-payment-method", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ businessId, paymentMethodId: pmId }),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({ error: "Failed to save" }));
-          onError(data.error || "Failed to save payment method");
-          return;
-        }
-
-        setSuccess(true);
-        setTimeout(() => onSuccess(), 1500);
+          : (setupIntent.payment_method as { id?: string })?.id || "";
+        if (!pmId) { onError("Could not retrieve payment method."); return; }
+        await savePaymentMethod(pmId);
       }
     } catch {
       onError("An unexpected error occurred. Please try again.");
@@ -1461,11 +1542,28 @@ function UpdatePaymentForm({
   return (
     <div>
       <div style={{ marginBottom: "1rem" }}>
-        <PaymentElement options={{ layout: "tabs" }} />
+        {mode === "manual" ? (
+          <CardElement
+            options={{
+              style: {
+                base: {
+                  fontSize: "16px",
+                  color: "#ffffff",
+                  "::placeholder": { color: "rgba(255,255,255,0.4)" },
+                  iconColor: "#14b8a6",
+                },
+                invalid: { color: "#ef4444", iconColor: "#ef4444" },
+              },
+              hidePostalCode: false,
+            }}
+          />
+        ) : (
+          <PaymentElement options={{ layout: "tabs" }} />
+        )}
       </div>
       <button
         type="button"
-        onClick={handleConfirm}
+        onClick={mode === "manual" ? handleConfirmManual : handleConfirmLink}
         disabled={!stripe || confirming}
         style={{
           width: "100%",
