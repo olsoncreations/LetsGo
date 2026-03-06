@@ -1792,6 +1792,55 @@ function BusinessesPage() {
                   />
                 </Card>
 
+                {/* Verification Documents */}
+                {(() => {
+                  const cfg = (selected.config ?? {}) as Record<string, unknown>;
+                  const verDoc = cfg.verificationDocFile as { name?: string; url?: string } | null | undefined;
+                  const logoDoc = cfg.businessLogoFile as { name?: string; url?: string } | null | undefined;
+                  const hasFiles = (verDoc && verDoc.url) || (logoDoc && logoDoc.url);
+                  return hasFiles ? (
+                    <>
+                      <SectionTitle icon="📄">Verification Documents</SectionTitle>
+                      <Card style={{ marginBottom: 24 }}>
+                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                          {verDoc?.url && (
+                            <div>
+                              <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, fontWeight: 600 }}>
+                                {(cfg.verificationDocType as string)?.replace(/_/g, " ").toUpperCase() || "VERIFICATION DOC"}
+                              </div>
+                              <div
+                                onClick={() => setPreview({ url: verDoc.url!, type: verDoc.name?.endsWith(".pdf") ? "pdf" : "image" })}
+                                style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", border: "2px solid " + COLORS.cardBorder, width: 140, height: 140 }}
+                              >
+                                {verDoc.name?.toLowerCase().endsWith(".pdf") ? (
+                                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.darkBg, color: COLORS.textSecondary, fontSize: 32 }}>
+                                    📄
+                                  </div>
+                                ) : (
+                                  <img src={verDoc.url} alt={verDoc.name || "Document"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                )}
+                              </div>
+                              <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>{verDoc.name}</div>
+                            </div>
+                          )}
+                          {logoDoc?.url && (
+                            <div>
+                              <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, fontWeight: 600 }}>BUSINESS LOGO</div>
+                              <div
+                                onClick={() => setPreview({ url: logoDoc.url!, type: "image" })}
+                                style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", border: "2px solid " + COLORS.cardBorder, width: 140, height: 140 }}
+                              >
+                                <img src={logoDoc.url} alt={logoDoc.name || "Logo"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              </div>
+                              <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>{logoDoc.name}</div>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    </>
+                  ) : null;
+                })()}
+
                 {/* Photos - Collapsible */}
                 <CollapsibleSection title="Photos" icon="📷" defaultOpen={true}>
                   <Card>
@@ -1842,9 +1891,44 @@ function BusinessesPage() {
                             accept="image/*"
                             multiple
                             style={{ display: "none" }}
-                            onChange={(e) => {
-                              // TODO: Implement file upload to storage
-                              alert("Photo upload will be implemented with Supabase Storage integration");
+                            onChange={async (e) => {
+                              const files = e.target.files;
+                              if (!files || files.length === 0 || !selected) return;
+                              const existingCount = selected.photos?.length || 0;
+                              for (let i = 0; i < files.length; i++) {
+                                const file = files[i];
+                                const ext = file.name.split(".").pop() || "jpg";
+                                const storagePath = `${selected.id}/photos/${Date.now()}-${i}.${ext}`;
+                                const { error: upErr } = await supabaseBrowser.storage
+                                  .from("business-media")
+                                  .upload(storagePath, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+                                if (upErr) { console.error("[admin] Photo upload error:", upErr); continue; }
+                                const { data: inserted, error: insErr } = await supabaseBrowser
+                                  .from("business_media")
+                                  .insert({
+                                    business_id: selected.id,
+                                    bucket: "business-media",
+                                    path: storagePath,
+                                    media_type: "photo",
+                                    sort_order: existingCount + i + 1,
+                                    caption: file.name,
+                                    is_active: true,
+                                    meta: {},
+                                  })
+                                  .select("id, path, caption, created_at")
+                                  .single();
+                                if (insErr) { console.error("[admin] Photo insert error:", insErr); continue; }
+                                const { data: urlData } = supabaseBrowser.storage.from("business-media").getPublicUrl(storagePath);
+                                const newPhoto = {
+                                  id: inserted.id,
+                                  name: inserted.caption || file.name,
+                                  url: urlData?.publicUrl || "",
+                                  status: "active" as const,
+                                  uploaded_at: inserted.created_at || new Date().toISOString(),
+                                };
+                                setBusinesses(prev => prev.map(b => b.id === selected.id ? { ...b, photos: [...(b.photos || []), newPhoto] } : b));
+                              }
+                              e.target.value = "";
                             }}
                           />
                         </label>
@@ -1978,9 +2062,44 @@ function BusinessesPage() {
                             accept="video/*"
                             multiple
                             style={{ display: "none" }}
-                            onChange={(e) => {
-                              // TODO: Implement file upload to storage
-                              alert("Video upload will be implemented with Supabase Storage integration");
+                            onChange={async (e) => {
+                              const files = e.target.files;
+                              if (!files || files.length === 0 || !selected) return;
+                              const existingCount = selected.videos?.length || 0;
+                              for (let i = 0; i < files.length; i++) {
+                                const file = files[i];
+                                const ext = file.name.split(".").pop() || "mp4";
+                                const storagePath = `${selected.id}/videos/${Date.now()}-${i}.${ext}`;
+                                const { error: upErr } = await supabaseBrowser.storage
+                                  .from("business-media")
+                                  .upload(storagePath, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+                                if (upErr) { console.error("[admin] Video upload error:", upErr); continue; }
+                                const { data: inserted, error: insErr } = await supabaseBrowser
+                                  .from("business_media")
+                                  .insert({
+                                    business_id: selected.id,
+                                    bucket: "business-media",
+                                    path: storagePath,
+                                    media_type: "video",
+                                    sort_order: existingCount + i + 1,
+                                    caption: file.name,
+                                    is_active: true,
+                                    meta: {},
+                                  })
+                                  .select("id, path, caption, created_at")
+                                  .single();
+                                if (insErr) { console.error("[admin] Video insert error:", insErr); continue; }
+                                const { data: urlData } = supabaseBrowser.storage.from("business-media").getPublicUrl(storagePath);
+                                const newVideo = {
+                                  id: inserted.id,
+                                  name: inserted.caption || file.name,
+                                  url: urlData?.publicUrl || "",
+                                  status: "active" as const,
+                                  uploaded_at: inserted.created_at || new Date().toISOString(),
+                                };
+                                setBusinesses(prev => prev.map(b => b.id === selected.id ? { ...b, videos: [...(b.videos || []), newVideo] } : b));
+                              }
+                              e.target.value = "";
                             }}
                           />
                         </label>

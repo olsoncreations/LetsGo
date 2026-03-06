@@ -1,9 +1,15 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { BarChart3, CheckCircle, CreditCard, DollarSign, Download, AlertCircle } from "lucide-react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { BarChart3, CheckCircle, CreditCard, DollarSign, Download, AlertCircle, RefreshCw } from "lucide-react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 type PlanName = "basic" | "premium";
 
@@ -247,6 +253,36 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
     expYear: 0,
   });
   const [paymentLoaded, setPaymentLoaded] = useState(false);
+
+  // ---------- UPDATE PAYMENT METHOD ----------
+  const [updatePmOpen, setUpdatePmOpen] = useState(false);
+  const [updatePmClientSecret, setUpdatePmClientSecret] = useState<string | null>(null);
+  const [updatePmLoading, setUpdatePmLoading] = useState(false);
+  const [updatePmError, setUpdatePmError] = useState<string | null>(null);
+
+  const handleStartPaymentUpdate = useCallback(async () => {
+    if (!businessId) return;
+    setUpdatePmLoading(true);
+    setUpdatePmError(null);
+    try {
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Authentication required");
+      const res = await fetch("/api/stripe/update-payment-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ businessId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start payment update");
+      setUpdatePmClientSecret(data.clientSecret);
+      setUpdatePmOpen(true);
+    } catch (err) {
+      setUpdatePmError(err instanceof Error ? err.message : "Failed to start payment update");
+    } finally {
+      setUpdatePmLoading(false);
+    }
+  }, [businessId]);
 
   // ---------- REAL BILLING DATA ----------
   const [billingSummary, setBillingSummary] = useState<BillingSummaryRow[]>([]);
@@ -962,42 +998,96 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
           )}
         </div>
 
-        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-          <button
+        {/* Update Payment Method */}
+        {!updatePmOpen ? (
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            <button
+              style={{
+                padding: "0.75rem 1.25rem",
+                background: `${colors.primary}20`,
+                border: `1px solid ${colors.primary}`,
+                borderRadius: "10px",
+                color: colors.primary,
+                fontSize: "0.875rem",
+                fontWeight: 900,
+                cursor: updatePmLoading ? "wait" : "pointer",
+                opacity: updatePmLoading ? 0.6 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+              onClick={handleStartPaymentUpdate}
+              disabled={updatePmLoading}
+            >
+              <RefreshCw size={14} className={updatePmLoading ? "animate-spin" : ""} />
+              {updatePmLoading ? "Loading..." : "Update Payment Method"}
+            </button>
+          </div>
+        ) : (
+          <div
             style={{
-              padding: "0.75rem 1.25rem",
-              background: `${colors.primary}20`,
-              border: `1px solid ${colors.primary}`,
-              borderRadius: "10px",
-              color: colors.primary,
-              fontSize: "0.875rem",
-              fontWeight: 900,
-              cursor: "pointer",
-              opacity: 1,
+              background: "rgba(255, 255, 255, 0.05)",
+              border: `1px solid ${colors.primary}40`,
+              borderRadius: "12px",
+              padding: "1.5rem",
             }}
-            title="Payment method updates coming soon"
-            onClick={() => alert("(Placeholder) Payment method updates will be wired later.")}
           >
-            Update Payment Method
-          </button>
-
-          <button
-            style={{
-              padding: "0.75rem 1.25rem",
-              background: `rgba(255, 255, 255, 0.06)`,
-              border: `1px solid rgba(255, 255, 255, 0.2)`,
-              borderRadius: "10px",
-              color: "white",
-              fontSize: "0.875rem",
-              fontWeight: 900,
-              cursor: "pointer",
-            }}
-            title="Placeholder"
-            onClick={() => alert("(Placeholder) Billing policy download")}
-          >
-            Download Billing Policy
-          </button>
-        </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <div style={{ fontSize: "0.875rem", fontWeight: 900, color: colors.primary }}>
+                Enter New Payment Details
+              </div>
+              <button
+                onClick={() => { setUpdatePmOpen(false); setUpdatePmClientSecret(null); setUpdatePmError(null); }}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: "6px",
+                  color: "rgba(255,255,255,0.4)",
+                  padding: "0.25rem 0.75rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            {updatePmClientSecret && stripePromise ? (
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret: updatePmClientSecret,
+                  appearance: {
+                    theme: "night",
+                    variables: {
+                      colorPrimary: colors.primary,
+                      colorBackground: "#1a1a2e",
+                      colorText: "#ffffff",
+                      colorTextSecondary: "rgba(255,255,255,0.5)",
+                      borderRadius: "8px",
+                    },
+                  },
+                }}
+              >
+                <UpdatePaymentForm
+                  businessId={businessId}
+                  onSuccess={() => {
+                    setUpdatePmOpen(false);
+                    setUpdatePmClientSecret(null);
+                    loadPaymentInfo();
+                  }}
+                  onError={(msg) => setUpdatePmError(msg)}
+                />
+              </Elements>
+            ) : (
+              <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.85rem" }}>Loading payment form...</div>
+            )}
+          </div>
+        )}
+        {updatePmError && (
+          <div style={{ marginTop: "0.75rem", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#fca5a5", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <AlertCircle size={14} /> {updatePmError}
+          </div>
+        )}
       </div>
 
       {/* Monthly Billing Summary (REAL) */}
@@ -1289,4 +1379,109 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
       </div>
     );
   }
+}
+
+// Separate component for Stripe Elements (must be inside <Elements> provider)
+function UpdatePaymentForm({
+  businessId,
+  onSuccess,
+  onError,
+}: {
+  businessId: string;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [confirming, setConfirming] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!stripe || !elements) return;
+    setConfirming(true);
+    onError("");
+
+    try {
+      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+        confirmParams: { return_url: window.location.href },
+      });
+
+      if (confirmError) {
+        onError(confirmError.message || "Payment setup failed. Please try again.");
+        return;
+      }
+
+      if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "requires_action")) {
+        const pmId = typeof setupIntent.payment_method === "string"
+          ? setupIntent.payment_method
+          : setupIntent.payment_method?.id || "";
+
+        if (!pmId) {
+          onError("Could not retrieve payment method. Please try again.");
+          return;
+        }
+
+        // Save to business table via API
+        const { data: session } = await supabaseBrowser.auth.getSession();
+        const token = session?.session?.access_token;
+        if (!token) { onError("Authentication required"); return; }
+
+        const res = await fetch("/api/stripe/update-payment-method", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ businessId, paymentMethodId: pmId }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({ error: "Failed to save" }));
+          onError(data.error || "Failed to save payment method");
+          return;
+        }
+
+        setSuccess(true);
+        setTimeout(() => onSuccess(), 1500);
+      }
+    } catch {
+      onError("An unexpected error occurred. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#6ee7b7", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <CheckCircle size={14} /> Payment method updated successfully!
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: "1rem" }}>
+        <PaymentElement options={{ layout: "tabs" }} />
+      </div>
+      <button
+        type="button"
+        onClick={handleConfirm}
+        disabled={!stripe || confirming}
+        style={{
+          width: "100%",
+          padding: "0.75rem",
+          background: confirming ? "rgba(20, 184, 166, 0.3)" : "rgba(20, 184, 166, 0.2)",
+          border: "1px solid #14b8a6",
+          borderRadius: "10px",
+          color: "#14b8a6",
+          fontSize: "0.875rem",
+          fontWeight: 900,
+          cursor: confirming ? "wait" : "pointer",
+          opacity: confirming ? 0.6 : 1,
+        }}
+      >
+        {confirming ? "Saving..." : "Save New Payment Method"}
+      </button>
+    </div>
+  );
 }
