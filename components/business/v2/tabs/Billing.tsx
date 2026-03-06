@@ -5,7 +5,7 @@ import { BarChart3, CheckCircle, CreditCard, DollarSign, Download, AlertCircle, 
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
@@ -1488,9 +1488,9 @@ function UpdatePaymentForm({
     showError("");
 
     try {
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) {
-        console.error("[UpdatePaymentForm] CardElement not found");
+      const cardNumberElement = elements.getElement(CardNumberElement);
+      if (!cardNumberElement) {
+        console.error("[UpdatePaymentForm] CardNumberElement not found");
         showError("Card form not loaded. Please try closing and reopening the form.");
         setConfirming(false);
         return;
@@ -1499,7 +1499,7 @@ function UpdatePaymentForm({
       console.log("[UpdatePaymentForm] Confirming card setup...");
       const { error: confirmError, setupIntent } = await stripe.confirmCardSetup(
         clientSecret,
-        { payment_method: { card: cardElement } }
+        { payment_method: { card: cardNumberElement } }
       );
 
       if (confirmError) {
@@ -1583,20 +1583,45 @@ function UpdatePaymentForm({
       )}
       <div style={{ marginBottom: "1rem" }}>
         {mode === "manual" ? (
-          <CardElement
-            options={{
-              style: {
-                base: {
-                  fontSize: "16px",
-                  color: "#ffffff",
-                  "::placeholder": { color: "rgba(255,255,255,0.4)" },
-                  iconColor: "#14b8a6",
-                },
-                invalid: { color: "#ef4444", iconColor: "#ef4444" },
-              },
-              hidePostalCode: false,
-            }}
-          />
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem", fontWeight: 600 }}>
+                Card Number
+              </label>
+              <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.75rem 0.875rem" }}>
+                <CardNumberElement options={{ style: { base: { fontSize: "16px", color: "#ffffff", "::placeholder": { color: "rgba(255,255,255,0.35)" }, iconColor: "#14b8a6" }, invalid: { color: "#ef4444", iconColor: "#ef4444" } }, showIcon: true }} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem", fontWeight: 600 }}>
+                  Expiration
+                </label>
+                <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.75rem 0.875rem" }}>
+                  <CardExpiryElement options={{ style: { base: { fontSize: "16px", color: "#ffffff", "::placeholder": { color: "rgba(255,255,255,0.35)" } }, invalid: { color: "#ef4444" } } }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem", fontWeight: 600 }}>
+                  CVC
+                </label>
+                <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.75rem 0.875rem" }}>
+                  <CardCvcElement options={{ style: { base: { fontSize: "16px", color: "#ffffff", "::placeholder": { color: "rgba(255,255,255,0.35)" } }, invalid: { color: "#ef4444" } } }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem", fontWeight: 600 }}>
+                  ZIP Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="12345"
+                  maxLength={10}
+                  style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "0.75rem 0.875rem", fontSize: "16px", color: "#ffffff", outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+          </div>
         ) : (
           <PaymentElement options={{ layout: "tabs" }} />
         )}
