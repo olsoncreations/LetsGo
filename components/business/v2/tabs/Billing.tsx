@@ -195,7 +195,11 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
         let payoutTotal = 0;
         let feeTotal = 0;
         try {
-          const receiptsRes = await fetch(`/api/businesses/${businessId}/receipts`);
+          const { data: receiptsSession } = await supabaseBrowser.auth.getSession();
+          const receiptsToken = receiptsSession?.session?.access_token;
+          const receiptsRes = await fetch(`/api/businesses/${businessId}/receipts`, {
+            headers: receiptsToken ? { Authorization: `Bearer ${receiptsToken}` } : {},
+          });
           if (receiptsRes.ok) {
             const { receipts: allReceipts } = await receiptsRes.json();
             for (const r of allReceipts ?? []) {
@@ -272,7 +276,7 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
       const res = await fetch("/api/stripe/update-payment-method", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ businessId }),
+        body: JSON.stringify({ businessId, paymentMethodType: "card" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start payment update");
