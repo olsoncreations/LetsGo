@@ -243,7 +243,13 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
 
     try {
       // Load receipts via server API (bypasses RLS)
-      const res = await fetch(`/api/businesses/${businessId}/receipts`);
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Authentication required");
+
+      const res = await fetch(`/api/businesses/${businessId}/receipts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "Failed to load receipts" }));
         throw new Error(errBody.error || `HTTP ${res.status}`);
@@ -382,9 +388,16 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
 
     try {
       // Business approval sets to "business_approved" (pending LetsGo final approval)
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Authentication required");
+
       const res = await fetch(`/api/businesses/${businessId}/receipts`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ ids: receiptIds, status: "business_approved" }),
       });
 
@@ -409,9 +422,16 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
     setActionLoading(true);
 
     try {
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Authentication required");
+
       const res = await fetch(`/api/businesses/${businessId}/receipts`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ ids: receiptIds, status: "rejected" }),
       });
 

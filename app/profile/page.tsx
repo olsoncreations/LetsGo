@@ -377,6 +377,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   const [blockedUsers,setBlockedUsers]=useState<FriendData[]>([]);
   const [supportMsg,setSupportMsg]=useState("");
   const [supportSent,setSupportSent]=useState(false);
+  const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [notifPrefs,setNotifPrefs]=useState<Record<string,boolean>>({push_notifications:true,email_notifications:true,sms_notifications:false,marketing_emails:false});
 
   useEffect(()=>{if(profile){setFormData({first_name:profile.first_name||"",last_name:profile.last_name||"",username:profile.username||"",email:profile.email||"",zip_code:profile.zip_code||"",bio:profile.bio||""});setVenmoUsername(profile.payout_identifier||"");if(profile.preferences)setNotifPrefs(prev=>({...prev,...profile.preferences}));}},[profile]);
@@ -398,10 +399,10 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   if(!open)return null;
   return(
     <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:520,maxHeight:"80vh",borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${NEON.primaryRGB},0.2)`,boxShadow:`0 0 60px rgba(${NEON.primaryRGB},0.08)`,overflow:"auto"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:640,maxHeight:"90vh",borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${NEON.primaryRGB},0.2)`,boxShadow:`0 0 60px rgba(${NEON.primaryRGB},0.08)`,overflow:"auto"}}>
         <div style={{padding:"20px 24px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><NeonTag neon={NEON.primary}>Settings</NeonTag><div onClick={onClose} style={{cursor:"pointer",width:28,height:28,borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.35)",fontSize:14}}>{"\u2715"}</div></div>
         <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-          {(["profile","notifications","privacy","account"] as const).map(t=>(<button key={t} onClick={()=>setActiveTab(t)} style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",padding:"8px 14px 10px",border:"none",background:"transparent",color:activeTab===t?NEON.primary:"rgba(255,255,255,0.25)",borderBottom:activeTab===t?`2px solid ${NEON.primary}`:"2px solid transparent",cursor:"pointer"}}>{t}</button>))}
+          {(["profile","notifications","privacy","account","help"] as const).map(t=>(<button key={t} onClick={()=>setActiveTab(t)} style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",padding:"8px 14px 10px",border:"none",background:"transparent",color:activeTab===t?NEON.primary:"rgba(255,255,255,0.25)",borderBottom:activeTab===t?`2px solid ${NEON.primary}`:"2px solid transparent",cursor:"pointer",whiteSpace:"nowrap"}}>{t==="help"?"Help & Support":t}</button>))}
         </div>
         <div style={{padding:24}}>
           {activeTab==="profile"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -426,9 +427,39 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}><div style={{fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase"}}>Payment Account</div>{venmoConnected&&<span style={{fontSize:9,fontWeight:700,color:NEON.green,letterSpacing:"0.08em",display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:"50%",background:NEON.green,boxShadow:`0 0 4px ${NEON.green}`}}/>CONNECTED</span>}</div>
               {venmoConnected?(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:2}}>Venmo {"\u00b7"} {profile?.payout_identifier}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.2)"}}>Cash outs sent here</div></div><button onClick={handleDisconnectVenmo} style={{padding:"5px 12px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.25)",fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.08em"}}>Disconnect</button></div>):(<div><div style={{fontSize:12,color:NEON.yellow,fontWeight:600,marginBottom:10}}>No payment account connected</div><p style={{fontSize:11,color:"rgba(255,255,255,0.3)",lineHeight:1.6,marginBottom:12}}>Connect your Venmo to receive cash outs.</p><div style={{display:"flex",gap:8}}><input type="text" placeholder="@yourusername" value={venmoUsername} onChange={e=>setVenmoUsername(e.target.value)} style={{flex:1,padding:"9px 14px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.15)`,background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/><button onClick={handleConnectVenmo} disabled={saving} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.greenRGB},0.4)`,background:`rgba(${NEON.greenRGB},0.1)`,color:NEON.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em",whiteSpace:"nowrap"}}>Connect</button></div></div>)}
             </div>
+          </div>)}
+          {activeTab==="help"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {/* FAQ Section */}
+            <div>
+              <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:12}}>Frequently Asked Questions</div>
+              {([
+                {q:"How do I connect my Venmo to receive cash outs?",a:"Go to Settings → Account tab → Payment Account section. Enter your Venmo username (e.g. @yourusername) and tap Connect. Once connected, all future cash outs will be sent to that Venmo account."},
+                {q:"How do Progressive Payouts work?",a:"Every business has 7 payout tiers. The more you visit the same business, the higher your cash-back percentage goes — starting at 5% and increasing up to 20%. Each business tracks your visits independently over a 365-day rolling window. Only approved receipts count toward your visit total."},
+                {q:"How do I upload a receipt?",a:"From your Profile, tap the \"Add Receipt\" button. Search for the business you visited, upload a photo of your receipt, enter the subtotal amount and visit date, then submit. The receipt must be submitted within 7 days of your visit."},
+                {q:"How long does receipt approval take?",a:"Most businesses review receipts within 24–48 hours. Some businesses have auto-approval enabled for smaller amounts. You'll receive a notification when your receipt is approved or rejected."},
+                {q:"What is the minimum cash out amount?",a:"The minimum cash out is $20.00. Once your available balance reaches $20 or more, you can request a cash out from your Profile page."},
+                {q:"How long does it take to receive my cash out?",a:"Cash outs are processed within 3 business days after you submit the request. The funds will be sent to your connected Venmo account."},
+                {q:"What are the payout tier levels?",a:"Most businesses use the Standard plan: Starter (visits 1–10, 5%), Regular (11–20, 7.5%), Favorite (21–30, 10%), VIP (31–40, 12.5%), Elite (41–50, 15%), Legend (51–60, 17.5%), and Ultimate (61+, 20%). Some businesses may use different percentages."},
+                {q:"Why was my receipt rejected?",a:"Receipts can be rejected if the photo is blurry or unreadable, the receipt is from a different business, the date or amount doesn't match, or the receipt is older than 7 days. You can resubmit with a clearer photo if needed."},
+                {q:"How does the 365-day rolling window work?",a:"Your visit count for each business is based on the last 365 days from today, not a calendar year. If you visited a business 25 times in the past year, you're at tier 3. Visits older than 365 days no longer count toward your tier."},
+                {q:"Can I earn rewards at multiple businesses?",a:"Yes! Each business tracks your visits and tiers independently. You could be a Starter at one place and a VIP at another. Visit more places to earn more cash back across the board."},
+              ]).map((item,i)=>(
+                <div key={i} style={{marginBottom:2}}>
+                  <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} style={{width:"100%",textAlign:"left",padding:"12px 14px",borderRadius:faqOpen===i?"4px 4px 0 0":"4px",border:`1px solid ${faqOpen===i?`rgba(${NEON.primaryRGB},0.2)`:"rgba(255,255,255,0.06)"}`,borderBottom:faqOpen===i?"none":`1px solid ${faqOpen===i?`rgba(${NEON.primaryRGB},0.2)`:"rgba(255,255,255,0.06)"}`,background:faqOpen===i?`rgba(${NEON.primaryRGB},0.05)`:"rgba(255,255,255,0.02)",color:faqOpen===i?NEON.primary:"rgba(255,255,255,0.5)",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <span>{item.q}</span>
+                    <span style={{fontSize:10,flexShrink:0,transition:"transform 0.2s",transform:faqOpen===i?"rotate(180deg)":"rotate(0deg)"}}>▼</span>
+                  </button>
+                  {faqOpen===i&&(
+                    <div style={{padding:"12px 14px",borderRadius:"0 0 4px 4px",border:`1px solid rgba(${NEON.primaryRGB},0.2)`,borderTop:"none",background:`rgba(${NEON.primaryRGB},0.03)`,fontSize:11,color:"rgba(255,255,255,0.45)",lineHeight:1.7,fontFamily:"'DM Sans',sans-serif"}}>{item.a}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Live Support Chat */}
             <div style={{padding:16,borderRadius:4,background:`rgba(${NEON.primaryRGB},0.03)`,border:`1px solid rgba(${NEON.primaryRGB},0.1)`}}>
-              <div style={{fontSize:12,fontWeight:600,color:NEON.primary,marginBottom:8}}>Live Support Chat</div>
-              {supportSent?<div style={{fontSize:11,color:NEON.green}}>Message sent! Our team will respond soon.</div>:(<div style={{display:"flex",gap:8}}><input type="text" placeholder="Type your message..." value={supportMsg} onChange={e=>setSupportMsg(e.target.value)} style={{flex:1,padding:"9px 14px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.15)`,background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/><button onClick={handleSendSupport} disabled={saving||!supportMsg.trim()} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.4)`,background:`rgba(${NEON.primaryRGB},0.1)`,color:NEON.primary,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em"}}>Send</button></div>)}
+              <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:4}}>Still need help?</div>
+              <div style={{fontSize:12,fontWeight:600,color:NEON.primary,marginBottom:10}}>Message Our Support Team</div>
+              {supportSent?<div style={{fontSize:11,color:NEON.green}}>Message sent! Our team will respond soon.</div>:(<div style={{display:"flex",gap:8}}><input type="text" placeholder="Type your message..." value={supportMsg} onChange={e=>setSupportMsg(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&supportMsg.trim())handleSendSupport();}} style={{flex:1,padding:"9px 14px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.15)`,background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/><button onClick={handleSendSupport} disabled={saving||!supportMsg.trim()} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.4)`,background:`rgba(${NEON.primaryRGB},0.1)`,color:NEON.primary,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em"}}>Send</button></div>)}
             </div>
           </div>)}
         </div>
@@ -504,6 +535,7 @@ export default function LetsGoProfile() {
   const [expUploading, setExpUploading] = useState(false);
   const [viewingExp, setViewingExp] = useState<ExperienceDisplay | null>(null);
   const expFileRef = useRef<HTMLInputElement>(null);
+  const friendsPanelRef = useRef<HTMLDivElement>(null);
   const addFriendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [accountActionLoading, setAccountActionLoading] = useState(false);
   const [minCashoutCents, setMinCashoutCents] = useState(2000);
@@ -1288,7 +1320,7 @@ export default function LetsGoProfile() {
 
                 <div className="hero-actions" style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
                   <button onClick={() => setSettingsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.primaryRGB},0.3)`, background: `rgba(${NEON.primaryRGB},0.08)`, color: NEON.primary, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>Edit Profile</button>
-                  <button onClick={() => setHeroFriendsOpen(!heroFriendsOpen)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${heroFriendsOpen ? 0.5 : 0.3})`, background: heroFriendsOpen ? `rgba(${NEON.purpleRGB},0.12)` : `rgba(${NEON.purpleRGB},0.06)`, color: NEON.purple, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s ease" }}>
+                  <button onClick={() => { const opening = !heroFriendsOpen; setHeroFriendsOpen(opening); if (opening) { setAddFriendOpen(true); setTimeout(() => friendsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); } }} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${heroFriendsOpen ? 0.5 : 0.3})`, background: heroFriendsOpen ? `rgba(${NEON.purpleRGB},0.12)` : `rgba(${NEON.purpleRGB},0.06)`, color: NEON.purple, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s ease" }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={NEON.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8.5" cy="7" r="4" stroke={NEON.purple} strokeWidth="2"/></svg>
                     Friends
                   </button>
@@ -1298,7 +1330,7 @@ export default function LetsGoProfile() {
 
             {/* FRIENDS PANEL (toggles from hero button) */}
             {heroFriendsOpen && (
-              <div style={{ marginTop: 12, animation: "fadeIn 0.25s ease" }}>
+              <div ref={friendsPanelRef} style={{ marginTop: 12, animation: "fadeIn 0.25s ease" }}>
                 <NeonBorderCard neon={NEON.purple} neonRGB={NEON.purpleRGB}>
                   <div style={{ padding: "20px 24px" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -1306,15 +1338,10 @@ export default function LetsGoProfile() {
                         <span style={{ fontSize: 14 }}>{"\uD83D\uDC65"}</span>
                         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: NEON.purple }}>Friends ({friends.filter(f => f.kind === "friend").length})</span>
                       </div>
-                      <button onClick={() => setAddFriendOpen(!addFriendOpen)} style={{ padding: "5px 12px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${addFriendOpen ? 0.5 : 0.3})`, background: addFriendOpen ? `rgba(${NEON.purpleRGB},0.1)` : `rgba(${NEON.purpleRGB},0.06)`, color: NEON.purple, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s ease" }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={NEON.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8.5" cy="7" r="4" stroke={NEON.purple} strokeWidth="2"/><line x1="20" y1="8" x2="20" y2="14" stroke={NEON.purple} strokeWidth="2" strokeLinecap="round"/><line x1="23" y1="11" x2="17" y2="11" stroke={NEON.purple} strokeWidth="2" strokeLinecap="round"/></svg>
-                        Add Friend
-                      </button>
                     </div>
 
                     {/* Add Friend search */}
-                    {addFriendOpen && (
-                      <div style={{ marginBottom: 14, padding: "14px 16px", borderRadius: 4, background: `rgba(${NEON.purpleRGB},0.03)`, border: `1px solid rgba(${NEON.purpleRGB},0.12)`, animation: "fadeIn 0.2s ease" }}>
+                    <div style={{ marginBottom: 14, padding: "14px 16px", borderRadius: 4, background: `rgba(${NEON.purpleRGB},0.03)`, border: `1px solid rgba(${NEON.purpleRGB},0.12)` }}>
                         <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 10 }}>Find people on LetsGo</div>
                         <div style={{ position: "relative" }}>
                           <input type="text" placeholder="Search by name or @username..." value={addFriendSearch} onChange={(e) => setAddFriendSearch(e.target.value)} style={{ width: "100%", padding: "9px 14px 9px 34px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},0.2)`, background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 12, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" }} />
@@ -1342,7 +1369,6 @@ export default function LetsGoProfile() {
                           <div style={{ marginTop: 10, fontSize: 10, color: "rgba(255,255,255,0.15)", textAlign: "center" }}>Type at least 2 characters to search...</div>
                         )}
                       </div>
-                    )}
 
                     {/* Filter bar */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
