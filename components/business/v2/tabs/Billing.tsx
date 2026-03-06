@@ -1444,12 +1444,19 @@ function UpdatePaymentForm({
   const elements = useElements();
   const [confirming, setConfirming] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [localError, setLocalError] = useState("");
+
+  // Wrap onError to also show error locally inside the form
+  const showError = (msg: string) => {
+    setLocalError(msg);
+    onError(msg);
+  };
 
   // Save payment method to DB after Stripe confirms
   const savePaymentMethod = async (pmId: string) => {
     const { data: session } = await supabaseBrowser.auth.getSession();
     const token = session?.session?.access_token;
-    if (!token) { onError("Authentication required"); return; }
+    if (!token) { showError("Authentication required"); return; }
 
     const res = await fetch("/api/stripe/update-payment-method", {
       method: "PATCH",
@@ -1459,7 +1466,7 @@ function UpdatePaymentForm({
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: "Failed to save" }));
-      onError(data.error || "Failed to save payment method");
+      showError(data.error || "Failed to save payment method");
       return;
     }
 
@@ -1468,44 +1475,63 @@ function UpdatePaymentForm({
   };
 
   const handleConfirmManual = async () => {
-    if (!stripe || !elements) return;
+    if (!stripe || !elements) {
+      console.error("[UpdatePaymentForm] stripe or elements not loaded", { stripe: !!stripe, elements: !!elements });
+      showError("Payment form is still loading. Please wait a moment and try again.");
+      return;
+    }
     setConfirming(true);
-    onError("");
+    showError("");
 
     try {
       const cardElement = elements.getElement(CardElement);
-      if (!cardElement) { onError("Card form not loaded"); setConfirming(false); return; }
+      if (!cardElement) {
+        console.error("[UpdatePaymentForm] CardElement not found");
+        showError("Card form not loaded. Please try closing and reopening the form.");
+        setConfirming(false);
+        return;
+      }
 
+      console.log("[UpdatePaymentForm] Confirming card setup...");
       const { error: confirmError, setupIntent } = await stripe.confirmCardSetup(
         clientSecret,
         { payment_method: { card: cardElement } }
       );
 
       if (confirmError) {
-        onError(confirmError.message || "Payment setup failed. Please try again.");
+        console.error("[UpdatePaymentForm] confirmCardSetup error:", confirmError);
+        showError(confirmError.message || "Payment setup failed. Please try again.");
         return;
       }
 
+      console.log("[UpdatePaymentForm] SetupIntent confirmed:", setupIntent?.id, setupIntent?.status);
       if (setupIntent) {
         const pmId = typeof setupIntent.payment_method === "string"
           ? setupIntent.payment_method
           : (setupIntent.payment_method as { id?: string })?.id || "";
-        if (!pmId) { onError("Could not retrieve payment method."); return; }
+        if (!pmId) { showError("Could not retrieve payment method from Stripe."); return; }
         await savePaymentMethod(pmId);
+      } else {
+        showError("No setup intent returned from Stripe. Please try again.");
       }
-    } catch {
-      onError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      console.error("[UpdatePaymentForm] Unexpected error:", err);
+      showError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
     } finally {
       setConfirming(false);
     }
   };
 
   const handleConfirmLink = async () => {
-    if (!stripe || !elements) return;
+    if (!stripe || !elements) {
+      showError("Payment form is still loading. Please wait a moment and try again.");
+      return;
+    }
     setConfirming(true);
-    onError("");
+    showError("");
 
     try {
+      console.log("[UpdatePaymentForm] Confirming setup via Link...");
       const { error: confirmError, setupIntent } = await stripe.confirmSetup({
         elements,
         redirect: "if_required",
@@ -1513,19 +1539,24 @@ function UpdatePaymentForm({
       });
 
       if (confirmError) {
-        onError(confirmError.message || "Payment setup failed. Please try again.");
+        console.error("[UpdatePaymentForm] confirmSetup error:", confirmError);
+        showError(confirmError.message || "Payment setup failed. Please try again.");
         return;
       }
 
+      console.log("[UpdatePaymentForm] SetupIntent confirmed:", setupIntent?.id, setupIntent?.status);
       if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "requires_action")) {
         const pmId = typeof setupIntent.payment_method === "string"
           ? setupIntent.payment_method
           : (setupIntent.payment_method as { id?: string })?.id || "";
-        if (!pmId) { onError("Could not retrieve payment method."); return; }
+        if (!pmId) { showError("Could not retrieve payment method from Stripe."); return; }
         await savePaymentMethod(pmId);
+      } else {
+        showError(`Unexpected setup status: ${setupIntent?.status || "unknown"}. Please try again.`);
       }
-    } catch {
-      onError("An unexpected error occurred. Please try again.");
+    } catch (err) {
+      console.error("[UpdatePaymentForm] Unexpected error:", err);
+      showError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
     } finally {
       setConfirming(false);
     }
@@ -1541,6 +1572,11 @@ function UpdatePaymentForm({
 
   return (
     <div>
+      {localError && (
+        <div style={{ marginBottom: "1rem", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#fca5a5", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <AlertCircle size={14} /> {localError}
+        </div>
+      )}
       <div style={{ marginBottom: "1rem" }}>
         {mode === "manual" ? (
           <CardElement
@@ -1563,7 +1599,11 @@ function UpdatePaymentForm({
       </div>
       <button
         type="button"
-        onClick={mode === "manual" ? handleConfirmManual : handleConfirmLink}
+        onClick={() => {
+          setLocalError("");
+          if (mode === "manual") handleConfirmManual();
+          else handleConfirmLink();
+        }}
         disabled={!stripe || confirming}
         style={{
           width: "100%",
@@ -1580,6 +1620,11 @@ function UpdatePaymentForm({
       >
         {confirming ? "Saving..." : "Save New Payment Method"}
       </button>
+      {!stripe && (
+        <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
+          Stripe is loading...
+        </div>
+      )}
     </div>
   );
 }
