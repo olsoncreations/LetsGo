@@ -1,20 +1,16 @@
 /**
  * paymentIntegration.ts
  *
- * Foundation for influencer payout integrations.
- * Currently a structured placeholder — wire up your chosen payment provider
- * by implementing the provider-specific functions below.
+ * Payment integration for user cashout payouts via PayPal Payouts API.
+ * Supports both PayPal and Venmo recipients through a single API.
  *
- * Supported provider stubs:
- *  - Stripe (Connect / Express payouts)
- *  - PayPal Payouts API
- *  - Venmo / Zelle (manual — no API)
- *  - ACH / Bank Transfer (via Stripe or Dwolla)
- *  - Check (manual generation)
+ * Supported providers:
+ *  - PayPal Payouts API (handles both PayPal + Venmo)
+ *  - Stripe (Connect / Express payouts) — stub
+ *  - Zelle / Check (manual — no API)
  *
- * Usage (when wired up):
- *   const result = await sendInfluencerPayout(payout, influencer);
- *   if (result.success) markPayoutPaid(payout.id);
+ * Required env vars for PayPal:
+ *   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_MODE (sandbox|live)
  */
 
 // ============================================================
@@ -22,19 +18,19 @@
 // ============================================================
 
 export interface PayoutRequest {
-  influencer_id: string;
+  user_id: string;
   payout_id: string;
-  amount_cents: number;           // Amount to pay in cents
+  amount_cents: number;
   payment_method: PaymentMethod;
-  payment_details: string | null; // Account info, PayPal email, etc.
+  payment_details: string | null; // Venmo handle or PayPal email
   recipient_name: string;
   recipient_email: string | null;
-  memo?: string;                  // Reference note on payout
+  memo?: string;
 }
 
 export interface PayoutResult {
   success: boolean;
-  transaction_id?: string;        // Provider-returned transaction/transfer ID
+  transaction_id?: string;
   provider: string;
   error?: string;
   timestamp: string;
@@ -53,112 +49,172 @@ export type PaymentMethod =
 // ============================================================
 
 /**
- * sendInfluencerPayout
+ * sendPayout
  * Routes a payout to the correct provider based on payment_method.
- * Returns a PayoutResult indicating success/failure.
  */
-export async function sendInfluencerPayout(
+export async function sendPayout(
   request: PayoutRequest
 ): Promise<PayoutResult> {
   switch (request.payment_method) {
-    case "bank_transfer":
-      return sendViaStripeACH(request);
     case "paypal":
       return sendViaPayPal(request);
     case "venmo":
-      return logManualPayout(request, "venmo");
+      return sendViaPayPal(request); // Venmo goes through PayPal Payouts API
+    case "bank_transfer":
+      return sendViaStripeACH(request);
     case "zelle":
-      return logManualPayout(request, "zelle");
     case "check":
-      return logManualPayout(request, "check");
     default:
-      return logManualPayout(request, "other");
+      return logManualPayout(request, request.payment_method || "other");
+  }
+}
+
+// Keep legacy name for influencer payouts that may reference it
+export const sendInfluencerPayout = sendPayout;
+
+// ============================================================
+// PAYPAL PAYOUTS API
+// ============================================================
+
+const PAYPAL_BASE_URL =
+  process.env.PAYPAL_MODE === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
+
+/**
+ * Get PayPal OAuth2 access token via client credentials grant.
+ */
+async function getPayPalAccessToken(): Promise<string> {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("PayPal credentials not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
+  }
+
+  const res = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+
+  if (!res.ok) {
+    console.error("[PayPal] OAuth token error, status:", res.status);
+    throw new Error(`PayPal authentication failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  return data.access_token;
+}
+
+/**
+ * Send payout via PayPal Payouts API.
+ * Handles both PayPal (email) and Venmo (handle) recipients.
+ */
+async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
+  const timestamp = new Date().toISOString();
+
+  try {
+    const accessToken = await getPayPalAccessToken();
+    const isVenmo = request.payment_method === "venmo";
+    const amountStr = (request.amount_cents / 100).toFixed(2);
+
+    // Build the payout item
+    const payoutItem: Record<string, unknown> = {
+      recipient_type: "EMAIL",
+      amount: { value: amountStr, currency: "USD" },
+      receiver: request.payment_details,
+      note: request.memo || `LetsGo cashout - ${request.recipient_name}`,
+      sender_item_id: request.payout_id,
+    };
+
+    // For Venmo recipients, add the wallet designation
+    if (isVenmo) {
+      payoutItem.recipient_wallet = "VENMO";
+    }
+
+    const body = {
+      sender_batch_header: {
+        sender_batch_id: `LETSGO-${request.payout_id}-${Date.now()}`,
+        email_subject: "You've received a LetsGo cashout!",
+        email_message: `Hi ${request.recipient_name}, your LetsGo cashout of $${amountStr} has been sent!`,
+      },
+      items: [payoutItem],
+    };
+
+    console.log("[PayPal] Sending payout:", {
+      amount: amountStr,
+      method: request.payment_method,
+      isVenmo,
+      payoutId: request.payout_id,
+    });
+
+    const res = await fetch(`${PAYPAL_BASE_URL}/v1/payments/payouts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseData = await res.json();
+
+    if (!res.ok) {
+      console.error("[PayPal] Payout error:", responseData?.message || res.status);
+      const errorMsg =
+        responseData?.details?.[0]?.issue ||
+        responseData?.message ||
+        `PayPal API error (${res.status})`;
+      return { success: false, provider: "paypal", error: errorMsg, timestamp };
+    }
+
+    // PayPal returns a batch with a payout_batch_id
+    const batchId = responseData?.batch_header?.payout_batch_id || "";
+    console.log("[PayPal] Payout batch created:", batchId);
+
+    return {
+      success: true,
+      transaction_id: batchId,
+      provider: isVenmo ? "venmo_via_paypal" : "paypal",
+      timestamp,
+    };
+  } catch (err) {
+    console.error("[PayPal] Payout exception:", err);
+    return {
+      success: false,
+      provider: "paypal",
+      error: err instanceof Error ? err.message : "PayPal payout failed",
+      timestamp,
+    };
   }
 }
 
 // ============================================================
-// PROVIDER STUBS
+// STRIPE ACH (STUB)
 // ============================================================
 
-/**
- * Stripe ACH / Express Payout
- *
- * To wire up:
- * 1. Set up Stripe Connect for your platform account
- * 2. Each influencer needs a Stripe Connect account ID stored in payment_details
- * 3. Install stripe: npm install stripe
- * 4. Add STRIPE_SECRET_KEY to your .env
- *
- * Example implementation:
- *   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2023-10-16" });
- *   const transfer = await stripe.transfers.create({
- *     amount: request.amount_cents,
- *     currency: "usd",
- *     destination: request.payment_details, // Stripe Connect account ID
- *     description: request.memo || "LetsGo influencer payout",
- *   });
- *   return { success: true, transaction_id: transfer.id, provider: "stripe", timestamp: new Date().toISOString() };
- */
 async function sendViaStripeACH(request: PayoutRequest): Promise<PayoutResult> {
-  console.log("[PaymentIntegration] Stripe ACH payout stub called", {
-    amount: request.amount_cents,
-    recipient: request.recipient_name,
-  });
+  console.log("[PaymentIntegration] Stripe ACH not configured, payoutId:", request.payout_id);
 
-  // TODO: Implement Stripe Connect payout
-  // See: https://stripe.com/docs/connect/account-transfers
   return {
     success: false,
     provider: "stripe",
-    error: "Stripe Connect not yet configured. See lib/paymentIntegration.ts for setup instructions.",
+    error: "Stripe Connect not yet configured.",
     timestamp: new Date().toISOString(),
   };
 }
 
-/**
- * PayPal Payouts API
- *
- * To wire up:
- * 1. Create a PayPal Business account with Payouts API access
- * 2. Add PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET to .env
- * 3. Use PayPal's REST API to send mass payouts
- *
- * Example implementation:
- *   const accessToken = await getPayPalAccessToken();
- *   const response = await fetch("https://api.paypal.com/v1/payments/payouts", {
- *     method: "POST",
- *     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
- *     body: JSON.stringify({
- *       sender_batch_header: { email_subject: "LetsGo Influencer Payout" },
- *       items: [{
- *         recipient_type: "EMAIL",
- *         amount: { value: (request.amount_cents / 100).toFixed(2), currency: "USD" },
- *         receiver: request.payment_details, // PayPal email
- *         note: request.memo || "LetsGo influencer payout",
- *       }]
- *     })
- *   });
- */
-async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
-  console.log("[PaymentIntegration] PayPal payout stub called", {
-    amount: request.amount_cents,
-    recipient: request.payment_details,
-  });
-
-  // TODO: Implement PayPal Payouts API
-  // See: https://developer.paypal.com/docs/payouts/
-  return {
-    success: false,
-    provider: "paypal",
-    error: "PayPal Payouts API not yet configured. See lib/paymentIntegration.ts for setup instructions.",
-    timestamp: new Date().toISOString(),
-  };
-}
+// ============================================================
+// MANUAL PAYOUT LOGGER
+// ============================================================
 
 /**
- * Manual Payout Logger
- * For Venmo, Zelle, Check, and Other — these have no public API.
- * Logs the payout intent and returns a result for the admin to manually process.
+ * For Zelle, Check, and Other — no API available.
+ * Logs the payout intent for admin to manually process.
  */
 function logManualPayout(request: PayoutRequest, method: string): PayoutResult {
   const manualRef = `MANUAL-${method.toUpperCase()}-${Date.now()}`;
@@ -167,13 +223,9 @@ function logManualPayout(request: PayoutRequest, method: string): PayoutResult {
     ref: manualRef,
     method,
     amount: `$${(request.amount_cents / 100).toFixed(2)}`,
-    recipient: request.recipient_name,
-    details: request.payment_details,
-    memo: request.memo,
+    payoutId: request.payout_id,
   });
 
-  // For manual methods, we return success = true so admin can proceed
-  // The actual payment is made outside the system
   return {
     success: true,
     transaction_id: manualRef,
@@ -186,46 +238,26 @@ function logManualPayout(request: PayoutRequest, method: string): PayoutResult {
 // HELPERS
 // ============================================================
 
-/**
- * formatPayoutAmount
- * Converts cents to a human-readable dollar string.
- */
 export function formatPayoutAmount(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/**
- * validatePayoutRequest
- * Returns an error string if the request is invalid, or null if valid.
- */
 export function validatePayoutRequest(request: PayoutRequest): string | null {
-  if (!request.influencer_id) return "Missing influencer ID";
+  if (!request.user_id) return "Missing user ID";
   if (!request.payout_id) return "Missing payout ID";
   if (request.amount_cents <= 0) return "Payout amount must be greater than $0";
   if (!request.payment_method) return "Missing payment method";
   if (!request.recipient_name) return "Missing recipient name";
 
   if (request.payment_method === "paypal" && !request.payment_details?.includes("@")) {
-    return "PayPal payment requires a valid email address in payment details";
+    return "PayPal requires a valid email address";
+  }
+  if (request.payment_method === "venmo" && !request.payment_details?.trim()) {
+    return "Venmo requires a username or phone number";
   }
   if (request.payment_method === "bank_transfer" && !request.payment_details) {
-    return "Bank transfer requires account/routing info or Stripe Connect ID in payment details";
+    return "Bank transfer requires account details";
   }
 
   return null;
 }
-
-// ============================================================
-// FUTURE: AUTOMATED PAYOUT SCHEDULING
-// ============================================================
-// When you're ready to automate payouts, create an API route:
-//   POST /api/admin/influencer-payouts/process
-// That route would:
-// 1. Fetch all unpaid influencer_payouts where signups_count >= 1000
-// 2. For each: build a PayoutRequest and call sendInfluencerPayout()
-// 3. On success: update influencer_payouts.paid = true, paid_at = now()
-// 4. Log results to an audit table
-//
-// Cron job (Vercel Cron or similar):
-//   schedule: "0 9 1 * *" (9am on 1st of each month)
-//   endpoint: /api/admin/influencer-payouts/process

@@ -67,6 +67,7 @@ type UploadedFileMeta = {
   name: string;
   size: number;
   type: string;
+  url?: string;
 };
 
 type VerificationDocType = "business_license" | "ein_certificate" | "utility_bill";
@@ -792,7 +793,7 @@ async function completeSignup() {
         {step === 3 && <Step3 data={data} setData={setData} pkgPricing={pkgPricing} dynamicAds={dynamicAds} ccFeeBps={ccFeeBps} />}
         {step === 4 && <Step4 data={data} setData={setData} tiers={dynamicTiers} presetBps={presetBps} />}
         {step === 5 && <Step5 data={data} setData={setData} ccFeeBps={ccFeeBps} feeBps={feeBps} feeCapCents={feeCapCents} />}
-        {step === 6 && <Step6 data={data} setData={setData} pkgPricing={pkgPricing} />}
+        {step === 6 && <Step6 data={data} setData={setData} pkgPricing={pkgPricing} authUser={authUser} />}
         {step === 7 && <Step7 data={data} setData={setData} reviewPlanFees={reviewPlanFees} feeBps={feeBps} feeCapCents={feeCapCents} ccFeeBps={ccFeeBps} pkgPricing={pkgPricing} tiers={dynamicTiers} />}
 
         <div className="button-group">
@@ -2378,25 +2379,71 @@ function Step6({
   data,
   setData,
   pkgPricing,
+  authUser,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   pkgPricing: { tpms_monthly_cents: number };
+  authUser: User | null;
 }) {
-  function onDocFile(file: File | null) {
-    if (!file) return;
-    setData((p) => ({
-      ...p,
-      verificationDocFile: { name: file.name, size: file.size, type: file.type },
-    }));
+  const [docUploading, setDocUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  async function uploadToStorage(file: File, folder: string): Promise<string> {
+    const userId = authUser?.id || "anonymous";
+    const timestamp = Date.now();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${userId}/${folder}/${timestamp}-${safeName}`;
+
+    const { error } = await supabaseBrowser.storage
+      .from("onboarding-documents")
+      .upload(path, file, { upsert: true });
+
+    if (error) throw new Error(error.message);
+
+    // Create a signed URL valid for 1 year (admin needs long-term access)
+    const { data: urlData, error: urlError } = await supabaseBrowser.storage
+      .from("onboarding-documents")
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+
+    if (urlError || !urlData?.signedUrl) throw new Error("Failed to generate file URL");
+
+    return urlData.signedUrl;
   }
 
-  function onLogoFile(file: File | null) {
+  async function onDocFile(file: File | null) {
     if (!file) return;
-    setData((p) => ({
-      ...p,
-      businessLogoFile: { name: file.name, size: file.size, type: file.type },
-    }));
+    setDocUploading(true);
+    setUploadError("");
+    try {
+      const url = await uploadToStorage(file, "verification");
+      setData((p) => ({
+        ...p,
+        verificationDocFile: { name: file.name, size: file.size, type: file.type, url },
+      }));
+    } catch (e) {
+      setUploadError(`Failed to upload document: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setDocUploading(false);
+    }
+  }
+
+  async function onLogoFile(file: File | null) {
+    if (!file) return;
+    setLogoUploading(true);
+    setUploadError("");
+    try {
+      const url = await uploadToStorage(file, "logo");
+      setData((p) => ({
+        ...p,
+        businessLogoFile: { name: file.name, size: file.size, type: file.type, url },
+      }));
+    } catch (e) {
+      setUploadError(`Failed to upload logo: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setLogoUploading(false);
+    }
   }
 
   return (
@@ -2428,11 +2475,18 @@ function Step6({
           />
         </div>
 
+        {uploadError && (
+          <div style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#fca5a5", fontSize: "0.85rem", marginBottom: "1rem" }}>
+            {uploadError}
+          </div>
+        )}
+
         <FileDrop
           label="Upload Document"
           hint="PDF, JPG, PNG accepted (max 10MB)"
           onFile={onDocFile}
           fileMeta={data.verificationDocFile}
+          uploading={docUploading}
         />
       </div>
 
@@ -2454,6 +2508,7 @@ function Step6({
           onFile={onLogoFile}
           fileMeta={data.businessLogoFile}
           accept="image/*"
+          uploading={logoUploading}
         />
       </div>
     </form>
@@ -2488,31 +2543,39 @@ function FileDrop({
   onFile,
   fileMeta,
   accept,
+  uploading,
 }: {
   label: string;
   hint: string;
   onFile: (f: File | null) => void;
   fileMeta?: UploadedFileMeta;
   accept?: string;
+  uploading?: boolean;
 }) {
   return (
     <div className="file-drop">
-      <label className="file-drop-inner">
-        <div className="file-icon">📁</div>
-        <div className="file-label">{label}</div>
+      <label className="file-drop-inner" style={uploading ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
+        <div className="file-icon">{uploading ? "⏳" : "📁"}</div>
+        <div className="file-label">{uploading ? "Uploading..." : label}</div>
         <div className="file-hint">{hint}</div>
         <input
           type="file"
           className="file-input"
           accept={accept}
           onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+          disabled={uploading}
         />
       </label>
 
       {fileMeta ? (
-        <div className="file-meta">
-          <strong>Selected:</strong> {fileMeta.name}{" "}
-          <span className="file-meta-muted">({Math.round(fileMeta.size / 1024)} KB)</span>
+        <div className="file-meta" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {fileMeta.url ? (
+            <span style={{ color: "#34d399" }}>✓</span>
+          ) : null}
+          <span>
+            <strong>{fileMeta.url ? "Uploaded:" : "Selected:"}</strong> {fileMeta.name}{" "}
+            <span className="file-meta-muted">({Math.round(fileMeta.size / 1024)} KB)</span>
+          </span>
         </div>
       ) : null}
     </div>

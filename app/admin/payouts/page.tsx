@@ -99,6 +99,13 @@ export default function PayoutsPage() {
   const [selectedPayout, setSelectedPayout] = useState<UserPayout | null>(null);
   const [denyReason, setDenyReason] = useState("");
 
+  // Send payment (PayPal/Venmo)
+  const [sendingPayoutId, setSendingPayoutId] = useState<string | null>(null);
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // Progressive payout summaries
   const [userPayoutSummaries, setUserPayoutSummaries] = useState<{ user_id: string; user_name: string; earned: number; paid: number; remaining: number }[]>([]);
   const [bizPayoutSummaries, setBizPayoutSummaries] = useState<{ business_id: string; business_name: string; earned: number; paid: number; remaining: number }[]>([]);
@@ -340,6 +347,121 @@ export default function PayoutsPage() {
     await fetchPayouts();
   }
 
+  async function handleSendPayment(payout: UserPayout) {
+    if (sendingPayoutId) return;
+    const methodLabel = payout.method === "venmo" ? "Venmo" : "PayPal";
+    if (!confirm(`Send ${formatMoney(payout.amount_cents)} to ${payout.user_name || payout.account} via ${methodLabel}?`)) return;
+
+    setSendingPayoutId(payout.id);
+    try {
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) { alert("Authentication required"); return; }
+
+      const res = await fetch("/api/admin/payouts/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ payoutId: payout.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`❌ Payment failed: ${data.error || "Unknown error"}`);
+        return;
+      }
+
+      alert(`✅ Payment sent successfully!\nTransaction: ${data.transaction_id || "N/A"}\nProvider: ${data.provider}`);
+      await fetchPayouts();
+    } catch (err) {
+      alert(`❌ Error: ${err instanceof Error ? err.message : "Failed to send payment"}`);
+    } finally {
+      setSendingPayoutId(null);
+    }
+  }
+
+  /* ==================== BULK ACTIONS ==================== */
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(status: string) {
+    const matching = filteredPayouts.filter(p => p.status === status);
+    const allSelected = matching.every(p => selectedIds.has(p.id));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      matching.forEach(p => { if (allSelected) next.delete(p.id); else next.add(p.id); });
+      return next;
+    });
+  }
+
+  async function handleBulkApprove() {
+    const pending = filteredPayouts.filter(p => p.status === "pending" && selectedIds.has(p.id));
+    if (pending.length === 0) return;
+    if (!confirm(`Approve ${pending.length} payout${pending.length > 1 ? "s" : ""} totaling ${formatMoney(pending.reduce((s, p) => s + p.amount_cents, 0))}?`)) return;
+
+    setBulkProcessing(true);
+    let succeeded = 0;
+    for (const payout of pending) {
+      const { error } = await supabaseBrowser
+        .from("user_payouts")
+        .update({ status: "processing", processed_by: staffName, processed_at: new Date().toISOString() })
+        .eq("id", payout.id);
+      if (!error) {
+        logAudit({ action: "approve_payout", tab: AUDIT_TABS.PAYOUTS, subTab: "Payout Queue", targetType: "user_payout", targetId: payout.id, entityName: payout.user_name || payout.account, fieldName: "status", oldValue: "pending", newValue: "processing", details: `Bulk approve — ${formatMoney(payout.amount_cents)}` });
+        succeeded++;
+      }
+    }
+    alert(`✅ Approved ${succeeded} of ${pending.length} payouts`);
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+    await fetchPayouts();
+  }
+
+  async function handleBulkSend() {
+    const processing = filteredPayouts.filter(p => p.status === "processing" && selectedIds.has(p.id) && (p.method === "venmo" || p.method === "paypal"));
+    if (processing.length === 0) return;
+    if (!confirm(`Send ${processing.length} payment${processing.length > 1 ? "s" : ""} totaling ${formatMoney(processing.reduce((s, p) => s + p.amount_cents, 0))} via PayPal?`)) return;
+
+    setBulkProcessing(true);
+    const { data: session } = await supabaseBrowser.auth.getSession();
+    const token = session?.session?.access_token;
+    if (!token) { alert("Authentication required"); setBulkProcessing(false); return; }
+
+    let succeeded = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const payout of processing) {
+      try {
+        const res = await fetch("/api/admin/payouts/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ payoutId: payout.id }),
+        });
+        const data = await res.json();
+        if (res.ok) { succeeded++; } else { failed++; errors.push(`${payout.user_name || payout.account}: ${data.error}`); }
+      } catch (err) {
+        failed++;
+        errors.push(`${payout.user_name || payout.account}: ${err instanceof Error ? err.message : "Failed"}`);
+      }
+    }
+
+    let msg = `✅ Sent: ${succeeded}`;
+    if (failed > 0) msg += `\n❌ Failed: ${failed}\n\n${errors.join("\n")}`;
+    alert(msg);
+    setSelectedIds(new Set());
+    setBulkProcessing(false);
+    await fetchPayouts();
+  }
+
+  const selectedPendingCount = filteredPayouts.filter(p => p.status === "pending" && selectedIds.has(p.id)).length;
+  const selectedProcessingCount = filteredPayouts.filter(p => p.status === "processing" && selectedIds.has(p.id) && (p.method === "venmo" || p.method === "paypal")).length;
+
   /* ==================== TIER MANAGEMENT ==================== */
 
   async function handleSelectBusiness(business: BusinessRecord) {
@@ -532,6 +654,11 @@ export default function PayoutsPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
               Showing {filteredPayouts.length} of {payouts.length} payouts
+              {selectedIds.size > 0 && (
+                <span style={{ marginLeft: 12, color: COLORS.neonBlue }}>
+                  ({selectedIds.size} selected)
+                </span>
+              )}
             </div>
             <button
               onClick={handleDownloadPayouts}
@@ -547,6 +674,84 @@ export default function PayoutsPage() {
             </button>
           </div>
 
+          {/* Bulk Action Bar */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 12, padding: "10px 16px", background: "rgba(0,212,255,0.06)", border: "1px solid " + COLORS.cardBorder, borderRadius: 12, flexWrap: "wrap", alignItems: "center" }}>
+            {/* Quick-select buttons */}
+            {filteredPayouts.some(p => p.status === "pending") && (
+              <button
+                onClick={() => toggleSelectAll("pending")}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", background: "transparent", border: "1px solid " + COLORS.neonYellow + "66",
+                  color: COLORS.neonYellow,
+                }}
+              >
+                {filteredPayouts.filter(p => p.status === "pending").every(p => selectedIds.has(p.id)) && filteredPayouts.some(p => p.status === "pending")
+                  ? "Deselect All Pending"
+                  : "Select All Pending"}
+              </button>
+            )}
+            {filteredPayouts.some(p => p.status === "processing") && (
+              <button
+                onClick={() => toggleSelectAll("processing")}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", background: "transparent", border: "1px solid " + COLORS.neonBlue + "66",
+                  color: COLORS.neonBlue,
+                }}
+              >
+                {filteredPayouts.filter(p => p.status === "processing").every(p => selectedIds.has(p.id)) && filteredPayouts.some(p => p.status === "processing")
+                  ? "Deselect All Processing"
+                  : "Select All Processing"}
+              </button>
+            )}
+
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
+
+            {/* Bulk action buttons — only show when items are selected */}
+            {selectedPendingCount > 0 && (
+              <button
+                onClick={handleBulkApprove}
+                disabled={bulkProcessing}
+                style={{
+                  padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  cursor: bulkProcessing ? "wait" : "pointer",
+                  background: "rgba(57,255,20,0.2)", border: "1px solid " + COLORS.neonGreen,
+                  color: COLORS.neonGreen, opacity: bulkProcessing ? 0.6 : 1,
+                }}
+              >
+                {bulkProcessing ? "Processing..." : `✓ Bulk Approve (${selectedPendingCount})`}
+              </button>
+            )}
+            {selectedProcessingCount > 0 && (
+              <button
+                onClick={handleBulkSend}
+                disabled={bulkProcessing}
+                style={{
+                  padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                  cursor: bulkProcessing ? "wait" : "pointer",
+                  background: "rgba(0,212,255,0.2)", border: "1px solid " + COLORS.neonBlue,
+                  color: COLORS.neonBlue, opacity: bulkProcessing ? 0.6 : 1,
+                }}
+              >
+                {bulkProcessing ? "Sending..." : `💸 Bulk Send Payment (${selectedProcessingCount})`}
+              </button>
+            )}
+            {selectedIds.size > 0 && (
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", background: "transparent", border: "1px solid " + COLORS.cardBorder,
+                  color: COLORS.textSecondary,
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           {/* Payout Table */}
           <Card style={{ marginBottom: 32 }}>
             {filteredPayouts.length === 0 ? (
@@ -557,6 +762,22 @@ export default function PayoutsPage() {
             ) : (
               <DataTable
                 columns={[
+                  {
+                    key: "id",
+                    label: "",
+                    render: (v) => {
+                      const id = String(v);
+                      return (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(id)}
+                          onChange={() => toggleSelect(id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ width: 16, height: 16, cursor: "pointer", accentColor: COLORS.neonBlue }}
+                        />
+                      );
+                    },
+                  },
                   {
                     key: "user_name",
                     label: "User",
@@ -621,11 +842,21 @@ export default function PayoutsPage() {
                         );
                       }
                       if (payout.status === "processing") {
+                        const isSending = sendingPayoutId === payout.id;
+                        const isPayPalOrVenmo = payout.method === "venmo" || payout.method === "paypal";
                         return (
-                          <button onClick={() => handleMarkCompleted(payout)}
-                            style={{ padding: "5px 10px", background: "rgba(57,255,20,0.2)", border: "1px solid " + COLORS.neonGreen, borderRadius: 6, color: COLORS.neonGreen, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
-                            ✅ Mark Complete
-                          </button>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            {isPayPalOrVenmo && (
+                              <button onClick={() => handleSendPayment(payout)} disabled={isSending}
+                                style={{ padding: "5px 10px", background: "rgba(0,212,255,0.2)", border: "1px solid " + COLORS.neonBlue, borderRadius: 6, color: COLORS.neonBlue, cursor: isSending ? "wait" : "pointer", fontSize: 11, fontWeight: 600, opacity: isSending ? 0.6 : 1 }}>
+                                {isSending ? "Sending..." : "💸 Send Payment"}
+                              </button>
+                            )}
+                            <button onClick={() => handleMarkCompleted(payout)}
+                              style={{ padding: "5px 10px", background: "rgba(57,255,20,0.2)", border: "1px solid " + COLORS.neonGreen, borderRadius: 6, color: COLORS.neonGreen, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                              ✅ Mark Complete
+                            </button>
+                          </div>
                         );
                       }
                       if (payout.status === "failed") {

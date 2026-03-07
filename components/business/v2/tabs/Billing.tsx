@@ -248,7 +248,8 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
   const [bankInfo, setBankInfo] = useState({
     bankName: "",
     accountType: "checking",
-    // Note: We don't store full account numbers - only display what's in config
+    routingLast4: "",
+    accountLast4: "",
   });
   const [cardInfo, setCardInfo] = useState({
     brand: "",
@@ -261,11 +262,12 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
   // ---------- UPDATE PAYMENT METHOD ----------
   const [updatePmOpen, setUpdatePmOpen] = useState(false);
   const [updatePmMode, setUpdatePmMode] = useState<"manual" | "link">("manual");
+  const [updatePmPayType, setUpdatePmPayType] = useState<"card" | "bank">("card");
   const [updatePmClientSecret, setUpdatePmClientSecret] = useState<string | null>(null);
   const [updatePmLoading, setUpdatePmLoading] = useState(false);
   const [updatePmError, setUpdatePmError] = useState<string | null>(null);
 
-  const handleStartPaymentUpdate = useCallback(async () => {
+  const handleStartCardUpdate = useCallback(async () => {
     if (!businessId) return;
     setUpdatePmLoading(true);
     setUpdatePmError(null);
@@ -281,9 +283,63 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start payment update");
       setUpdatePmClientSecret(data.clientSecret);
+      setUpdatePmPayType("card");
+      setUpdatePmMode("manual");
       setUpdatePmOpen(true);
     } catch (err) {
       setUpdatePmError(err instanceof Error ? err.message : "Failed to start payment update");
+    } finally {
+      setUpdatePmLoading(false);
+    }
+  }, [businessId]);
+
+  const [settingPreferred, setSettingPreferred] = useState(false);
+
+  const handleSetPreferred = useCallback(async (type: "card" | "bank") => {
+    if (!businessId || settingPreferred) return;
+    setSettingPreferred(true);
+    try {
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Authentication required");
+      const res = await fetch("/api/stripe/update-payment-method", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ businessId, setPreferred: type }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Failed to update" }));
+        throw new Error(data.error || "Failed to set preferred method");
+      }
+      setPaymentType(type);
+    } catch (err) {
+      setUpdatePmError(err instanceof Error ? err.message : "Failed to set preferred method");
+    } finally {
+      setSettingPreferred(false);
+    }
+  }, [businessId, settingPreferred]);
+
+  const handleStartBankUpdate = useCallback(async () => {
+    if (!businessId) return;
+    setUpdatePmLoading(true);
+    setUpdatePmError(null);
+    try {
+      const { data: session } = await supabaseBrowser.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) throw new Error("Authentication required");
+      const res = await fetch("/api/stripe/update-payment-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ businessId, paymentMethodType: "us_bank_account" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start bank setup");
+      setUpdatePmClientSecret(data.clientSecret);
+      setUpdatePmPayType("bank");
+      setUpdatePmMode("link");
+      setUpdatePmOpen(true);
+    } catch (err) {
+      setUpdatePmError(err instanceof Error ? err.message : "Failed to start bank setup");
     } finally {
       setUpdatePmLoading(false);
     }
@@ -312,23 +368,22 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
 
       const cfg = (data?.config ?? {}) as Record<string, any>;
 
-      // Set payment type from config
-      if (cfg.paymentMethod === "card") {
-        setPaymentType("card");
-        setCardInfo({
-          brand: cfg.cardBrand || cfg.cardName || "Card",
-          last4: cfg.cardLast4 || "****",
-          expMonth: cfg.cardExpMonth || 0,
-          expYear: cfg.cardExpYear || 0,
-        });
-      } else {
-        // Default to bank
-        setPaymentType("bank");
-        setBankInfo({
-          bankName: cfg.bankName || "Bank Account",
-          accountType: cfg.accountType || "checking",
-        });
-      }
+      // Set preferred payment type
+      setPaymentType(cfg.paymentMethod === "card" ? "card" : "bank");
+
+      // Always load both — they may both have data
+      setCardInfo({
+        brand: cfg.cardBrand || cfg.cardName || "",
+        last4: cfg.cardLast4 || "",
+        expMonth: cfg.cardExpMonth || 0,
+        expYear: cfg.cardExpYear || 0,
+      });
+      setBankInfo({
+        bankName: cfg.bankName || "",
+        accountType: cfg.accountType || "checking",
+        routingLast4: cfg.routingLast4 || "",
+        accountLast4: cfg.accountLast4 || "",
+      });
 
       setPaymentLoaded(true);
     } catch (e) {
@@ -935,77 +990,118 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
             marginBottom: "1.25rem",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <div style={{ fontSize: "1.125rem", fontWeight: 900, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <DollarSign size={20} style={{ color: colors.primary }} />
-              Current Payment Method
-            </div>
-
-            <span
-              style={{
-                padding: "0.25rem 0.75rem",
-                background: `${colors.success}20`,
-                color: colors.success,
-                borderRadius: "6px",
-                fontSize: "0.75rem",
-                fontWeight: 900,
-              }}
-            >
-              Active
-            </span>
+          <div style={{ fontSize: "1.125rem", fontWeight: 900, display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+            <DollarSign size={20} style={{ color: colors.primary }} />
+            Payment Methods
           </div>
 
-          <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
-            <button
-              onClick={() => setPaymentType("bank")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            {/* Bank Card */}
+            <div
               style={{
-                padding: "0.5rem 0.85rem",
-                borderRadius: "10px",
-                border: paymentType === "bank" ? `1px solid ${colors.primary}` : "1px solid rgba(255,255,255,0.18)",
-                background: paymentType === "bank" ? "rgba(20,184,166,0.15)" : "rgba(255,255,255,0.06)",
-                color: "white",
-                fontWeight: 900,
-                cursor: "pointer",
+                padding: "1.25rem",
+                borderRadius: "12px",
+                border: paymentType === "bank" ? `2px solid ${colors.primary}` : "1px solid rgba(255,255,255,0.1)",
+                background: paymentType === "bank" ? "rgba(20,184,166,0.08)" : "rgba(255,255,255,0.02)",
+                position: "relative",
               }}
             >
-              Bank (ACH)
-            </button>
-            <button
-              onClick={() => setPaymentType("card")}
-              style={{
-                padding: "0.5rem 0.85rem",
-                borderRadius: "10px",
-                border: paymentType === "card" ? `1px solid ${colors.primary}` : "1px solid rgba(255,255,255,0.18)",
-                background: paymentType === "card" ? "rgba(20,184,166,0.15)" : "rgba(255,255,255,0.06)",
-                color: "white",
-                fontWeight: 900,
-                cursor: "pointer",
-              }}
-            >
-              Card
-            </button>
-          </div>
+              {paymentType === "bank" && (
+                <span style={{
+                  position: "absolute", top: "0.75rem", right: "0.75rem",
+                  padding: "0.2rem 0.5rem", background: `${colors.success}20`, color: colors.success,
+                  borderRadius: "4px", fontSize: "0.65rem", fontWeight: 900, textTransform: "uppercase",
+                }}>
+                  Preferred
+                </span>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                <DollarSign size={18} style={{ color: paymentType === "bank" ? colors.primary : "rgba(255,255,255,0.4)" }} />
+                <span style={{ fontWeight: 900, fontSize: "0.95rem" }}>Bank Account (ACH)</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <Info label="Bank Name" value={bankInfo.bankName || "Not set"} />
+                <Info label="Account Type" value={bankInfo.accountType === "checking" ? "Checking" : "Savings"} />
+                <Info label="Account" value={bankInfo.accountLast4 ? `••••${bankInfo.accountLast4}` : "—"} mono />
+              </div>
+              {paymentType !== "bank" && bankInfo.bankName && (
+                <button
+                  onClick={() => handleSetPreferred("bank")}
+                  disabled={settingPreferred}
+                  style={{
+                    marginTop: "0.75rem",
+                    width: "100%",
+                    padding: "0.5rem",
+                    background: "rgba(20,184,166,0.1)",
+                    border: `1px solid ${colors.primary}60`,
+                    borderRadius: "8px",
+                    color: colors.primary,
+                    fontSize: "0.75rem",
+                    fontWeight: 900,
+                    cursor: settingPreferred ? "wait" : "pointer",
+                    opacity: settingPreferred ? 0.6 : 1,
+                  }}
+                >
+                  {settingPreferred ? "Saving..." : "Set as Preferred"}
+                </button>
+              )}
+            </div>
 
-          {paymentType === "bank" ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              <Info label="Payment Type" value="Bank Account (ACH)" />
-              <Info label="Bank Name" value={bankInfo.bankName || "Not set"} />
-              <Info label="Account Type" value={bankInfo.accountType === "checking" ? "Checking" : "Savings"} />
-              <Info label="Status" value="Verified" icon={<CheckCircle size={14} style={{ color: colors.success }} />} />
+            {/* Card */}
+            <div
+              style={{
+                padding: "1.25rem",
+                borderRadius: "12px",
+                border: paymentType === "card" ? `2px solid ${colors.primary}` : "1px solid rgba(255,255,255,0.1)",
+                background: paymentType === "card" ? "rgba(20,184,166,0.08)" : "rgba(255,255,255,0.02)",
+                position: "relative",
+              }}
+            >
+              {paymentType === "card" && (
+                <span style={{
+                  position: "absolute", top: "0.75rem", right: "0.75rem",
+                  padding: "0.2rem 0.5rem", background: `${colors.success}20`, color: colors.success,
+                  borderRadius: "4px", fontSize: "0.65rem", fontWeight: 900, textTransform: "uppercase",
+                }}>
+                  Preferred
+                </span>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                <CreditCard size={18} style={{ color: paymentType === "card" ? colors.primary : "rgba(255,255,255,0.4)" }} />
+                <span style={{ fontWeight: 900, fontSize: "0.95rem" }}>Credit / Debit Card</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <Info label="Card" value={cardInfo.brand && cardInfo.last4 ? `${cardInfo.brand} ****${cardInfo.last4}` : "Not set"} mono />
+                <Info label="Expiration" value={cardInfo.expMonth && cardInfo.expYear ? `${String(cardInfo.expMonth).padStart(2, "0")}/${String(cardInfo.expYear).slice(-2)}` : "—"} mono />
+              </div>
+              {paymentType !== "card" && cardInfo.last4 && (
+                <button
+                  onClick={() => handleSetPreferred("card")}
+                  disabled={settingPreferred}
+                  style={{
+                    marginTop: "0.75rem",
+                    width: "100%",
+                    padding: "0.5rem",
+                    background: "rgba(20,184,166,0.1)",
+                    border: `1px solid ${colors.primary}60`,
+                    borderRadius: "8px",
+                    color: colors.primary,
+                    fontSize: "0.75rem",
+                    fontWeight: 900,
+                    cursor: settingPreferred ? "wait" : "pointer",
+                    opacity: settingPreferred ? 0.6 : 1,
+                  }}
+                >
+                  {settingPreferred ? "Saving..." : "Set as Preferred"}
+                </button>
+              )}
             </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              <Info label="Payment Type" value="Credit/Debit Card" icon={<CreditCard size={16} style={{ color: colors.accent }} />} />
-              <Info label="Card" value={cardInfo.brand && cardInfo.last4 ? `${cardInfo.brand} ****${cardInfo.last4}` : "Not set"} mono />
-              <Info label="Expiration" value={cardInfo.expMonth && cardInfo.expYear ? `${String(cardInfo.expMonth).padStart(2, "0")}/${String(cardInfo.expYear).slice(-2)}` : "—"} mono />
-              <Info label="Status" value="Verified" icon={<CheckCircle size={14} style={{ color: colors.success }} />} />
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Update Payment Method */}
         {!updatePmOpen ? (
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             <button
               style={{
                 padding: "0.75rem 1.25rem",
@@ -1021,11 +1117,32 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
                 alignItems: "center",
                 gap: "0.5rem",
               }}
-              onClick={() => { setUpdatePmMode("manual"); handleStartPaymentUpdate(); }}
+              onClick={handleStartCardUpdate}
               disabled={updatePmLoading}
             >
               <CreditCard size={14} />
-              {updatePmLoading && updatePmMode === "manual" ? "Loading..." : "Enter Card / Bank Details"}
+              {updatePmLoading ? "Loading..." : "Update Card"}
+            </button>
+            <button
+              style={{
+                padding: "0.75rem 1.25rem",
+                background: `${colors.accent}20`,
+                border: `1px solid ${colors.accent}`,
+                borderRadius: "10px",
+                color: colors.accent,
+                fontSize: "0.875rem",
+                fontWeight: 900,
+                cursor: updatePmLoading ? "wait" : "pointer",
+                opacity: updatePmLoading ? 0.6 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+              onClick={handleStartBankUpdate}
+              disabled={updatePmLoading}
+            >
+              <DollarSign size={14} />
+              {updatePmLoading ? "Loading..." : "Update Bank Account"}
             </button>
             <button
               style={{
@@ -1042,11 +1159,11 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
                 alignItems: "center",
                 gap: "0.5rem",
               }}
-              onClick={() => { setUpdatePmMode("link"); handleStartPaymentUpdate(); }}
+              onClick={() => { setUpdatePmPayType("card"); setUpdatePmMode("link"); handleStartCardUpdate(); }}
               disabled={updatePmLoading}
             >
-              <RefreshCw size={14} className={updatePmLoading && updatePmMode === "link" ? "animate-spin" : ""} />
-              {updatePmLoading && updatePmMode === "link" ? "Loading..." : "Use Stripe Link"}
+              <RefreshCw size={14} />
+              Use Stripe Link
             </button>
           </div>
         ) : (
@@ -1060,43 +1177,28 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
               <div style={{ fontSize: "0.875rem", fontWeight: 900, color: colors.primary }}>
-                {updatePmMode === "manual" ? "Enter New Payment Details" : "Update via Stripe Link"}
+                {updatePmPayType === "bank"
+                  ? "Update Bank Account"
+                  : updatePmMode === "manual"
+                    ? "Enter New Card Details"
+                    : "Update via Stripe Link"}
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <button
-                  onClick={() => {
-                    const newMode = updatePmMode === "manual" ? "link" : "manual";
-                    setUpdatePmMode(newMode);
-                  }}
-                  style={{
-                    background: "transparent",
-                    border: `1px solid rgba(255,255,255,0.15)`,
-                    borderRadius: "6px",
-                    color: "rgba(255,255,255,0.5)",
-                    padding: "0.25rem 0.75rem",
-                    fontSize: "0.7rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
-                >
-                  {updatePmMode === "manual" ? "Use Stripe Link instead" : "Enter details manually"}
-                </button>
-                <button
-                  onClick={() => { setUpdatePmOpen(false); setUpdatePmClientSecret(null); setUpdatePmError(null); }}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    borderRadius: "6px",
-                    color: "rgba(255,255,255,0.4)",
-                    padding: "0.25rem 0.75rem",
-                    fontSize: "0.75rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
+              <button
+                onClick={() => { setUpdatePmOpen(false); setUpdatePmClientSecret(null); setUpdatePmError(null); }}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: "6px",
+                  color: "rgba(255,255,255,0.4)",
+                  padding: "0.25rem 0.75rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
             </div>
+
             {updatePmClientSecret && stripePromise ? (
               <Elements
                 stripe={stripePromise}
@@ -1118,6 +1220,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
                 <UpdatePaymentForm
                   businessId={businessId}
                   mode={updatePmMode}
+                  payType={updatePmPayType}
                   clientSecret={updatePmClientSecret}
                   onSuccess={() => {
                     setUpdatePmOpen(false);
@@ -1434,12 +1537,14 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
 function UpdatePaymentForm({
   businessId,
   mode,
+  payType = "card",
   clientSecret,
   onSuccess,
   onError,
 }: {
   businessId: string;
   mode: "manual" | "link";
+  payType?: "card" | "bank";
   clientSecret: string;
   onSuccess: () => void;
   onError: (msg: string) => void;
@@ -1566,6 +1671,46 @@ function UpdatePaymentForm({
     }
   };
 
+  const handleConfirmBank = async () => {
+    if (!stripe || !elements) {
+      showError("Payment form is still loading. Please wait a moment and try again.");
+      return;
+    }
+    setConfirming(true);
+    showError("");
+
+    try {
+      console.log("[UpdatePaymentForm] Confirming US bank account setup...");
+      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+        confirmParams: { return_url: window.location.href },
+      });
+
+      if (confirmError) {
+        console.error("[UpdatePaymentForm] bank confirmSetup error:", confirmError);
+        showError(confirmError.message || "Bank account setup failed. Please try again.");
+        return;
+      }
+
+      console.log("[UpdatePaymentForm] Bank SetupIntent:", setupIntent?.id, setupIntent?.status);
+      if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "requires_action")) {
+        const pmId = typeof setupIntent.payment_method === "string"
+          ? setupIntent.payment_method
+          : (setupIntent.payment_method as { id?: string })?.id || "";
+        if (!pmId) { showError("Could not retrieve payment method from Stripe."); return; }
+        await savePaymentMethod(pmId);
+      } else {
+        showError(`Unexpected setup status: ${setupIntent?.status || "unknown"}. Please try again.`);
+      }
+    } catch (err) {
+      console.error("[UpdatePaymentForm] Bank setup error:", err);
+      showError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   if (success) {
     return (
       <div style={{ background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "0.75rem", borderRadius: "10px", color: "#6ee7b7", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -1582,7 +1727,9 @@ function UpdatePaymentForm({
         </div>
       )}
       <div style={{ marginBottom: "1rem" }}>
-        {mode === "manual" ? (
+        {payType === "bank" ? (
+          <PaymentElement options={{ layout: "tabs" }} />
+        ) : mode === "manual" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem", fontWeight: 600 }}>
@@ -1630,7 +1777,8 @@ function UpdatePaymentForm({
         type="button"
         onClick={() => {
           setLocalError("");
-          if (mode === "manual") handleConfirmManual();
+          if (payType === "bank") handleConfirmBank();
+          else if (mode === "manual") handleConfirmManual();
           else handleConfirmLink();
         }}
         disabled={!stripe || confirming}
@@ -1647,7 +1795,7 @@ function UpdatePaymentForm({
           opacity: confirming ? 0.6 : 1,
         }}
       >
-        {confirming ? "Saving..." : "Save New Payment Method"}
+        {confirming ? "Saving..." : payType === "bank" ? "Save Bank Account" : "Save New Payment Method"}
       </button>
       {!stripe && (
         <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
@@ -1657,3 +1805,4 @@ function UpdatePaymentForm({
     </div>
   );
 }
+

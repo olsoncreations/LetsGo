@@ -509,7 +509,6 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
 
     setLoading(true);
     try {
-      console.log("Attempting sign in...");
       const { data, error: signInError } = await supabaseBrowser.auth.signInWithPassword({ email, password });
 
       if (signInError) {
@@ -528,24 +527,20 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         return;
       }
 
-      console.log("Sign in successful:", data.user?.id);
-
       if (data.session) {
         // Only check business_users for business sign-ins
         let businessId: string | undefined;
         if (type === "business") {
           try {
-            console.log("Checking for existing business...");
             const res = await fetch(`/api/auth/check-business`, {
               headers: { Authorization: `Bearer ${data.session.access_token}` },
             });
             const { businessId: foundId } = await res.json();
             if (foundId) {
-              console.log("Found business:", foundId);
               businessId = foundId;
             }
-          } catch (bizErr) {
-            console.log("business_users check failed, continuing:", bizErr);
+          } catch {
+            // business_users check failed, continue without business context
           }
         }
 
@@ -1025,15 +1020,12 @@ export default function WelcomePage() {
   }, [router]);
 
   function handleAuthSuccess(userId: string, hasExistingBusiness?: boolean, businessId?: string) {
-    console.log("handleAuthSuccess called:", { userId, hasExistingBusiness, businessId, type: authModal.type });
     setAuthModal({ ...authModal, open: false });
 
     if (authModal.type === "business") {
       if (hasExistingBusiness && businessId) {
-        console.log("Redirecting to business profile:", businessId);
         router.push(`/businessprofile-v2/${businessId}`);
       } else {
-        console.log("Redirecting to partner-onboarding");
         router.push("/partner-onboarding");
       }
     } else {

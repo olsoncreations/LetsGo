@@ -112,10 +112,9 @@ export async function POST(req: NextRequest): Promise<Response> {
 /**
  * PATCH /api/stripe/update-payment-method
  *
- * After Stripe Elements confirms the SetupIntent, this saves the new
- * payment method ID to the business table and updates config.
- *
- * Body: { businessId: string, paymentMethodId: string, paymentType: "card" | "bank" }
+ * Saves payment method info to business config. Supports two modes:
+ * 1. Stripe card: { businessId, paymentMethodId } — retrieves card details from Stripe
+ * 2. Manual bank: { businessId, manualBank: { bankName, accountType } } — saves bank info directly
  */
 export async function PATCH(req: NextRequest): Promise<Response> {
   try {
@@ -126,14 +125,25 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     if (authErr || !user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const body = await req.json();
-    const { businessId, paymentMethodId, paymentType } = body as {
+    const { businessId, paymentMethodId, paymentType, manualBank, setPreferred } = body as {
       businessId?: string;
       paymentMethodId?: string;
       paymentType?: "card" | "bank";
+      manualBank?: {
+        bankName: string;
+        accountType: "checking" | "savings";
+        routingLast4?: string;
+        accountLast4?: string;
+      };
+      setPreferred?: "card" | "bank";
     };
 
-    if (!businessId || !paymentMethodId) {
-      return NextResponse.json({ error: "businessId and paymentMethodId required" }, { status: 400 });
+    if (!businessId) {
+      return NextResponse.json({ error: "businessId is required" }, { status: 400 });
+    }
+
+    if (!paymentMethodId && !manualBank && !setPreferred) {
+      return NextResponse.json({ error: "paymentMethodId, manualBank, or setPreferred required" }, { status: 400 });
     }
 
     // Verify access
@@ -152,22 +162,58 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Retrieve payment method details from Stripe
-    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    const configUpdates: Record<string, unknown> = {};
+    let stripePaymentMethodId: string | undefined;
 
-    // Build config updates based on payment method type
-    const configUpdates: Record<string, unknown> = {
-      paymentMethod: paymentType || (pm.type === "us_bank_account" ? "bank" : "card"),
-    };
+    // Set preferred only — just toggle config.paymentMethod without changing details
+    if (setPreferred && !paymentMethodId && !manualBank) {
+      const { data: currentBiz } = await supabaseServer
+        .from("business")
+        .select("config")
+        .eq("id", businessId)
+        .single();
 
-    if (pm.type === "card" && pm.card) {
-      configUpdates.cardBrand = pm.card.brand || "Card";
-      configUpdates.cardLast4 = pm.card.last4 || "";
-      configUpdates.cardExpMonth = pm.card.exp_month;
-      configUpdates.cardExpYear = pm.card.exp_year;
-    } else if (pm.type === "us_bank_account" && pm.us_bank_account) {
-      configUpdates.bankName = pm.us_bank_account.bank_name || "Bank Account";
-      configUpdates.accountType = pm.us_bank_account.account_type || "checking";
+      const currentConfig = (currentBiz?.config || {}) as Record<string, unknown>;
+      const newConfig = { ...currentConfig, paymentMethod: setPreferred };
+
+      const { error: updateErr } = await supabaseServer
+        .from("business")
+        .update({ config: newConfig })
+        .eq("id", businessId);
+
+      if (updateErr) {
+        return NextResponse.json({ error: updateErr.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ ok: true, paymentType: setPreferred });
+    }
+
+    if (manualBank) {
+      // Manual bank entry — save directly to config
+      if (!manualBank.bankName?.trim()) {
+        return NextResponse.json({ error: "Bank name is required" }, { status: 400 });
+      }
+      configUpdates.paymentMethod = "bank";
+      configUpdates.bankName = manualBank.bankName.trim();
+      configUpdates.accountType = manualBank.accountType || "checking";
+      if (manualBank.routingLast4) configUpdates.routingLast4 = manualBank.routingLast4;
+      if (manualBank.accountLast4) configUpdates.accountLast4 = manualBank.accountLast4;
+    } else if (paymentMethodId) {
+      // Stripe-based — retrieve payment method details
+      stripePaymentMethodId = paymentMethodId;
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+
+      configUpdates.paymentMethod = paymentType || (pm.type === "us_bank_account" ? "bank" : "card");
+
+      if (pm.type === "card" && pm.card) {
+        configUpdates.cardBrand = pm.card.brand || "Card";
+        configUpdates.cardLast4 = pm.card.last4 || "";
+        configUpdates.cardExpMonth = pm.card.exp_month;
+        configUpdates.cardExpYear = pm.card.exp_year;
+      } else if (pm.type === "us_bank_account" && pm.us_bank_account) {
+        configUpdates.bankName = pm.us_bank_account.bank_name || "Bank Account";
+        configUpdates.accountType = pm.us_bank_account.account_type || "checking";
+      }
     }
 
     // Get current config and merge
@@ -181,12 +227,14 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     const newConfig = { ...currentConfig, ...configUpdates };
 
     // Update business table
+    const updateData: Record<string, unknown> = { config: newConfig };
+    if (stripePaymentMethodId) {
+      updateData.stripe_payment_method_id = stripePaymentMethodId;
+    }
+
     const { error: updateErr } = await supabaseServer
       .from("business")
-      .update({
-        stripe_payment_method_id: paymentMethodId,
-        config: newConfig,
-      })
+      .update(updateData)
       .eq("id", businessId);
 
     if (updateErr) {

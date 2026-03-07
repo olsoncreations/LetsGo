@@ -185,7 +185,7 @@ export default function ExecutivePage() {
     setLoading(true);
     try {
       // ---- COUNTS ----
-      const { count: usersCount } = await supabaseBrowser.from("users").select("*", { count: "exact", head: true });
+      const { count: usersCount } = await supabaseBrowser.from("profiles").select("*", { count: "exact", head: true });
       setTotalUsers(usersCount || 0);
       const { count: businessCount } = await supabaseBrowser.from("business").select("*", { count: "exact", head: true });
       setTotalBusinesses(businessCount || 0);
@@ -251,22 +251,37 @@ export default function ExecutivePage() {
       }
 
       // ---- USER GROWTH + COHORT ----
-      const { data: users } = await supabaseBrowser.from("users").select("id, created_at");
+      const { data: users } = await supabaseBrowser.from("profiles").select("id, created_at");
       if (users && users.length > 0) {
         const um: Record<string,number> = {};
-        users.forEach(u => { const m = new Date(u.created_at).toLocaleDateString("en-US",{month:"short"}); um[m]=(um[m]||0)+1; });
+        users.forEach(u => {
+          const d = new Date(u.created_at);
+          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+          um[key] = (um[key] || 0) + 1;
+        });
         let rt = 0;
-        setUserGrowth(p => ({...p, month: Object.entries(um).slice(-6).map(([l,n])=>{rt+=n;return{label:l,total:rt,new:n};})}));
+        setUserGrowth(p => ({...p, month: Object.entries(um).sort(([a],[b])=>a.localeCompare(b)).slice(-6).map(([k,n])=>{
+          rt+=n;
+          const [y,m] = k.split("-");
+          const label = new Date(Number(y), Number(m)-1).toLocaleDateString("en-US",{month:"short"});
+          return{label,total:rt,new:n};
+        })}));
 
         // Cohort
         const usm: Record<string,string[]> = {};
-        users.forEach(u => { const k = new Date(u.created_at).toLocaleDateString("en-US",{month:"short",year:"numeric"}); if(!usm[k]) usm[k]=[]; usm[k].push(u.id); });
+        users.forEach(u => {
+          const d = new Date(u.created_at);
+          const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+          if(!usm[k]) usm[k]=[];
+          usm[k].push(u.id);
+        });
         const { data: allRec } = await supabaseBrowser.from("receipts").select("user_id, created_at").limit(10000);
         const rbu: Record<string,string[]> = {};
         if (allRec) allRec.forEach(r => { if(!rbu[r.user_id]) rbu[r.user_id]=[]; rbu[r.user_id].push(r.created_at); });
         const now = new Date();
-        setCohortData(Object.entries(usm).slice(-7).map(([cohort,uids])=>{
-          const cd = new Date(cohort);
+        setCohortData(Object.entries(usm).sort(([a],[b])=>a.localeCompare(b)).slice(-7).map(([cohort,uids])=>{
+          const [cy,cm] = cohort.split("-");
+          const cd = new Date(Number(cy), Number(cm)-1);
           const msc = Math.max(0,Math.floor((now.getTime()-cd.getTime())/(30*24*60*60*1000)));
           const months: (number|undefined)[] = [];
           for (let m=0;m<=Math.min(6,msc);m++) {
@@ -275,7 +290,8 @@ export default function ExecutivePage() {
             const ac = uids.filter(uid => (rbu[uid]||[]).some(rd => { const d2=new Date(rd); return d2.getMonth()===tm.getMonth()&&d2.getFullYear()===tm.getFullYear(); })).length;
             months.push(uids.length > 0 ? Math.round((ac/uids.length)*100) : 0);
           }
-          return {cohort,users:uids.length,months};
+          const cohortLabel = cd.toLocaleDateString("en-US",{month:"short",year:"numeric"});
+          return {cohort:cohortLabel,users:uids.length,months};
         }));
       }
 

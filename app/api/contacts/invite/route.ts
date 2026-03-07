@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { resend, FROM_EMAIL } from "@/lib/resend";
 import { getEmailContent } from "@/lib/emailTemplates";
+import { notify } from "@/lib/notify";
+import { NOTIFICATION_TYPES } from "@/lib/notificationTypes";
 
 // ─── Types ───
 
@@ -131,6 +133,15 @@ export async function POST(req: NextRequest): Promise<Response> {
         });
 
         sent++;
+
+        // Notify sender that invite was sent
+        notify({
+          userId,
+          type: NOTIFICATION_TYPES.FRIEND_INVITE,
+          title: "Invite Sent",
+          body: `Your invite to ${invite.name || email} was sent successfully.`,
+          metadata: { contactEmail: email, contactName: invite.name || null, href: "/welcome/find-friends" },
+        });
       } catch (emailErr) {
         console.error("[contacts/invite] Email send failed for", email, emailErr);
         skipped++;
