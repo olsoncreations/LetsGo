@@ -1,5 +1,5 @@
 -- Seed: Unified tag categories + tags for DB-driven filter system
--- Idempotent — uses ON CONFLICT DO NOTHING so safe to run multiple times.
+-- Idempotent — uses ON CONFLICT DO UPDATE so re-running corrects values.
 -- Run AFTER add-tag-system-columns.sql
 
 -- ══════════════════════════════════════════════════════════════
@@ -15,7 +15,10 @@ INSERT INTO tag_categories (name, icon, scope, requires_food) VALUES
   ('Popular',       '🔥', ARRAY['business'],        false),
   ('Event Type',    '📅', ARRAY['event'],            false),
   ('Event Vibe',    '🎉', ARRAY['event'],            false)
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (name) DO UPDATE SET
+  icon = EXCLUDED.icon,
+  scope = EXCLUDED.scope,
+  requires_food = EXCLUDED.requires_food;
 
 -- ══════════════════════════════════════════════════════════════
 -- 2. BUSINESS TYPE TAGS (with icons + is_food flag)
@@ -57,7 +60,12 @@ FROM (VALUES
 ) AS t(name, slug, icon, is_food, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Business Type'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  icon = EXCLUDED.icon,
+  is_food = EXCLUDED.is_food,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 3. CUISINE TAGS
@@ -101,7 +109,10 @@ FROM (VALUES
 ) AS t(name, slug, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Cuisine'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 4. VIBE TAGS (scope: business + event)
@@ -133,7 +144,10 @@ FROM (VALUES
 ) AS t(name, slug, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Vibe'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 5. AMENITY TAGS
@@ -165,7 +179,10 @@ FROM (VALUES
 ) AS t(name, slug, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Amenities'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 6. DIETARY TAGS
@@ -187,7 +204,10 @@ FROM (VALUES
 ) AS t(name, slug, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Dietary'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 7. POPULAR TAGS
@@ -229,7 +249,10 @@ FROM (VALUES
 ) AS t(name, slug, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Popular'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 8. EVENT TYPE TAGS (with per-tag icons)
@@ -249,7 +272,11 @@ FROM (VALUES
 ) AS t(name, slug, icon, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Event Type'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  icon = EXCLUDED.icon,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
 -- 9. EVENT VIBE TAGS (event-specific vibes not in base Vibe list)
@@ -275,4 +302,7 @@ FROM (VALUES
 ) AS t(name, slug, sort_order)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Event Vibe'
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;

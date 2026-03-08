@@ -857,11 +857,9 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                       }}>
                         {biz ? (
                           <div>
-                            {biz.images.length > 0 && (
-                              <div style={{ width: "100%", height: 180, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
-                                <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={180} />
-                              </div>
-                            )}
+                            <div style={{ width: "100%", height: 180, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                              <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={180} />
+                            </div>
                             <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>{biz.type}</div>
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                               <span style={{ padding: "3px 8px", borderRadius: 50, background: `${COLORS.neonYellow}10`, border: `1px solid ${COLORS.neonYellow}25`, fontSize: 10, fontWeight: 700, color: COLORS.neonYellow }}>{biz.price}</span>
@@ -2658,8 +2656,8 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
         animation: revealed ? "revealScale 0.8s ease-out 0.4s forwards, glowPulse 3s ease-in-out infinite 1.2s" : "none",
         opacity: revealed ? 1 : 0,
       }}>
-        <div style={{ width: "100%", height: 140, position: "relative", overflow: "hidden" }}>
-          <CardImageCarousel images={business.images} gradient={getBusinessGradient(business.id)} emoji={getBusinessEmoji(business.type)} height={140} />
+        <div style={{ width: "100%", height: 200, position: "relative", overflow: "hidden" }}>
+          <CardImageCarousel images={business.images} gradient={getBusinessGradient(business.id)} emoji={getBusinessEmoji(business.type)} height={200} />
         </div>
 
         <div style={{ padding: "10px 14px 14px" }}>
