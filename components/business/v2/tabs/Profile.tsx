@@ -980,7 +980,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
           </div>
 
           {/* Tags Card */}
-          <div style={cardStyle}>
+          <div style={{ ...cardStyle, overflow: "visible", position: "relative", zIndex: 10 }}>
             <div style={cardTitleStyle}>
               <Tag size={20} style={{ color: colors.secondary }} />
               Tags & Keywords
