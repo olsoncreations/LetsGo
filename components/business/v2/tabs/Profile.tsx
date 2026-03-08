@@ -643,6 +643,17 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     }));
   }, [tagCategories]);
 
+  // Re-apply type & cuisine when DB-driven options load (race condition fix)
+  useEffect(() => {
+    if (!loadedData) return;
+    if (typeRef.current && loadedData.fields.type) {
+      typeRef.current.value = loadedData.fields.type;
+    }
+    if (cuisineRef.current && loadedData.fields.cuisineType) {
+      cuisineRef.current.value = loadedData.fields.cuisineType;
+    }
+  }, [businessTypeOptions, cuisineOptions, loadedData]);
+
   // Grouped suggestions filtered by input text
   const groupedSuggestions = useMemo(() => {
     if (!tagInput.trim() || !visibleCategories.length) return [] as { category: string; icon: string; tags: string[] }[];
