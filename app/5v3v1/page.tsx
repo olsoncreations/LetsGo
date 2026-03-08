@@ -575,16 +575,17 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
     const c = tagCats.find(c => c.name === "Vibe");
     return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
   }, [tagCats]);
-  // Smart visibility: hide Cuisine when non-food category selected
+  // Smart visibility: hide Cuisine when non-food category selected in step 1
   const showCuisine = useMemo(() => {
-    if (filters.categories.includes("All") || filters.categories.length === 0) return true;
+    if (selectedCategories.length === 0 || selectedCategories.includes("anything")) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
     if (!bt) return true;
-    return filters.categories.some(cat => {
-      const tag = bt.tags.find(t => t.name === cat);
-      return tag?.is_food ?? true;
+    // Check if any selected step-1 category is food-related
+    return selectedCategories.some(catId => {
+      const tag = bt.tags.find(t => t.slug === catId || t.name.toLowerCase().replace(/[/ ]/g, "_") === catId);
+      return tag?.is_food ?? false;
     });
-  }, [filters.categories, tagCats]);
+  }, [selectedCategories, tagCats]);
   const [editingZip, setEditingZip] = useState(false);
   const [zipInput, setZipInput] = useState("");
   const [locationName, setLocationName] = useState("");
@@ -1033,19 +1034,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
             </div>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Category</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <GlassPill active={filters.categories.includes("All") || filters.categories.length === 0} onClick={() => setFilters(p => ({ ...p, categories: ["All"] }))}>All</GlassPill>
-              {FILTER_CATEGORIES.filter(c => c !== "All").map(c => (
-                <GlassPill key={c} active={filters.categories.includes(c)} onClick={() => setFilters(p => {
-                  const cats = p.categories.filter(x => x !== "All");
-                  const next = cats.includes(c) ? cats.filter(x => x !== c) : [...cats, c];
-                  return { ...p, categories: next.length === 0 ? ["All"] : next };
-                })}>{c}</GlassPill>
-              ))}
-            </div>
-          </div>
+          {/* Category removed — already selected in step 1 */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Price</div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -1248,7 +1237,19 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
             onClick={() => {
               if (canProceed) { onNext(); return; }
               if (activeSection === "history") { switchSection("category"); return; }
-              if (activeSection === "category" && selectedCategories.length > 0) { switchSection("filters"); return; }
+              if (activeSection === "category" && selectedCategories.length > 0) {
+                // Map step-1 category IDs to filter category names
+                if (selectedCategories.includes("anything")) {
+                  setFilters(p => ({ ...p, categories: ["All"] }));
+                } else {
+                  const catNames = selectedCategories.map(id => {
+                    const cat = CATEGORIES.find(c => c.id === id);
+                    return cat?.label ?? id;
+                  });
+                  setFilters(p => ({ ...p, categories: catNames }));
+                }
+                switchSection("filters"); return;
+              }
               if (activeSection === "filters" && !/^\d{5}$/.test(locationZip)) { setEditingZip(true); setZipInput(""); setTimeout(() => zipRef.current?.focus(), 50); return; }
               if (activeSection === "filters") { switchSection("friend"); return; }
             }}
