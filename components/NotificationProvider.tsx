@@ -20,6 +20,8 @@ interface NotificationContextValue {
   loading: boolean;
   markAsRead: (ids: string[]) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
 }
 
@@ -29,6 +31,8 @@ const NotificationContext = createContext<NotificationContextValue>({
   loading: true,
   markAsRead: async () => {},
   markAllAsRead: async () => {},
+  deleteNotification: async () => {},
+  clearAllNotifications: async () => {},
   refreshNotifications: async () => {},
 });
 
@@ -160,6 +164,58 @@ export default function NotificationProvider({ children }: { children: ReactNode
     if (unreadIds.length > 0) await markAsRead(unreadIds);
   }, [notifications, markAsRead]);
 
+  // Delete a single notification
+  const deleteNotification = useCallback(async (id: string) => {
+    const {
+      data: { session },
+    } = await supabaseBrowser.auth.getSession();
+    if (!session?.access_token) return;
+
+    // Optimistic removal
+    const wasUnread = notifications.find((n) => n.id === id && !n.read);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (wasUnread) setUnreadCount((prev) => Math.max(0, prev - 1));
+
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ ids: [id] }),
+      });
+    } catch {
+      // Re-fetch on failure to restore correct state
+      fetchNotifications();
+    }
+  }, [notifications, fetchNotifications]);
+
+  // Clear all notifications
+  const clearAllNotifications = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabaseBrowser.auth.getSession();
+    if (!session?.access_token) return;
+
+    // Optimistic clear
+    setNotifications([]);
+    setUnreadCount(0);
+
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ ids: ["*"] }),
+      });
+    } catch {
+      fetchNotifications();
+    }
+  }, [fetchNotifications]);
+
   return (
     <NotificationContext.Provider
       value={{
@@ -168,6 +224,8 @@ export default function NotificationProvider({ children }: { children: ReactNode
         loading,
         markAsRead,
         markAllAsRead,
+        deleteNotification,
+        clearAllNotifications,
         refreshNotifications: fetchNotifications,
       }}
     >

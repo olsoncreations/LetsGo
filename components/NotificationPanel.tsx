@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "./NotificationProvider";
 import { NOTIFICATION_HREFS, type UserNotification } from "@/lib/notificationTypes";
@@ -59,6 +59,255 @@ const TYPE_ICONS: Record<string, string> = {
   receipt_submitted: "\u2709",   // envelope
 };
 
+// ── Swipe threshold (px) ─────────────────────────────
+
+const SWIPE_THRESHOLD = 80;
+const DELETE_FULL_SWIPE = 160;
+
+// ── Swipeable notification item ──────────────────────
+
+interface SwipeableNotifProps {
+  notif: UserNotification;
+  onDelete: (id: string) => void;
+  onClick: (notif: UserNotification) => void;
+}
+
+function SwipeableNotifItem({ notif, onDelete, onClick }: SwipeableNotifProps) {
+  const [translateX, setTranslateX] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const isHorizontalSwipe = useRef<boolean | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isHorizontalSwipe.current = null;
+    setSwiping(true);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!swiping) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+
+    // Determine direction on first significant move
+    if (isHorizontalSwipe.current === null) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        isHorizontalSwipe.current = Math.abs(dx) > Math.abs(dy);
+      }
+      return;
+    }
+
+    if (!isHorizontalSwipe.current) return;
+
+    // Only allow left swipe (negative dx)
+    const clampedDx = Math.min(0, dx);
+    setTranslateX(clampedDx);
+  }, [swiping]);
+
+  const handleTouchEnd = useCallback(() => {
+    setSwiping(false);
+    isHorizontalSwipe.current = null;
+
+    if (translateX < -DELETE_FULL_SWIPE) {
+      // Full swipe — animate out and delete
+      setDismissed(true);
+      setTimeout(() => onDelete(notif.id), 300);
+    } else if (translateX < -SWIPE_THRESHOLD) {
+      // Partial swipe — snap to reveal delete button
+      setTranslateX(-SWIPE_THRESHOLD);
+    } else {
+      // Snap back
+      setTranslateX(0);
+    }
+  }, [translateX, notif.id, onDelete]);
+
+  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDismissed(true);
+    setTimeout(() => onDelete(notif.id), 300);
+  }, [notif.id, onDelete]);
+
+  const color = TYPE_COLORS[notif.type] || "#6b7280";
+  const icon = TYPE_ICONS[notif.type] || "\u2022";
+
+  return (
+    <div
+      ref={rowRef}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        maxHeight: dismissed ? 0 : 200,
+        opacity: dismissed ? 0 : 1,
+        transition: dismissed
+          ? "max-height 0.3s ease, opacity 0.3s ease"
+          : undefined,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Delete backdrop (revealed on swipe) */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          bottom: 1,
+          width: SWIPE_THRESHOLD,
+          background: "#dc2626",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: "0.05em",
+          fontFamily: "'DM Sans', sans-serif",
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+        onClick={handleDeleteClick}
+      >
+        DELETE
+      </div>
+
+      {/* Foreground notification row */}
+      <button
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={() => {
+          // Only navigate if not swiped open
+          if (Math.abs(translateX) < 10) {
+            onClick(notif);
+          } else {
+            setTranslateX(0);
+          }
+        }}
+        style={{
+          position: "relative",
+          width: "100%",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+          padding: "13px 18px",
+          border: "none",
+          borderBottom: "1px solid #f5f5f5",
+          background: notif.read ? "#ffffff" : "#fdf2f8",
+          cursor: "pointer",
+          textAlign: "left",
+          transition: swiping ? "none" : "transform 0.25s ease",
+          transform: `translateX(${translateX}px)`,
+          borderLeft: notif.read ? "3px solid transparent" : `3px solid ${color}`,
+          zIndex: 1,
+        }}
+      >
+        {/* Type icon */}
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 8,
+            flexShrink: 0,
+            background: `${color}15`,
+            border: `1px solid ${color}30`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 14,
+            color: color,
+            fontWeight: 700,
+          }}
+        >
+          {icon}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: notif.read ? 500 : 700,
+              color: notif.read ? "#6b7280" : "#1a1a2e",
+              fontFamily: "'DM Sans', sans-serif",
+              lineHeight: 1.35,
+              marginBottom: 2,
+            }}
+          >
+            {notif.title}
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: notif.read ? "#9ca3af" : "#6b7280",
+              fontFamily: "'DM Sans', sans-serif",
+              lineHeight: 1.4,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap" as const,
+            }}
+          >
+            {notif.body}
+          </div>
+          <div
+            style={{
+              fontSize: 10,
+              color: "#b0b0b0",
+              fontFamily: "'DM Sans', sans-serif",
+              marginTop: 4,
+            }}
+          >
+            {timeAgo(notif.created_at)}
+          </div>
+        </div>
+
+        {/* Unread dot / Desktop X button */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginTop: 4 }}>
+          {!notif.read && (
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                background: "#FF2D78",
+                boxShadow: "0 0 8px rgba(255,45,120,0.4)",
+              }}
+            />
+          )}
+          {/* Desktop hover X button */}
+          <div
+            onClick={handleDeleteClick}
+            role="button"
+            tabIndex={-1}
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 6,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              color: "#b0b0b0",
+              background: hovered ? "#f3f4f6" : "transparent",
+              cursor: "pointer",
+              opacity: hovered ? 1 : 0,
+              transition: "opacity 0.15s, background 0.15s",
+              lineHeight: 1,
+            }}
+            title="Delete notification"
+          >
+            ×
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
 // ── Panel ────────────────────────────────────────────
 
 interface NotificationPanelProps {
@@ -68,7 +317,7 @@ interface NotificationPanelProps {
 
 const NotificationPanel = forwardRef<HTMLDivElement, NotificationPanelProps>(function NotificationPanel({ onClose, position }, ref) {
   const router = useRouter();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAllNotifications } = useNotifications();
 
   const handleClick = async (notif: UserNotification) => {
     if (!notif.read) await markAsRead([notif.id]);
@@ -128,27 +377,65 @@ const NotificationPanel = forwardRef<HTMLDivElement, NotificationPanelProps>(fun
         >
           Notifications
         </span>
-        {unreadCount > 0 && (
-          <button
-            onClick={() => markAllAsRead()}
-            style={{
-              padding: "5px 12px",
-              borderRadius: 20,
-              border: "1px solid rgba(255,45,120,0.25)",
-              background: "rgba(255,45,120,0.06)",
-              color: "#FF2D78",
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase" as const,
-              cursor: "pointer",
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
-            Mark all read
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 6 }}>
+          {unreadCount > 0 && (
+            <button
+              onClick={() => markAllAsRead()}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 20,
+                border: "1px solid rgba(255,45,120,0.25)",
+                background: "rgba(255,45,120,0.06)",
+                color: "#FF2D78",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase" as const,
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Mark all read
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button
+              onClick={() => clearAllNotifications()}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 20,
+                border: "1px solid rgba(220,38,38,0.25)",
+                background: "rgba(220,38,38,0.06)",
+                color: "#dc2626",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase" as const,
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Swipe hint (mobile only, shown briefly) */}
+      {isMobile && notifications.length > 0 && (
+        <div
+          style={{
+            padding: "6px 18px",
+            fontSize: 10,
+            color: "#b0b0b0",
+            fontFamily: "'DM Sans', sans-serif",
+            textAlign: "center",
+            borderBottom: "1px solid #f5f5f5",
+          }}
+        >
+          Swipe left to delete
+        </div>
+      )}
 
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
@@ -165,105 +452,14 @@ const NotificationPanel = forwardRef<HTMLDivElement, NotificationPanelProps>(fun
             No notifications yet
           </div>
         ) : (
-          notifications.map((notif) => {
-            const color = TYPE_COLORS[notif.type] || "#6b7280";
-            const icon = TYPE_ICONS[notif.type] || "\u2022";
-
-            return (
-              <button
-                key={notif.id}
-                onClick={() => handleClick(notif)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 12,
-                  padding: "13px 18px",
-                  border: "none",
-                  borderBottom: "1px solid #f5f5f5",
-                  background: notif.read ? "#ffffff" : "#fdf2f8",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "background 0.15s",
-                  borderLeft: notif.read ? "3px solid transparent" : `3px solid ${color}`,
-                }}
-              >
-                {/* Type icon */}
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 8,
-                    flexShrink: 0,
-                    background: `${color}15`,
-                    border: `1px solid ${color}30`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 14,
-                    color: color,
-                    fontWeight: 700,
-                  }}
-                >
-                  {icon}
-                </div>
-
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: notif.read ? 500 : 700,
-                      color: notif.read ? "#6b7280" : "#1a1a2e",
-                      fontFamily: "'DM Sans', sans-serif",
-                      lineHeight: 1.35,
-                      marginBottom: 2,
-                    }}
-                  >
-                    {notif.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: notif.read ? "#9ca3af" : "#6b7280",
-                      fontFamily: "'DM Sans', sans-serif",
-                      lineHeight: 1.4,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap" as const,
-                    }}
-                  >
-                    {notif.body}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "#b0b0b0",
-                      fontFamily: "'DM Sans', sans-serif",
-                      marginTop: 4,
-                    }}
-                  >
-                    {timeAgo(notif.created_at)}
-                  </div>
-                </div>
-
-                {/* Unread dot */}
-                {!notif.read && (
-                  <div
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      background: "#FF2D78",
-                      boxShadow: "0 0 8px rgba(255,45,120,0.4)",
-                      flexShrink: 0,
-                      marginTop: 6,
-                    }}
-                  />
-                )}
-              </button>
-            );
-          })
+          notifications.map((notif) => (
+            <SwipeableNotifItem
+              key={notif.id}
+              notif={notif}
+              onDelete={deleteNotification}
+              onClick={handleClick}
+            />
+          ))
         )}
       </div>
     </div>

@@ -83,3 +83,48 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ ok: true, markedCount: ids.length });
 }
+
+/**
+ * DELETE /api/notifications
+ * Delete notifications by IDs, or all notifications if ids is ["*"].
+ * Body: { ids: string[] }
+ */
+export async function DELETE(req: NextRequest) {
+  const user = await authenticate(req);
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const ids = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: "ids array required" }, { status: 400 });
+  }
+
+  // Clear all notifications for this user
+  if (ids.length === 1 && ids[0] === "*") {
+    const { error } = await supabaseServer
+      .from("user_notifications")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, deletedAll: true });
+  }
+
+  // Delete specific notifications
+  const { error } = await supabaseServer
+    .from("user_notifications")
+    .delete()
+    .in("id", ids)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, deletedCount: ids.length });
+}
