@@ -36,6 +36,8 @@ interface PlatformSettings {
   change_history: { date: string; changed_by: string; changes: string }[];
   scheduled_maintenance: { date: string; time: string; duration_hours: number; notify_advance: boolean } | null;
   maintenance_history: { date: string; action: string; by: string }[];
+  // Influencer tiers
+  default_influencer_tiers: { tier_index: number; min_signups: number; max_signups: number | null; rate_cents: number; label: string }[];
   // Metadata
   updated_at: string | null;
   updated_by: string | null;
@@ -128,6 +130,12 @@ const DEFAULT_SETTINGS: PlatformSettings = {
     push_100mile_cents: 259900,
     push_tourwide_cents: 459900,
   },
+  default_influencer_tiers: [
+    { tier_index: 1, min_signups: 1, max_signups: 50, rate_cents: 3000, label: "Starter" },
+    { tier_index: 2, min_signups: 51, max_signups: 200, rate_cents: 2500, label: "Growth" },
+    { tier_index: 3, min_signups: 201, max_signups: 500, rate_cents: 2000, label: "Scale" },
+    { tier_index: 4, min_signups: 501, max_signups: null, rate_cents: 1500, label: "Volume" },
+  ],
   maintenance_enabled: false,
   maintenance_message: "We're currently performing scheduled maintenance. We'll be back shortly. Thank you for your patience!",
   change_history: [],
@@ -467,6 +475,7 @@ export default function SettingsPage() {
         package_pricing: settings.package_pricing,
         ad_pricing: settings.ad_pricing,
         roles_config: settings.roles_config,
+        default_influencer_tiers: settings.default_influencer_tiers,
         maintenance_enabled: settings.maintenance_enabled,
         maintenance_message: settings.maintenance_message,
         change_history: updatedHistory,
@@ -623,6 +632,7 @@ export default function SettingsPage() {
           { key: "roles", label: "Staff Roles" },
           { key: "security", label: "Security" },
           { key: "tags", label: "Tag Management" },
+          { key: "influencer_tiers", label: "Influencer Tiers" },
           { key: "maintenance", label: "Maintenance" },
         ].map(section => (
           <button
@@ -2072,6 +2082,193 @@ export default function SettingsPage() {
               </Card>
             </>
           )}
+        </div>
+      )}
+
+      {/* ==================== INFLUENCER TIERS ==================== */}
+      {settingsSection === "influencer_tiers" && (
+        <div style={{ display: "grid", gap: 24 }}>
+          <Card title="DEFAULT INFLUENCER RATE TIERS">
+            <div style={{ marginBottom: 16, color: COLORS.textSecondary, fontSize: 13 }}>
+              Define the default rate tiers assigned to new influencers. Each signup earns the rate of the tier it falls into (tax-bracket style). Rates are in dollars per signup.
+            </div>
+
+            {/* Info box */}
+            <div style={{ padding: 16, background: "rgba(0,212,255,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(0,212,255,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <span style={{ fontSize: 20 }}>💡</span>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.6 }}>
+                  <strong style={{ color: COLORS.neonBlue }}>Tax-bracket style:</strong> An influencer with 65 signups and tiers [1-50 → $30, 51-200 → $25] earns $30 for each of their first 50 signups and $25 for signups 51-65. These defaults apply to newly created influencers — existing influencers keep their own tiers.
+                </div>
+              </div>
+            </div>
+
+            {/* Tier rows */}
+            <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
+              {/* Header */}
+              <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 1fr 1fr 1fr 40px", gap: 12, padding: "0 4px" }}>
+                <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600, textTransform: "uppercase" }}>#</div>
+                <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600, textTransform: "uppercase" }}>From (signups)</div>
+                <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600, textTransform: "uppercase" }}>To (signups)</div>
+                <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600, textTransform: "uppercase" }}>Rate / Signup</div>
+                <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600, textTransform: "uppercase" }}>Label</div>
+                <div />
+              </div>
+
+              {(settings.default_influencer_tiers || []).map((tier, idx) => (
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "40px 1fr 1fr 1fr 1fr 40px", gap: 12, alignItems: "center", padding: 12, background: COLORS.darkBg, borderRadius: 10 }}>
+                  <div style={{ fontWeight: 700, color: COLORS.neonBlue, fontSize: 14 }}>{idx + 1}</div>
+                  <input
+                    type="number"
+                    min={1}
+                    value={tier.min_signups}
+                    disabled={!editing}
+                    onChange={e => {
+                      const updated = [...settings.default_influencer_tiers];
+                      updated[idx] = { ...updated[idx], min_signups: Math.max(1, parseInt(e.target.value) || 1) };
+                      setSettings({ ...settings, default_influencer_tiers: updated });
+                    }}
+                    style={{ padding: 10, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 14, width: "100%" }}
+                  />
+                  {tier.max_signups === null ? (
+                    <div style={{ padding: 10, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonGreen, fontSize: 13, fontWeight: 600 }}>
+                      Unlimited
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      min={tier.min_signups}
+                      value={tier.max_signups}
+                      disabled={!editing}
+                      onChange={e => {
+                        const updated = [...settings.default_influencer_tiers];
+                        updated[idx] = { ...updated[idx], max_signups: parseInt(e.target.value) || tier.min_signups };
+                        setSettings({ ...settings, default_influencer_tiers: updated });
+                      }}
+                      style={{ padding: 10, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 14, width: "100%" }}
+                    />
+                  )}
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: COLORS.neonYellow, fontWeight: 700, fontSize: 14 }}>$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={(tier.rate_cents / 100).toFixed(2)}
+                      disabled={!editing}
+                      onChange={e => {
+                        const updated = [...settings.default_influencer_tiers];
+                        updated[idx] = { ...updated[idx], rate_cents: Math.round(parseFloat(e.target.value || "0") * 100) };
+                        setSettings({ ...settings, default_influencer_tiers: updated });
+                      }}
+                      style={{ padding: 10, paddingLeft: 24, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonYellow, fontSize: 14, fontWeight: 600, width: "100%" }}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={tier.label}
+                    disabled={!editing}
+                    onChange={e => {
+                      const updated = [...settings.default_influencer_tiers];
+                      updated[idx] = { ...updated[idx], label: e.target.value };
+                      setSettings({ ...settings, default_influencer_tiers: updated });
+                    }}
+                    style={{ padding: 10, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 14, width: "100%" }}
+                  />
+                  {editing && settings.default_influencer_tiers.length > 1 && (
+                    <button
+                      onClick={() => {
+                        const updated = settings.default_influencer_tiers.filter((_, i) => i !== idx);
+                        // If we removed a non-last tier, make the new last tier unlimited
+                        if (idx === settings.default_influencer_tiers.length - 1 && updated.length > 0) {
+                          updated[updated.length - 1] = { ...updated[updated.length - 1], max_signups: null };
+                        }
+                        // Re-index
+                        const reindexed = updated.map((t, i) => ({ ...t, tier_index: i + 1 }));
+                        setSettings({ ...settings, default_influencer_tiers: reindexed });
+                      }}
+                      style={{ padding: 6, background: "rgba(255,49,49,0.15)", border: "1px solid rgba(255,49,49,0.3)", borderRadius: 8, color: COLORS.neonRed, cursor: "pointer", fontSize: 16 }}
+                      title="Remove tier"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add Tier button */}
+            {editing && (
+              <button
+                onClick={() => {
+                  const tiers = settings.default_influencer_tiers || [];
+                  const lastTier = tiers[tiers.length - 1];
+                  const newMin = lastTier ? (lastTier.max_signups ?? lastTier.min_signups) + 1 : 1;
+                  // Set current last tier's max_signups if it was unlimited
+                  const updatedTiers = tiers.map((t, i) => {
+                    if (i === tiers.length - 1 && t.max_signups === null) {
+                      return { ...t, max_signups: newMin - 1 };
+                    }
+                    return t;
+                  });
+                  const newTier = {
+                    tier_index: tiers.length + 1,
+                    min_signups: newMin,
+                    max_signups: null as number | null,
+                    rate_cents: lastTier ? Math.max(lastTier.rate_cents - 500, 100) : 3000,
+                    label: `Tier ${tiers.length + 1}`,
+                  };
+                  setSettings({ ...settings, default_influencer_tiers: [...updatedTiers, newTier] });
+                }}
+                style={{ padding: "10px 20px", background: "rgba(0,212,255,0.12)", border: "1px dashed " + COLORS.neonBlue, borderRadius: 10, color: COLORS.neonBlue, cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+              >
+                + Add Tier
+              </button>
+            )}
+
+            {/* Preview earnings example */}
+            {(settings.default_influencer_tiers || []).length > 0 && (
+              <div style={{ marginTop: 24, padding: 16, background: "rgba(57,255,20,0.06)", borderRadius: 12, border: "1px solid rgba(57,255,20,0.15)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.neonGreen, marginBottom: 12 }}>Earnings Preview (100 signups)</div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {(() => {
+                    const tiers = settings.default_influencer_tiers || [];
+                    let totalCents = 0;
+                    let remaining = 100;
+                    let pos = 1;
+                    const rows: { label: string; signups: number; rate: number; amount: number }[] = [];
+                    for (const tier of tiers) {
+                      if (remaining <= 0) break;
+                      const tierMax = tier.max_signups ?? Infinity;
+                      const start = Math.max(tier.min_signups, pos);
+                      const end = Math.min(tierMax, 100);
+                      if (start > end) continue;
+                      const count = Math.min(end - start + 1, remaining);
+                      const amount = count * tier.rate_cents;
+                      rows.push({ label: tier.label, signups: count, rate: tier.rate_cents, amount });
+                      totalCents += amount;
+                      remaining -= count;
+                      pos = end + 1;
+                    }
+                    return (
+                      <>
+                        {rows.map((r, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: COLORS.textSecondary }}>
+                            <span>{r.label}: {r.signups} signups × ${(r.rate / 100).toFixed(2)}</span>
+                            <span style={{ color: COLORS.neonYellow, fontWeight: 600 }}>${(r.amount / 100).toFixed(2)}</span>
+                          </div>
+                        ))}
+                        <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 8, marginTop: 4, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700 }}>
+                          <span>Total (100 signups)</span>
+                          <span style={{ color: COLORS.neonGreen }}>${(totalCents / 100).toFixed(2)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

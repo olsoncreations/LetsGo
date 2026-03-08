@@ -12,6 +12,7 @@ import {
   formatMoney,
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
+import { calculateBracketPayout, formatRateCents, type InfluencerRateTier } from "@/lib/influencerPayoutEngine";
 
 /* ==================== TYPES ==================== */
 
@@ -387,7 +388,7 @@ export default function ReferralsPage() {
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [influencerPayouts, setInfluencerPayouts] = useState<InfluencerPayout[]>([]);
   const [showCreateInfluencer, setShowCreateInfluencer] = useState(false);
-  const [showEditRate, setShowEditRate] = useState(false);
+  const [showEditTiers, setShowEditTiers] = useState(false);
   const [showEditInfluencer, setShowEditInfluencer] = useState(false);
   const [selectedInfluencer, setSelectedInfluencer] = useState<Influencer | null>(null);
   const [originalInfluencer, setOriginalInfluencer] = useState<Influencer | null>(null);
@@ -398,7 +399,13 @@ export default function ReferralsPage() {
     payment_method: "bank_transfer", payment_details: "", tax_id: "",
     rate_per_thousand_cents: 5000, ftc_agreed: false
   });
-  const [editRateData, setEditRateData] = useState({ rate_per_thousand_cents: 5000, reason: "" });
+  // Tier editing state
+  const [editTiers, setEditTiers] = useState<InfluencerRateTier[]>([]);
+  const [editTiersReason, setEditTiersReason] = useState("");
+  // Cache of all influencer tiers (keyed by influencer_id)
+  const [influencerTiersMap, setInfluencerTiersMap] = useState<Record<string, InfluencerRateTier[]>>({});
+  // Default tiers from platform_settings
+  const [defaultInfluencerTiers, setDefaultInfluencerTiers] = useState<InfluencerRateTier[]>([]);
 
   // Analytics drawer
   const [analyticsInfluencer, setAnalyticsInfluencer] = useState<Influencer | null>(null);
@@ -407,9 +414,8 @@ export default function ReferralsPage() {
 
   // Bulk actions
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
-  const [showBulkRateModal, setShowBulkRateModal] = useState(false);
-  const [bulkRateValue, setBulkRateValue] = useState(5000);
-  const [bulkRateReason, setBulkRateReason] = useState("");
+  const [showBulkTierResetModal, setShowBulkTierResetModal] = useState(false);
+  const [bulkTierResetReason, setBulkTierResetReason] = useState("");
 
   // Advanced filtering
   const [filterStatus, setFilterStatus] = useState("all");
@@ -540,6 +546,31 @@ export default function ReferralsPage() {
         .select("*")
         .order("created_at", { ascending: false });
       if (contractData) setInfluencerContracts(contractData as InfluencerContract[]);
+
+      // Fetch all influencer rate tiers
+      const { data: tierData } = await supabaseBrowser
+        .from("influencer_rate_tiers")
+        .select("influencer_id, tier_index, min_signups, max_signups, rate_cents, label")
+        .order("tier_index", { ascending: true });
+      if (tierData) {
+        const tiersMap: Record<string, InfluencerRateTier[]> = {};
+        for (const t of tierData) {
+          const infId = t.influencer_id as string;
+          if (!tiersMap[infId]) tiersMap[infId] = [];
+          tiersMap[infId].push(t as InfluencerRateTier);
+        }
+        setInfluencerTiersMap(tiersMap);
+      }
+
+      // Fetch default influencer tiers from platform_settings
+      const { data: settingsData } = await supabaseBrowser
+        .from("platform_settings")
+        .select("default_influencer_tiers")
+        .eq("id", 1)
+        .maybeSingle();
+      if (settingsData?.default_influencer_tiers) {
+        setDefaultInfluencerTiers(settingsData.default_influencer_tiers as InfluencerRateTier[]);
+      }
     } catch (err) {
       console.error("Error fetching referral data:", err);
     } finally {
@@ -696,9 +727,7 @@ export default function ReferralsPage() {
       if (!inf.name.toLowerCase().includes(q) && !inf.code.toLowerCase().includes(q) && !(inf.email || "").toLowerCase().includes(q)) return false;
     }
     if (filterOutstanding !== "all") {
-      const paidSignups = influencerPayouts.filter(p => p.influencer_id === inf.id && p.paid).reduce((s, p) => s + p.signups_count, 0);
-      const unpaidSignups = inf.total_signups - paidSignups;
-      const unpaidPayoutValue = Math.floor(unpaidSignups / 1000) * inf.rate_per_thousand_cents;
+      const unpaidPayoutValue = calcUnpaidPayoutValue(inf);
       const unpaidBonusTotal = influencerBonuses.filter(b => b.influencer_id === inf.id && !b.paid).reduce((s, b) => s + b.amount_cents, 0);
       const totalOwed = unpaidPayoutValue + unpaidBonusTotal;
       if (filterOutstanding === "has_outstanding" && totalOwed === 0) return false;
@@ -724,6 +753,28 @@ export default function ReferralsPage() {
   function getClickConversionRate(inf: Influencer): string {
     if (!inf.total_clicks || inf.total_clicks === 0) return "—";
     return ((inf.total_signups / inf.total_clicks) * 100).toFixed(1) + "%";
+  }
+
+  // Calculate unpaid payout value using bracket tiers
+  function calcUnpaidPayoutValue(inf: Influencer): number {
+    const paidSignups = influencerPayouts.filter(p => p.influencer_id === inf.id && p.paid).reduce((s, p) => s + p.signups_count, 0);
+    const unpaidSignups = inf.total_signups - paidSignups;
+    if (unpaidSignups <= 0) return 0;
+    const tiers = influencerTiersMap[inf.id];
+    if (tiers && tiers.length > 0) {
+      const { totalCents } = calculateBracketPayout(tiers, paidSignups, unpaidSignups);
+      return totalCents;
+    }
+    // Legacy fallback
+    return Math.floor(unpaidSignups * inf.rate_per_thousand_cents / 1000);
+  }
+
+  // Get tier rate range for display (e.g., "$15.00 – $30.00")
+  function getTierRangeDisplay(infId: string): { minRate: number; maxRate: number; count: number } | null {
+    const tiers = influencerTiersMap[infId];
+    if (!tiers || tiers.length === 0) return null;
+    const rates = tiers.map(t => t.rate_cents);
+    return { minRate: Math.min(...rates), maxRate: Math.max(...rates), count: tiers.length };
   }
 
   /* ==================== ACTIONS ==================== */
@@ -882,13 +933,31 @@ export default function ReferralsPage() {
       notes: `Created on ${new Date().toLocaleDateString()} with rate $${(newInfluencer.rate_per_thousand_cents / 100).toFixed(2)} per 1,000 signups`,
     });
     if (error) { alert("Error creating influencer: " + error.message); return; }
+
+    // Insert default rate tiers for the new influencer
+    if (defaultInfluencerTiers.length > 0) {
+      // Look up the newly created influencer to get its ID
+      const { data: newInfData } = await supabaseBrowser.from("influencers").select("id").eq("code", newInfluencer.code.toUpperCase().replace(/\s/g, "")).maybeSingle();
+      if (newInfData) {
+        const tierRows = defaultInfluencerTiers.map((t, i) => ({
+          influencer_id: newInfData.id,
+          tier_index: i + 1,
+          min_signups: t.min_signups,
+          max_signups: t.max_signups,
+          rate_cents: t.rate_cents,
+          label: t.label || `Tier ${i + 1}`,
+        }));
+        await supabaseBrowser.from("influencer_rate_tiers").insert(tierRows);
+      }
+    }
+
     logAudit({
       action: "create_influencer",
       tab: AUDIT_TABS.REFERRALS,
       subTab: "Influencers",
       targetType: "influencer",
       entityName: newInfluencer.name,
-      details: `Created influencer "${newInfluencer.name}" with code ${newInfluencer.code.toUpperCase()}, rate $${(newInfluencer.rate_per_thousand_cents / 100).toFixed(2)}/1K signups`,
+      details: `Created influencer "${newInfluencer.name}" with code ${newInfluencer.code.toUpperCase()}, default tiers applied`,
     });
     alert(`✅ Influencer "${newInfluencer.name}" created with code ${newInfluencer.code.toUpperCase()}!`);
     setShowCreateInfluencer(false);
@@ -969,39 +1038,58 @@ export default function ReferralsPage() {
     await fetchData();
   }
 
-  async function handleEditRate() {
+  async function handleSaveTiers() {
     if (!selectedInfluencer) return;
-    if (!editRateData.reason.trim()) { alert("Please enter a reason for the rate change."); return; }
-    const oldRate = selectedInfluencer.rate_per_thousand_cents;
-    const newRate = editRateData.rate_per_thousand_cents;
-    const noteEntry = `\n[${new Date().toLocaleDateString()}] Rate changed from $${(oldRate / 100).toFixed(2)} to $${(newRate / 100).toFixed(2)} per 1K - Reason: ${editRateData.reason}`;
-    const updatedNotes = (selectedInfluencer.notes || "") + noteEntry;
+    if (!editTiersReason.trim()) { alert("Please enter a reason for the tier change."); return; }
+    if (editTiers.length === 0) { alert("At least one tier is required."); return; }
 
-    const { error } = await supabaseBrowser
-      .from("influencers")
-      .update({
-        rate_per_thousand_cents: newRate,
-        notes: updatedNotes,
-      })
-      .eq("id", selectedInfluencer.id);
+    // Validate tiers
+    for (let i = 0; i < editTiers.length; i++) {
+      if (editTiers[i].rate_cents < 0) { alert(`Tier ${i + 1} rate must be non-negative.`); return; }
+      if (editTiers[i].min_signups < 1) { alert(`Tier ${i + 1} min signups must be at least 1.`); return; }
+      if (i < editTiers.length - 1 && editTiers[i].max_signups === null) { alert(`Only the last tier can have unlimited max signups.`); return; }
+    }
 
-    if (error) { alert("Error updating rate: " + error.message); return; }
+    // Delete existing tiers
+    const { error: delErr } = await supabaseBrowser
+      .from("influencer_rate_tiers")
+      .delete()
+      .eq("influencer_id", selectedInfluencer.id);
+    if (delErr) { alert("Error clearing old tiers: " + delErr.message); return; }
+
+    // Insert new tiers
+    const rows = editTiers.map((t, i) => ({
+      influencer_id: selectedInfluencer.id,
+      tier_index: i + 1,
+      min_signups: t.min_signups,
+      max_signups: t.max_signups,
+      rate_cents: t.rate_cents,
+      label: t.label || `Tier ${i + 1}`,
+    }));
+    const { error: insErr } = await supabaseBrowser.from("influencer_rate_tiers").insert(rows);
+    if (insErr) { alert("Error saving tiers: " + insErr.message); return; }
+
+    // Log note on influencer
+    const tierSummary = editTiers.map(t => `${t.min_signups}-${t.max_signups ?? "∞"}: ${formatRateCents(t.rate_cents)}/signup`).join(", ");
+    const noteEntry = `\n[${new Date().toLocaleDateString()}] Tiers updated: [${tierSummary}] — Reason: ${editTiersReason}`;
+    await supabaseBrowser.from("influencers").update({ notes: (selectedInfluencer.notes || "") + noteEntry }).eq("id", selectedInfluencer.id);
+
     logAudit({
-      action: "update_influencer_rate",
+      action: "update_influencer_tiers",
       tab: AUDIT_TABS.REFERRALS,
       subTab: "Influencers",
       targetType: "influencer",
       targetId: selectedInfluencer.id,
       entityName: selectedInfluencer.name,
-      fieldName: "rate_per_thousand_cents",
-      oldValue: `$${(oldRate / 100).toFixed(2)}/1K`,
-      newValue: `$${(newRate / 100).toFixed(2)}/1K`,
-      details: `Rate changed from $${(oldRate / 100).toFixed(2)} to $${(newRate / 100).toFixed(2)} per 1K signups — Reason: ${editRateData.reason}`,
+      fieldName: "rate_tiers",
+      newValue: tierSummary,
+      details: `Tiers updated for "${selectedInfluencer.name}": [${tierSummary}] — Reason: ${editTiersReason}`,
     });
-    alert(`✅ Rate updated for ${selectedInfluencer.name}!`);
-    setShowEditRate(false);
+    alert(`Tiers updated for ${selectedInfluencer.name}!`);
+    setShowEditTiers(false);
     setSelectedInfluencer(null);
-    setEditRateData({ rate_per_thousand_cents: 5000, reason: "" });
+    setEditTiers([]);
+    setEditTiersReason("");
     await fetchData();
   }
 
@@ -1039,17 +1127,33 @@ export default function ReferralsPage() {
     }
 
     const signupsCount = unpaidSignups;
-    const amountCents = Math.floor(unpaidSignups * influencer.rate_per_thousand_cents / 1000);
+    const tiers = influencerTiersMap[influencerId];
+    let amountCents: number;
+    let tiersSnapshot: InfluencerRateTier[] | null = null;
+    let notesText: string;
+
+    if (tiers && tiers.length > 0) {
+      const { totalCents, breakdown } = calculateBracketPayout(tiers, paidSignups, unpaidSignups);
+      amountCents = totalCents;
+      tiersSnapshot = tiers;
+      const breakdownStr = breakdown.map(b => `${b.signupsInTier}×${formatRateCents(b.tier.rate_cents)}`).join(" + ");
+      notesText = `Generated payout for ${signupsCount} signups (bracket: ${breakdownStr})`;
+    } else {
+      // Legacy fallback
+      amountCents = Math.floor(unpaidSignups * influencer.rate_per_thousand_cents / 1000);
+      notesText = `Generated payout for ${signupsCount} signups at $${(influencer.rate_per_thousand_cents / 100).toFixed(2)} per 1K`;
+    }
 
     const { error } = await supabaseBrowser.from("influencer_payouts").insert({
       influencer_id: influencerId,
       signups_count: signupsCount,
       amount_cents: amountCents,
       rate_per_thousand_cents: influencer.rate_per_thousand_cents,
+      rate_tiers_snapshot: tiersSnapshot,
       period_start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       period_end: new Date().toISOString(),
       paid: false,
-      notes: `Generated payout for ${signupsCount} signups at $${(influencer.rate_per_thousand_cents / 100).toFixed(2)} per 1K`,
+      notes: notesText,
     });
 
     if (error) { alert("Error generating payout: " + error.message); return; }
@@ -1060,9 +1164,9 @@ export default function ReferralsPage() {
       targetType: "influencer",
       targetId: influencerId,
       entityName: influencer.name,
-      details: `Generated payout of ${formatMoney(amountCents)} for ${signupsCount} signups at $${(influencer.rate_per_thousand_cents / 100).toFixed(2)}/1K`,
+      details: `Generated payout of ${formatMoney(amountCents)} for ${signupsCount} signups`,
     });
-    alert(`✅ Payout of ${formatMoney(amountCents)} generated for ${influencer.name} (${signupsCount} signups)!`);
+    alert(`Payout of ${formatMoney(amountCents)} generated for ${influencer.name} (${signupsCount} signups)!`);
     await fetchData();
   }
 
@@ -1133,36 +1237,42 @@ export default function ReferralsPage() {
     await fetchData();
   }
 
-  async function handleBulkRateUpdate() {
-    if (!bulkRateReason.trim()) { alert("Please enter a reason for the rate change."); return; }
-    const previousRates = Array.from(bulkSelected).map((id) => {
-      const inf = influencers.find((i) => i.id === id);
-      return `${inf?.name || id}: $${((inf?.rate_per_thousand_cents || 0) / 100).toFixed(2)}/1K`;
-    });
+  async function handleBulkTierReset() {
+    if (!bulkTierResetReason.trim()) { alert("Please enter a reason for the tier reset."); return; }
+    if (defaultInfluencerTiers.length === 0) { alert("No default tiers configured. Set them in Admin Settings → Influencer Tiers."); return; }
+
     for (const id of bulkSelected) {
       const inf = influencers.find((i) => i.id === id);
-      const oldRate = inf?.rate_per_thousand_cents || 0;
-      const noteEntry = `\n[${new Date().toLocaleDateString()}] BULK rate change: $${(oldRate / 100).toFixed(2)} → $${(bulkRateValue / 100).toFixed(2)} per 1K - ${bulkRateReason}`;
-      await supabaseBrowser.from("influencers").update({
-        rate_per_thousand_cents: bulkRateValue,
-        notes: (inf?.notes || "") + noteEntry,
-      }).eq("id", id);
+      // Delete existing tiers
+      await supabaseBrowser.from("influencer_rate_tiers").delete().eq("influencer_id", id);
+      // Insert default tiers
+      const rows = defaultInfluencerTiers.map((t, i) => ({
+        influencer_id: id,
+        tier_index: i + 1,
+        min_signups: t.min_signups,
+        max_signups: t.max_signups,
+        rate_cents: t.rate_cents,
+        label: t.label || `Tier ${i + 1}`,
+      }));
+      await supabaseBrowser.from("influencer_rate_tiers").insert(rows);
+      // Append note
+      const noteEntry = `\n[${new Date().toLocaleDateString()}] BULK tiers reset to defaults — ${bulkTierResetReason}`;
+      await supabaseBrowser.from("influencers").update({ notes: (inf?.notes || "") + noteEntry }).eq("id", id);
     }
     const names = Array.from(bulkSelected).map((id) => influencers.find((i) => i.id === id)?.name || id);
     logAudit({
-      action: "bulk_update_influencer_rate",
+      action: "bulk_reset_influencer_tiers",
       tab: AUDIT_TABS.REFERRALS,
       subTab: "Influencers",
       targetType: "influencer",
-      fieldName: "rate_per_thousand_cents",
-      oldValue: previousRates.join("; "),
-      newValue: `$${(bulkRateValue / 100).toFixed(2)}/1K`,
-      details: `Bulk rate change to $${(bulkRateValue / 100).toFixed(2)}/1K for ${bulkSelected.size} influencer(s): ${names.join(", ")} — Reason: ${bulkRateReason}`,
+      fieldName: "rate_tiers",
+      newValue: "default tiers",
+      details: `Bulk tier reset to defaults for ${bulkSelected.size} influencer(s): ${names.join(", ")} — Reason: ${bulkTierResetReason}`,
     });
-    alert(`✅ Rate updated for ${bulkSelected.size} influencer(s)`);
-    setShowBulkRateModal(false);
+    alert(`Tiers reset to defaults for ${bulkSelected.size} influencer(s)`);
+    setShowBulkTierResetModal(false);
     setBulkSelected(new Set());
-    setBulkRateReason("");
+    setBulkTierResetReason("");
     await fetchData();
   }
 
@@ -1172,7 +1282,7 @@ export default function ReferralsPage() {
       i.name, i.code, i.email || "", i.phone || "",
       `${i.address_city || ""} ${i.address_state || ""}`.trim(),
       getInfluencerTier(i.total_signups), i.total_signups.toString(),
-      (i.rate_per_thousand_cents / 100).toFixed(2), formatMoney(i.total_paid_cents),
+      (() => { const r = getTierRangeDisplay(i.id); return r ? `${formatRateCents(r.minRate)}-${formatRateCents(r.maxRate)} (${r.count} tiers)` : `$${(i.rate_per_thousand_cents / 100).toFixed(2)}/1K`; })(), formatMoney(i.total_paid_cents),
       i.payment_method || "", i.status,
       i.instagram_handle || "", i.tiktok_handle || "", i.youtube_handle || "", i.twitter_handle || "",
     ]);
@@ -1637,12 +1747,9 @@ export default function ReferralsPage() {
                 { label: "Total Signups", value: analyticsInfluencer.total_signups.toLocaleString(), color: COLORS.neonGreen },
                 { label: "Link Clicks", value: (analyticsInfluencer.total_clicks || 0).toLocaleString(), color: COLORS.neonBlue },
                 { label: "Click → Signup Rate", value: getClickConversionRate(analyticsInfluencer), color: COLORS.neonYellow },
-                { label: "Rate per 1K", value: formatMoney(analyticsInfluencer.rate_per_thousand_cents), color: COLORS.neonYellow },
+                { label: "Rate Tiers", value: (() => { const r = getTierRangeDisplay(analyticsInfluencer.id); return r ? `${formatRateCents(r.minRate)}–${formatRateCents(r.maxRate)}` : formatMoney(analyticsInfluencer.rate_per_thousand_cents) + "/1K"; })(), color: COLORS.neonYellow },
                 { label: "Total Paid", value: formatMoney(analyticsInfluencer.total_paid_cents), color: COLORS.neonGreen },
-                { label: "Unpaid Balance", value: formatMoney(Math.max(0, (() => {
-                  const paid = influencerPayouts.filter(p => p.influencer_id === analyticsInfluencer.id && p.paid).reduce((s,p)=>s+p.signups_count,0);
-                  return Math.floor((analyticsInfluencer.total_signups - paid) / 1000) * analyticsInfluencer.rate_per_thousand_cents;
-                })())) , color: COLORS.neonOrange },
+                { label: "Unpaid Balance", value: formatMoney(Math.max(0, calcUnpaidPayoutValue(analyticsInfluencer))), color: COLORS.neonOrange },
               ].map((s, i) => (
                 <div key={i} style={{ background: COLORS.darkBg, borderRadius: 10, padding: 16, border: "1px solid " + COLORS.cardBorder }}>
                   <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 6 }}>{s.label}</div>
@@ -1866,26 +1973,30 @@ export default function ReferralsPage() {
       )}
 
       {/* ====== BULK RATE UPDATE MODAL ====== */}
-      {showBulkRateModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setShowBulkRateModal(false)}>
+      {showBulkTierResetModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setShowBulkTierResetModal(false)}>
           <div style={{ background: COLORS.cardBg, borderRadius: 20, padding: 32, maxWidth: 480, width: "90%", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>📊 Bulk Rate Update</h2>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>Updating {bulkSelected.size} influencer(s)</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>New Rate per 1,000 Signups ($)</label>
-                <input type="number" value={bulkRateValue / 100} onChange={(e) => setBulkRateValue(Math.round(parseFloat(e.target.value) * 100) || 0)}
-                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.neonGreen, fontSize: 20, fontWeight: 700 }} />
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>📊 Reset Tiers to Defaults</h2>
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>Resetting {bulkSelected.size} influencer(s) to default tier structure</div>
+            {defaultInfluencerTiers.length > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, background: COLORS.darkBg, borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase", fontWeight: 600 }}>Default Tiers</div>
+                {defaultInfluencerTiers.map((t, i) => (
+                  <div key={i} style={{ fontSize: 12, color: COLORS.textPrimary, marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
+                    <span>{t.label}: {t.min_signups}–{t.max_signups ?? "∞"} signups</span>
+                    <span style={{ color: COLORS.neonYellow, fontWeight: 600 }}>{formatRateCents(t.rate_cents)}/signup</span>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Reason *</label>
-                <textarea value={bulkRateReason} onChange={(e) => setBulkRateReason(e.target.value)} placeholder="e.g. Q1 2026 rate adjustment..."
-                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary, fontSize: 13, minHeight: 70, resize: "vertical" }} />
-              </div>
+            )}
+            <div>
+              <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Reason *</label>
+              <textarea value={bulkTierResetReason} onChange={(e) => setBulkTierResetReason(e.target.value)} placeholder="e.g. Q1 2026 tier adjustment..."
+                style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary, fontSize: 13, minHeight: 70, resize: "vertical" }} />
             </div>
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}>
-              <button onClick={() => setShowBulkRateModal(false)} style={{ padding: "12px 24px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-              <button onClick={handleBulkRateUpdate} style={{ padding: "12px 24px", background: COLORS.neonOrange, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Apply to All Selected</button>
+              <button onClick={() => setShowBulkTierResetModal(false)} style={{ padding: "12px 24px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+              <button onClick={handleBulkTierReset} style={{ padding: "12px 24px", background: COLORS.neonOrange, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Reset All Selected</button>
             </div>
           </div>
         </div>
@@ -2060,9 +2171,23 @@ export default function ReferralsPage() {
                         placeholder="SARAH2026" style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary, fontSize: 14, fontWeight: 700, textTransform: "uppercase" }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Rate per 1,000 Signups ($)</label>
-                      <input type="number" value={newInfluencer.rate_per_thousand_cents / 100} onChange={(e) => setNewInfluencer({ ...newInfluencer, rate_per_thousand_cents: Math.round(parseFloat(e.target.value) * 100) || 0 })}
-                        style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.neonGreen, fontSize: 16, fontWeight: 700 }} />
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Rate Tiers</label>
+                      <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
+                        {defaultInfluencerTiers.length > 0 ? (
+                          <>
+                            <div style={{ fontSize: 12, color: COLORS.neonGreen, fontWeight: 600, marginBottom: 6 }}>Default tiers will be applied:</div>
+                            {defaultInfluencerTiers.map((t, i) => (
+                              <div key={i} style={{ fontSize: 11, color: COLORS.textSecondary, display: "flex", justifyContent: "space-between" }}>
+                                <span>{t.label}: {t.min_signups}–{t.max_signups ?? "∞"}</span>
+                                <span style={{ color: COLORS.neonYellow }}>{formatRateCents(t.rate_cents)}/signup</span>
+                              </div>
+                            ))}
+                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 6 }}>You can customize tiers after creation</div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 12, color: COLORS.textSecondary }}>No default tiers configured. Set them in Settings → Influencer Tiers</div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2430,33 +2555,122 @@ export default function ReferralsPage() {
         </div>
       )}
 
-      {/* Edit Rate Modal */}
-      {showEditRate && selectedInfluencer && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setShowEditRate(false)}>
-          <div style={{ background: COLORS.cardBg, borderRadius: 20, padding: 32, maxWidth: 520, width: "90%", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>📊 Edit Rate: {selectedInfluencer.name}</h2>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>
-              Current rate: <span style={{ color: COLORS.neonGreen, fontWeight: 700 }}>${(selectedInfluencer.rate_per_thousand_cents / 100).toFixed(2)}</span> per 1,000 signups
+      {/* Edit Tiers Modal */}
+      {showEditTiers && selectedInfluencer && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, overflow: "auto" }} onClick={() => setShowEditTiers(false)}>
+          <div style={{ background: COLORS.cardBg, borderRadius: 20, padding: 32, maxWidth: 700, width: "95%", border: "1px solid " + COLORS.cardBorder, margin: "20px auto" }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>📊 Edit Rate Tiers: {selectedInfluencer.name}</h2>
+            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 20 }}>
+              Each signup earns the rate of the tier it falls into (tax-bracket style)
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>New Rate per 1,000 Signups ($)</label>
-                <input type="number" value={editRateData.rate_per_thousand_cents / 100} onChange={(e) => setEditRateData({ ...editRateData, rate_per_thousand_cents: Math.round(parseFloat(e.target.value) * 100) || 0 })}
-                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.neonGreen, fontSize: 20, fontWeight: 700 }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Reason for Rate Change *</label>
-                <textarea value={editRateData.reason} onChange={(e) => setEditRateData({ ...editRateData, reason: e.target.value })}
-                  placeholder="e.g., Increased performance, special promotion, contract renegotiation..."
-                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary, fontSize: 13, minHeight: 80, resize: "vertical" }} />
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 6 }}>⚠️ This change will be logged in the influencer's notes for audit purposes</div>
-              </div>
+
+            {/* Tier rows header */}
+            <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 1fr 1fr 1fr 36px", gap: 8, marginBottom: 8, padding: "0 4px" }}>
+              <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600 }}>#</div>
+              <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600 }}>FROM</div>
+              <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600 }}>TO</div>
+              <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600 }}>$/SIGNUP</div>
+              <div style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 600 }}>LABEL</div>
+              <div />
             </div>
-            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}>
-              <button onClick={() => setShowEditRate(false)}
+
+            {/* Tier rows */}
+            {editTiers.map((tier, idx) => (
+              <div key={idx} style={{ display: "grid", gridTemplateColumns: "36px 1fr 1fr 1fr 1fr 36px", gap: 8, alignItems: "center", marginBottom: 8, padding: "8px 4px", background: COLORS.darkBg, borderRadius: 8 }}>
+                <div style={{ fontWeight: 700, color: COLORS.neonBlue, fontSize: 14, textAlign: "center" }}>{idx + 1}</div>
+                <input type="number" min={1} value={tier.min_signups}
+                  onChange={e => {
+                    const updated = [...editTiers];
+                    updated[idx] = { ...updated[idx], min_signups: Math.max(1, parseInt(e.target.value) || 1) };
+                    setEditTiers(updated);
+                  }}
+                  style={{ padding: 8, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textPrimary, fontSize: 13, width: "100%" }}
+                />
+                {tier.max_signups === null ? (
+                  <div style={{ padding: 8, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.neonGreen, fontSize: 12, fontWeight: 600 }}>Unlimited</div>
+                ) : (
+                  <input type="number" min={tier.min_signups} value={tier.max_signups}
+                    onChange={e => {
+                      const updated = [...editTiers];
+                      updated[idx] = { ...updated[idx], max_signups: parseInt(e.target.value) || tier.min_signups };
+                      setEditTiers(updated);
+                    }}
+                    style={{ padding: 8, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textPrimary, fontSize: 13, width: "100%" }}
+                  />
+                )}
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: COLORS.neonYellow, fontWeight: 700, fontSize: 13 }}>$</span>
+                  <input type="number" min={0} step={0.01} value={(tier.rate_cents / 100).toFixed(2)}
+                    onChange={e => {
+                      const updated = [...editTiers];
+                      updated[idx] = { ...updated[idx], rate_cents: Math.round(parseFloat(e.target.value || "0") * 100) };
+                      setEditTiers(updated);
+                    }}
+                    style={{ padding: 8, paddingLeft: 22, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.neonYellow, fontSize: 13, fontWeight: 600, width: "100%" }}
+                  />
+                </div>
+                <input type="text" value={tier.label || ""} placeholder="Label"
+                  onChange={e => {
+                    const updated = [...editTiers];
+                    updated[idx] = { ...updated[idx], label: e.target.value };
+                    setEditTiers(updated);
+                  }}
+                  style={{ padding: 8, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textPrimary, fontSize: 13, width: "100%" }}
+                />
+                {editTiers.length > 1 && (
+                  <button onClick={() => {
+                    const updated = editTiers.filter((_, i) => i !== idx);
+                    if (idx === editTiers.length - 1 && updated.length > 0) {
+                      updated[updated.length - 1] = { ...updated[updated.length - 1], max_signups: null };
+                    }
+                    setEditTiers(updated.map((t, i) => ({ ...t, tier_index: i + 1 })));
+                  }}
+                    style={{ padding: 4, background: "rgba(255,49,49,0.15)", border: "1px solid rgba(255,49,49,0.3)", borderRadius: 6, color: COLORS.neonRed, cursor: "pointer", fontSize: 14 }}
+                    title="Remove tier">×</button>
+                )}
+              </div>
+            ))}
+
+            {/* Add Tier + Reset to Defaults */}
+            <div style={{ display: "flex", gap: 12, marginTop: 8, marginBottom: 16 }}>
+              <button onClick={() => {
+                const last = editTiers[editTiers.length - 1];
+                const newMin = last ? (last.max_signups ?? last.min_signups) + 1 : 1;
+                const updatedTiers = editTiers.map((t, i) => {
+                  if (i === editTiers.length - 1 && t.max_signups === null) return { ...t, max_signups: newMin - 1 };
+                  return t;
+                });
+                setEditTiers([...updatedTiers, {
+                  tier_index: editTiers.length + 1, min_signups: newMin, max_signups: null,
+                  rate_cents: last ? Math.max(last.rate_cents - 500, 100) : 3000, label: `Tier ${editTiers.length + 1}`,
+                }]);
+              }}
+                style={{ padding: "8px 16px", background: "rgba(0,212,255,0.12)", border: "1px dashed " + COLORS.neonBlue, borderRadius: 8, color: COLORS.neonBlue, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                + Add Tier
+              </button>
+              {defaultInfluencerTiers.length > 0 && (
+                <button onClick={() => setEditTiers([...defaultInfluencerTiers])}
+                  style={{ padding: "8px 16px", background: "rgba(191,95,255,0.12)", border: "1px dashed " + COLORS.neonPurple, borderRadius: 8, color: COLORS.neonPurple, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                  Reset to Defaults
+                </button>
+              )}
+            </div>
+
+            {/* Reason */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Reason for Tier Change *</label>
+              <textarea value={editTiersReason} onChange={e => setEditTiersReason(e.target.value)}
+                placeholder="e.g., Performance review, contract renegotiation..."
+                style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary, fontSize: 13, minHeight: 70, resize: "vertical" }} />
+              <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 6 }}>This change will be logged in the influencer&apos;s notes for audit purposes</div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowEditTiers(false)}
                 style={{ padding: "12px 24px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, cursor: "pointer", fontWeight: 600 }}>Cancel</button>
-              <button onClick={handleEditRate}
-                style={{ padding: "12px 24px", background: COLORS.neonOrange, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Save Rate Change</button>
+              <button onClick={handleSaveTiers}
+                style={{ padding: "12px 24px", background: COLORS.neonOrange, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Save Tier Changes</button>
             </div>
           </div>
         </div>
@@ -3157,7 +3371,7 @@ export default function ReferralsPage() {
             {bulkSelected.size > 0 && (
               <div style={{ marginBottom: 12, padding: "12px 16px", background: "rgba(0,212,255,0.08)", border: "1px solid " + COLORS.neonBlue, borderRadius: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 13, color: COLORS.neonBlue, fontWeight: 700 }}>{bulkSelected.size} selected</span>
-                <button onClick={() => setShowBulkRateModal(true)} style={{ padding: "5px 12px", background: "rgba(255,255,0,0.15)", border: "1px solid " + COLORS.neonYellow, borderRadius: 6, color: COLORS.neonYellow, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>📊 Bulk Rate Update</button>
+                <button onClick={() => setShowBulkTierResetModal(true)} style={{ padding: "5px 12px", background: "rgba(255,255,0,0.15)", border: "1px solid " + COLORS.neonYellow, borderRadius: 6, color: COLORS.neonYellow, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>📊 Reset Tiers to Defaults</button>
                 <button onClick={() => handleBulkStatusToggle("active")} style={{ padding: "5px 12px", background: "rgba(57,255,20,0.15)", border: "1px solid " + COLORS.neonGreen, borderRadius: 6, color: COLORS.neonGreen, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>▶️ Activate All</button>
                 <button onClick={() => handleBulkStatusToggle("paused")} style={{ padding: "5px 12px", background: "rgba(255,255,0,0.15)", border: "1px solid " + COLORS.neonYellow, borderRadius: 6, color: COLORS.neonYellow, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>⏸️ Pause All</button>
                 <button onClick={handleBulkCSVExport} style={{ padding: "5px 12px", background: "rgba(57,255,20,0.15)", border: "1px solid " + COLORS.neonGreen, borderRadius: 6, color: COLORS.neonGreen, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>📥 Export Selected</button>
@@ -3270,22 +3484,36 @@ export default function ReferralsPage() {
                       },
                       {
                         key: "rate_per_thousand_cents",
-                        label: "Rate / 1K",
+                        label: "Rate / Signup",
                         align: "center",
-                        render: (v, row) => {
+                        render: (_v, row) => {
                           const inf = row as unknown as Influencer;
+                          const range = getTierRangeDisplay(inf.id);
                           return (
                             <div style={{ textAlign: "center" }}>
-                              <div style={{ fontWeight: 700, color: COLORS.neonYellow }}>{formatMoney(Number(v))}</div>
+                              {range ? (
+                                <>
+                                  <div style={{ fontWeight: 700, color: COLORS.neonYellow, fontSize: 13 }}>
+                                    {range.minRate === range.maxRate
+                                      ? formatRateCents(range.maxRate)
+                                      : `${formatRateCents(range.minRate)} – ${formatRateCents(range.maxRate)}`}
+                                  </div>
+                                  <div style={{ fontSize: 10, color: COLORS.textSecondary }}>{range.count} tier{range.count > 1 ? "s" : ""}</div>
+                                </>
+                              ) : (
+                                <div style={{ fontWeight: 700, color: COLORS.neonYellow }}>{formatMoney(inf.rate_per_thousand_cents)}/1K</div>
+                              )}
                               <button
                                 onClick={() => {
                                   setSelectedInfluencer(inf);
-                                  setEditRateData({ rate_per_thousand_cents: inf.rate_per_thousand_cents, reason: "" });
-                                  setShowEditRate(true);
+                                  const tiers = influencerTiersMap[inf.id];
+                                  setEditTiers(tiers && tiers.length > 0 ? [...tiers] : defaultInfluencerTiers.length > 0 ? [...defaultInfluencerTiers] : [{ tier_index: 1, min_signups: 1, max_signups: null, rate_cents: 3000, label: "Standard" }]);
+                                  setEditTiersReason("");
+                                  setShowEditTiers(true);
                                 }}
                                 style={{ marginTop: 4, padding: "3px 8px", background: "rgba(255,255,0,0.2)", border: "1px solid " + COLORS.neonYellow, borderRadius: 4, color: COLORS.neonYellow, cursor: "pointer", fontSize: 9, fontWeight: 600 }}
                               >
-                                Edit Rate
+                                Edit Tiers
                               </button>
                             </div>
                           );
@@ -3315,12 +3543,10 @@ export default function ReferralsPage() {
                         key: "id",
                         label: "Outstanding",
                         align: "right",
-                        render: (v, row) => {
+                        render: (_v, row) => {
                           const inf = row as unknown as Influencer;
-                          // Unpaid payout balance (signups not yet paid out)
-                          const paidSignups = influencerPayouts.filter(p => p.influencer_id === inf.id && p.paid).reduce((s, p) => s + p.signups_count, 0);
-                          const unpaidSignups = inf.total_signups - paidSignups;
-                          const unpaidPayoutValue = Math.floor(unpaidSignups / 1000) * inf.rate_per_thousand_cents;
+                          // Unpaid payout balance (bracket math)
+                          const unpaidPayoutValue = calcUnpaidPayoutValue(inf);
                           // Unpaid bonuses
                           const unpaidBonuses = influencerBonuses.filter(b => b.influencer_id === inf.id && !b.paid);
                           const unpaidBonusTotal = unpaidBonuses.reduce((s, b) => s + b.amount_cents, 0);

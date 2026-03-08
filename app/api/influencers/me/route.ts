@@ -89,6 +89,13 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(20);
 
+  // Fetch rate tiers
+  const { data: rateTierRows } = await supabaseServer
+    .from("influencer_rate_tiers")
+    .select("tier_index, min_signups, max_signups, rate_cents, label")
+    .eq("influencer_id", influencerId)
+    .order("tier_index", { ascending: true });
+
   return NextResponse.json({
     isInfluencer: true,
     influencer: {
@@ -106,6 +113,13 @@ export async function GET(req: NextRequest) {
       youtubeHandle: influencer.youtube_handle,
       twitterHandle: influencer.twitter_handle,
     },
+    rateTiers: (rateTierRows || []).map(t => ({
+      tierIndex: t.tier_index,
+      minSignups: t.min_signups,
+      maxSignups: t.max_signups,
+      rateCents: t.rate_cents,
+      label: t.label,
+    })),
     recentSignups,
     payouts: (payoutRows || []).map(p => ({
       id: p.id,

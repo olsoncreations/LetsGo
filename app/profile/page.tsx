@@ -558,6 +558,7 @@ export default function LetsGoProfile() {
       instagramHandle: string | null; tiktokHandle: string | null;
       youtubeHandle: string | null; twitterHandle: string | null;
     };
+    rateTiers: { tierIndex: number; minSignups: number; maxSignups: number | null; rateCents: number; label: string | null }[];
     recentSignups: { userName: string; createdAt: string }[];
     payouts: { id: string; amountCents: number; signupsCount: number; periodStart: string; periodEnd: string; paid: boolean; paidAt: string | null; createdAt: string }[];
   } | null>(null);
@@ -808,7 +809,7 @@ export default function LetsGoProfile() {
         if (infRes.ok) {
           const infData = await infRes.json();
           if (infData.isInfluencer) {
-            setInfluencerData({ influencer: infData.influencer, recentSignups: infData.recentSignups, payouts: infData.payouts });
+            setInfluencerData({ influencer: infData.influencer, rateTiers: infData.rateTiers || [], recentSignups: infData.recentSignups, payouts: infData.payouts });
           }
         }
       } catch { /* influencer tables may not exist yet */ }
@@ -1495,7 +1496,7 @@ export default function LetsGoProfile() {
                             {tier.icon} {tier.label}
                           </span>
                           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
-                            ${((influencerData.influencer.ratePerThousandCents || 0) / 100).toFixed(0)} per 1,000 signups
+                            {signups.toLocaleString()} signups
                           </span>
                         </div>
                         <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
@@ -1504,6 +1505,25 @@ export default function LetsGoProfile() {
                         <div style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 4 }}>
                           {signups.toLocaleString()} / {tier.nextMin.toLocaleString()} signups to next tier
                         </div>
+
+                        {/* Rate Tiers */}
+                        {influencerData.rateTiers && influencerData.rateTiers.length > 0 && (
+                          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 8 }}>Your Rate Tiers</div>
+                            {influencerData.rateTiers.map((rt, i) => {
+                              const isActive = signups >= rt.minSignups && (rt.maxSignups === null || signups <= rt.maxSignups);
+                              return (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11, color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
+                                  <span>
+                                    {isActive && <span style={{ color: "#39ff14", marginRight: 4 }}>●</span>}
+                                    {rt.label || `Tier ${rt.tierIndex}`}: {rt.minSignups}–{rt.maxSignups ?? "∞"}
+                                  </span>
+                                  <span style={{ fontWeight: 600, color: isActive ? "#ffff00" : "rgba(255,255,255,0.2)" }}>${(rt.rateCents / 100).toFixed(2)}/signup</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })()}

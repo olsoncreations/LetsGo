@@ -1,12 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { calculateBracketPayout, type InfluencerRateTier } from "@/lib/influencerPayoutEngine";
 
 /**
  * POST /api/admin/billing/generate-influencer-payouts
  *
  * Generates monthly payout records for all active influencers.
- * Called as part of the month-end billing flow alongside invoice generation.
+ * Uses tax-bracket style tier calculation.
  * Body: { periodStart: "2026-02-01", periodEnd: "2026-02-28" }
  */
 export async function POST(req: NextRequest): Promise<Response> {
@@ -74,6 +75,19 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
     }
 
+    // Fetch all influencer rate tiers
+    const { data: allTiers } = await supabaseServer
+      .from("influencer_rate_tiers")
+      .select("influencer_id, tier_index, min_signups, max_signups, rate_cents, label")
+      .order("tier_index", { ascending: true });
+
+    const tiersMap: Record<string, InfluencerRateTier[]> = {};
+    for (const t of allTiers || []) {
+      const infId = t.influencer_id as string;
+      if (!tiersMap[infId]) tiersMap[infId] = [];
+      tiersMap[infId].push(t as InfluencerRateTier);
+    }
+
     const MINIMUM_SIGNUPS = 1;
     let generated = 0;
     let skipped = 0;
@@ -107,8 +121,30 @@ export async function POST(req: NextRequest): Promise<Response> {
         continue;
       }
 
-      // Proportional payout: signups × rate / 1000
-      const amountCents = Math.floor(signups * influencer.rate_per_thousand_cents / 1000);
+      // Calculate payout using bracket tiers or legacy flat rate
+      const tiers = tiersMap[influencer.id];
+      let amountCents: number;
+      let tiersSnapshot: InfluencerRateTier[] | null = null;
+      let notesText: string;
+
+      if (tiers && tiers.length > 0) {
+        // Count signups before this period to determine bracket position
+        const { count: priorSignups } = await supabaseServer
+          .from("influencer_signups")
+          .select("id", { count: "exact", head: true })
+          .eq("influencer_id", influencer.id)
+          .lt("created_at", periodStart + "T00:00:00");
+
+        const previousSignups = priorSignups || 0;
+        const { totalCents: bracketTotal } = calculateBracketPayout(tiers, previousSignups, signups);
+        amountCents = bracketTotal;
+        tiersSnapshot = tiers;
+        notesText = `Auto-generated for ${billingPeriod}: ${signups} signups (bracket calc, ${tiers.length} tiers)`;
+      } else {
+        // Legacy fallback
+        amountCents = Math.floor(signups * influencer.rate_per_thousand_cents / 1000);
+        notesText = `Auto-generated for ${billingPeriod}: ${signups} signups at $${(influencer.rate_per_thousand_cents / 100).toFixed(2)} per 1K`;
+      }
 
       if (amountCents <= 0) {
         skipped++;
@@ -122,10 +158,11 @@ export async function POST(req: NextRequest): Promise<Response> {
           signups_count: signups,
           amount_cents: amountCents,
           rate_per_thousand_cents: influencer.rate_per_thousand_cents,
+          rate_tiers_snapshot: tiersSnapshot,
           period_start: periodStart,
           period_end: periodEnd,
           paid: false,
-          notes: `Auto-generated for ${billingPeriod}: ${signups} signups at $${(influencer.rate_per_thousand_cents / 100).toFixed(2)} per 1K`,
+          notes: notesText,
         })
         .select("id")
         .single();
