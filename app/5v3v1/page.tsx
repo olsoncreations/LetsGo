@@ -360,7 +360,7 @@ function CardImageCarousel({ images, gradient, emoji, height }: { images: { url:
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height, overflow: "hidden" }}>
+    <div style={{ position: "relative", width: "100%", height, overflow: "hidden", background: gradient }}>
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -378,8 +378,7 @@ function CardImageCarousel({ images, gradient, emoji, height }: { images: { url:
             <img
               src={img.url} alt=""
               style={{
-                width: "100%", height: "100%", objectFit: "cover",
-                objectPosition: `${img.focalX}% ${img.focalY}%`,
+                width: "100%", height: "100%", objectFit: "contain",
               }}
             />
           </div>
