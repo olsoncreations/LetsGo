@@ -816,7 +816,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                       if (!historyBizDetails[g.businessId] && g.businessId) {
                         const { data: row } = await supabaseBrowser.from("business").select("id, is_active, business_name, public_business_name, contact_phone, website, street_address, city, state, zip, category_main, config, blurb, payout_tiers, payout_preset").eq("id", g.businessId).maybeSingle();
                         if (row) {
-                          const { data: media } = await supabaseBrowser.from("business_media").select("business_id, bucket, path, sort_order, caption, meta").eq("business_id", g.businessId).order("sort_order", { ascending: true }).limit(5);
+                          const { data: media } = await supabaseBrowser.from("business_media").select("business_id, bucket, path, sort_order, caption, meta").eq("business_id", g.businessId).eq("is_active", true).eq("media_type", "photo").order("sort_order", { ascending: true }).limit(5);
                           const { data: tiers } = await supabaseBrowser.from("business_payout_tiers").select("percent_bps").eq("business_id", g.businessId).order("tier_index", { ascending: true });
                           const tableBps = (tiers ?? []).map((t: Record<string, unknown>) => (t.percent_bps as number) || 0);
                           const normalized = normalizeToDiscoveryBusiness(row as unknown as BusinessRow, (media ?? []) as unknown as MediaRow[], tableBps.length >= 7 ? tableBps : undefined);
