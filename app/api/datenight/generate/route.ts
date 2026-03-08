@@ -153,13 +153,17 @@ function getRowVibe(row: BusinessRow): string {
 }
 
 function getRowBusinessType(row: BusinessRow): string {
-  // Use config.businessType (user-provided during onboarding, most accurate).
-  // Skip standalone business_type column — it was bulk-defaulted to "restaurant_bar"
-  // for all businesses and is unreliable for classification.
-  // Fall back to category_main for businesses without config.businessType.
+  // 1. config.businessType (user-provided during onboarding, most accurate)
   const cfg = row.config;
   const cfgType = String(cfg?.businessType ?? "").toLowerCase();
-  return cfgType || (row.category_main ?? "").toLowerCase();
+  if (cfgType) return cfgType;
+  // 2. business_type column (now actively maintained via admin/business profile)
+  //    Skip the bulk-default "restaurant_bar" — may be unreliable for businesses
+  //    that were never explicitly categorized
+  const bt = (row.business_type ?? "").toLowerCase();
+  if (bt && bt !== "restaurant_bar") return bt;
+  // 3. Fall back to category_main
+  return bt || (row.category_main ?? "").toLowerCase();
 }
 
 function getRowPriceLevel(row: BusinessRow): string {
