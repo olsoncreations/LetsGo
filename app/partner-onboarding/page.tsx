@@ -420,6 +420,7 @@ export default function PartnerOnboardingPage() {
   const [error, setError] = useState<string>("");
   const [completed, setCompleted] = useState<boolean>(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -525,7 +526,8 @@ export default function PartnerOnboardingPage() {
         }
         
         setAuthUser(session.user);
-        
+        setAuthToken(session.access_token);
+
         // Pre-fill email and name from auth user
         setData((prev) => ({
           ...prev,
@@ -792,7 +794,7 @@ async function completeSignup() {
         {step === 2 && <Step2 data={data} setData={setData} mapsLoaded={mapsLoaded} />}
         {step === 3 && <Step3 data={data} setData={setData} pkgPricing={pkgPricing} dynamicAds={dynamicAds} ccFeeBps={ccFeeBps} />}
         {step === 4 && <Step4 data={data} setData={setData} tiers={dynamicTiers} presetBps={presetBps} />}
-        {step === 5 && <Step5 data={data} setData={setData} ccFeeBps={ccFeeBps} feeBps={feeBps} feeCapCents={feeCapCents} />}
+        {step === 5 && <Step5 data={data} setData={setData} ccFeeBps={ccFeeBps} feeBps={feeBps} feeCapCents={feeCapCents} authToken={authToken} />}
         {step === 6 && <Step6 data={data} setData={setData} pkgPricing={pkgPricing} authUser={authUser} />}
         {step === 7 && <Step7 data={data} setData={setData} reviewPlanFees={reviewPlanFees} feeBps={feeBps} feeCapCents={feeCapCents} ccFeeBps={ccFeeBps} pkgPricing={pkgPricing} tiers={dynamicTiers} />}
 
@@ -2050,12 +2052,14 @@ function Step5({
   ccFeeBps,
   feeBps,
   feeCapCents,
+  authToken,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   ccFeeBps: number;
   feeBps: number;
   feeCapCents: number;
+  authToken: string | null;
 }) {
   const bankActive = data.paymentMethod === "bank";
   const cardActive = data.paymentMethod === "card";
@@ -2071,7 +2075,7 @@ function Step5({
     try {
       const res = await fetch("/api/stripe/create-setup-intent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
         body: JSON.stringify({
           businessName: data.businessName,
           email: data.email,
@@ -2091,7 +2095,7 @@ function Step5({
     } finally {
       setStripeLoading(false);
     }
-  }, [data.email, data.businessName, bankActive, setData]);
+  }, [data.email, data.businessName, bankActive, setData, authToken]);
 
   useEffect(() => {
     fetchSetupIntent();

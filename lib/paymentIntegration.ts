@@ -2,14 +2,9 @@
  * paymentIntegration.ts
  *
  * Payment integration for user cashout payouts via PayPal Payouts API.
- * Supports both PayPal and Venmo recipients through a single API.
+ * Supports PayPal and Venmo recipients through a single API.
  *
- * Supported providers:
- *  - PayPal Payouts API (handles both PayPal + Venmo)
- *  - Stripe (Connect / Express payouts) — stub
- *  - Zelle / Check (manual — no API)
- *
- * Required env vars for PayPal:
+ * Required env vars:
  *   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_MODE (sandbox|live)
  */
 
@@ -36,13 +31,7 @@ export interface PayoutResult {
   timestamp: string;
 }
 
-export type PaymentMethod =
-  | "bank_transfer"
-  | "paypal"
-  | "venmo"
-  | "zelle"
-  | "check"
-  | "other";
+export type PaymentMethod = "paypal" | "venmo";
 
 // ============================================================
 // MAIN DISPATCHER
@@ -50,23 +39,21 @@ export type PaymentMethod =
 
 /**
  * sendPayout
- * Routes a payout to the correct provider based on payment_method.
+ * Routes a payout to PayPal Payouts API (handles both PayPal and Venmo).
  */
 export async function sendPayout(
   request: PayoutRequest
 ): Promise<PayoutResult> {
-  switch (request.payment_method) {
-    case "paypal":
-      return sendViaPayPal(request);
-    case "venmo":
-      return sendViaPayPal(request); // Venmo goes through PayPal Payouts API
-    case "bank_transfer":
-      return sendViaStripeACH(request);
-    case "zelle":
-    case "check":
-    default:
-      return logManualPayout(request, request.payment_method || "other");
+  if (request.payment_method !== "paypal" && request.payment_method !== "venmo") {
+    return {
+      success: false,
+      provider: "unknown",
+      error: `Unsupported payment method: ${request.payment_method}. Only PayPal and Venmo are supported.`,
+      timestamp: new Date().toISOString(),
+    };
   }
+
+  return sendViaPayPal(request);
 }
 
 // Keep legacy name for influencer payouts that may reference it
@@ -194,47 +181,6 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
 }
 
 // ============================================================
-// STRIPE ACH (STUB)
-// ============================================================
-
-async function sendViaStripeACH(request: PayoutRequest): Promise<PayoutResult> {
-  console.log("[PaymentIntegration] Stripe ACH not configured, payoutId:", request.payout_id);
-
-  return {
-    success: false,
-    provider: "stripe",
-    error: "Stripe Connect not yet configured.",
-    timestamp: new Date().toISOString(),
-  };
-}
-
-// ============================================================
-// MANUAL PAYOUT LOGGER
-// ============================================================
-
-/**
- * For Zelle, Check, and Other — no API available.
- * Logs the payout intent for admin to manually process.
- */
-function logManualPayout(request: PayoutRequest, method: string): PayoutResult {
-  const manualRef = `MANUAL-${method.toUpperCase()}-${Date.now()}`;
-
-  console.log("[PaymentIntegration] Manual payout logged", {
-    ref: manualRef,
-    method,
-    amount: `$${(request.amount_cents / 100).toFixed(2)}`,
-    payoutId: request.payout_id,
-  });
-
-  return {
-    success: true,
-    transaction_id: manualRef,
-    provider: method,
-    timestamp: new Date().toISOString(),
-  };
-}
-
-// ============================================================
 // HELPERS
 // ============================================================
 
@@ -254,9 +200,6 @@ export function validatePayoutRequest(request: PayoutRequest): string | null {
   }
   if (request.payment_method === "venmo" && !request.payment_details?.trim()) {
     return "Venmo requires a username or phone number";
-  }
-  if (request.payment_method === "bank_transfer" && !request.payment_details) {
-    return "Bank transfer requires account details";
   }
 
   return null;
