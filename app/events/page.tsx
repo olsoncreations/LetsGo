@@ -1852,8 +1852,7 @@ export default function EventsPage() {
                       const month = calendarMonth.getMonth();
                       const firstDay = new Date(year, month, 1).getDay();
                       const daysInMonth = new Date(year, month + 1, 0).getDate();
-                      const today = new Date();
-                      const todayStr = today.toISOString().split("T")[0];
+                      const todayStr = getTodayStr();
                       const eventsByDate: Record<string, Event[]> = {};
                       sortedEvents.forEach(e => {
                         if (!eventsByDate[e.date]) eventsByDate[e.date] = [];
