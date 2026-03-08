@@ -19,6 +19,7 @@ import {
   formatMoney,
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 
 /* ==================== TYPES ==================== */
 
@@ -902,6 +903,24 @@ export default function OnboardingPage() {
 
   const selected = submissions.find((s) => s.id === selectedId) || null;
   const p = (selected?.payload || {}) as Record<string, unknown>;
+
+  // DB-driven business type options
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  const businessTypeOptions = React.useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (!bt || bt.tags.length === 0) {
+      return [
+        { value: "restaurant_bar", label: "Restaurant/Bar" },
+        { value: "salon_beauty", label: "Salon/Beauty" },
+        { value: "retail", label: "Retail" },
+        { value: "activity", label: "Activity" },
+        { value: "event_venue", label: "Event Venue" },
+        { value: "other", label: "Other" },
+      ];
+    }
+    return bt.tags.map(t => ({ value: t.name.toLowerCase().replace(/[/ ]/g, "_"), label: `${t.icon || ""} ${t.name}`.trim() }));
+  }, [tagCats]);
 
   /* ==================== FILTERING & SORTING ==================== */
 
@@ -2366,14 +2385,7 @@ export default function OnboardingPage() {
                       value={pVal("businessType") as string}
                       editable={isEditing}
                       onChange={(v) => setPayloadField("businessType", v)}
-                      options={[
-                        { value: "restaurant_bar", label: "Restaurant/Bar" },
-                        { value: "salon_beauty", label: "Salon/Beauty" },
-                        { value: "retail", label: "Retail" },
-                        { value: "activity", label: "Activity" },
-                        { value: "event_venue", label: "Event Venue" },
-                        { value: "other", label: "Other" },
-                      ]}
+                      options={businessTypeOptions}
                     />
                     <EditField
                       label="Age Restriction"

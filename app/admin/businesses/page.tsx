@@ -32,6 +32,7 @@ import {
   formatMoney,
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 
 interface Business {
   id: string;
@@ -188,6 +189,51 @@ function BusinessesPage() {
   } | null>(null);
 
   const selected = businesses.find((b) => b.id === selectedId) || null;
+
+  // DB-driven tag categories for dropdowns
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+
+  const businessTypeOptions = React.useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (!bt || bt.tags.length === 0) {
+      return [
+        { value: "", label: "Select..." },
+        { value: "restaurant_bar", label: "Restaurant/Bar" },
+        { value: "salon_beauty", label: "Salon/Beauty" },
+        { value: "retail", label: "Retail" },
+        { value: "activity", label: "Activity" },
+        { value: "event_venue", label: "Event Venue" },
+        { value: "other", label: "Other" },
+      ];
+    }
+    return [
+      { value: "", label: "Select..." },
+      ...bt.tags.map(t => ({ value: t.name.toLowerCase().replace(/[/ ]/g, "_"), label: `${t.icon || ""} ${t.name}`.trim() })),
+    ];
+  }, [tagCats]);
+
+  const cuisineTypeOptions = React.useMemo(() => {
+    const cu = tagCats.find(c => c.name === "Cuisine");
+    if (!cu || cu.tags.length === 0) {
+      return [
+        { value: "", label: "Select..." },
+        { value: "american", label: "American" },
+        { value: "italian", label: "Italian" },
+        { value: "mexican", label: "Mexican" },
+        { value: "asian", label: "Asian" },
+        { value: "seafood", label: "Seafood" },
+        { value: "bakery", label: "Bakery" },
+        { value: "coffee", label: "Coffee" },
+        { value: "bar", label: "Bar" },
+        { value: "other", label: "Other" },
+      ];
+    }
+    return [
+      { value: "", label: "Select..." },
+      ...cu.tags.map(t => ({ value: t.name.toLowerCase(), label: t.name })),
+    ];
+  }, [tagCats]);
 
   // When entering edit mode or selecting a new business, reset edited state
   useEffect(() => {
@@ -1074,38 +1120,19 @@ function BusinessesPage() {
                   <Card title="Basic Details">
                     <EditField label="Legal Name" value={getValue("business_name") as string} editable={isEditing} onChange={(v) => updateField("business_name", v)} />
                     <EditField label="Public Name" value={getValue("public_business_name") as string} editable={isEditing} onChange={(v) => updateField("public_business_name", v)} />
-                    <EditField 
-                      label="Business Type" 
-                      value={getValue("business_type") as string} 
-                      editable={isEditing} 
+                    <EditField
+                      label="Business Type"
+                      value={getValue("business_type") as string}
+                      editable={isEditing}
                       onChange={(v) => updateField("business_type", v)}
-                      options={[
-                        { value: "", label: "Select..." },
-                        { value: "restaurant_bar", label: "Restaurant/Bar" },
-                        { value: "salon_beauty", label: "Salon/Beauty" },
-                        { value: "retail", label: "Retail" },
-                        { value: "activity", label: "Activity" },
-                        { value: "event_venue", label: "Event Venue" },
-                        { value: "other", label: "Other" },
-                      ]}
+                      options={businessTypeOptions}
                     />
-                    <EditField 
-                      label="Cuisine Type" 
-                      value={getValue("cuisine_type") as string} 
-                      editable={isEditing} 
+                    <EditField
+                      label="Cuisine Type"
+                      value={getValue("cuisine_type") as string}
+                      editable={isEditing}
                       onChange={(v) => updateField("cuisine_type", v)}
-                      options={[
-                        { value: "", label: "Select..." },
-                        { value: "american", label: "American" },
-                        { value: "italian", label: "Italian" },
-                        { value: "mexican", label: "Mexican" },
-                        { value: "asian", label: "Asian" },
-                        { value: "seafood", label: "Seafood" },
-                        { value: "bakery", label: "Bakery" },
-                        { value: "coffee", label: "Coffee" },
-                        { value: "bar", label: "Bar" },
-                        { value: "other", label: "Other" },
-                      ]}
+                      options={cuisineTypeOptions}
                     />
                     <EditField 
                       label="Price Level" 
