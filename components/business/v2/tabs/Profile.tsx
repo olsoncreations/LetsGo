@@ -206,6 +206,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tagInputFocused, setTagInputFocused] = useState(false);
+  const [selectedBusinessType, setSelectedBusinessType] = useState("restaurant_bar");
   const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
 
   // Password change state
@@ -251,6 +252,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     console.log("[Profile] Applying fields to refs:", fields);
     if (nameRef.current) nameRef.current.value = fields.name ?? "";
     if (typeRef.current) typeRef.current.value = fields.type ?? "restaurant_bar";
+    setSelectedBusinessType(fields.type ?? "restaurant_bar");
     if (streetRef.current) streetRef.current.value = fields.streetAddress ?? "";
     if (cityRef.current) cityRef.current.value = fields.city ?? "";
     if (stateRef.current) stateRef.current.value = fields.state ?? "NE";
@@ -597,11 +599,18 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     setTags((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Smart visibility: determine which categories to show based on selected tags
+  // Smart visibility: determine which categories to show based on business type
   const visibleCategories = useMemo(() => {
     if (!tagCategories.length) return [];
-    return getVisibleCategories(tagCategories, tags);
-  }, [tagCategories, tags]);
+    // Resolve the business_type value (e.g. "restaurant_bar") back to the Business Type tag name
+    const bt = tagCategories.find(c => c.name === "Business Type");
+    const matchingTag = bt?.tags.find(t =>
+      t.name.toLowerCase().replace(/[/ ]/g, "_") === selectedBusinessType ||
+      t.slug === selectedBusinessType
+    );
+    const businessTypeTags = matchingTag ? [matchingTag.name] : [];
+    return getVisibleCategories(tagCategories, businessTypeTags);
+  }, [tagCategories, selectedBusinessType]);
 
   // DB-driven Business Type options
   const businessTypeOptions = useMemo(() => {
@@ -812,7 +821,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 </div>
                 <div>
                   <label style={labelStyle}>Business Type</label>
-                  <select ref={typeRef} defaultValue="restaurant_bar" style={selectStyle}>
+                  <select ref={typeRef} defaultValue="restaurant_bar" onChange={(e) => setSelectedBusinessType(e.target.value)} style={selectStyle}>
                     {businessTypeOptions.map(opt => (
                       <option key={opt.value} style={optionStyle} value={opt.value}>{opt.label}</option>
                     ))}
