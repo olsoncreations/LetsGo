@@ -196,18 +196,17 @@ export default function ExecutivePage() {
       setTotalBusinesses(businessCount || 0);
 
       // ---- RECEIPTS / REVENUE ----
-      let letsGoFeesFromReceipts = 0;
       const { data: receipts } = await supabaseBrowser.from("receipts").select("id, receipt_total_cents, payout_cents, created_at, status, payout_tier_index, user_id, business_id").eq("status", "approved");
       if (receipts && receipts.length > 0) {
-        // LetsGo platform fee: 10% of receipt, capped at $5.00 per receipt
-        letsGoFeesFromReceipts = receipts.reduce((s, r) => {
-          const fee = Math.min(Math.floor((r.receipt_total_cents || 0) * 0.10), 500);
-          return s + fee;
-        }, 0);
+        // Total revenue = receipt_total - payout (same as Total Revenue card)
+        const allTimeRev = receipts.reduce((s, r) => s + ((r.receipt_total_cents || 0) - (r.payout_cents || 0)), 0);
+        setTotalLetsGoRevenue(allTimeRev);
         const uniqueUsersWithReceipts = new Set(receipts.map(r => r.user_id)).size;
         const uniqueBusinessesWithReceipts = new Set(receipts.map(r => r.business_id)).size;
         setUsersWithReceipts(uniqueUsersWithReceipts);
         setBusinessesWithReceipts(uniqueBusinessesWithReceipts);
+        setAvgRevenuePerBusiness(businessCount ? Math.round(allTimeRev / businessCount) : 0);
+        setAvgRevenuePerUser((usersCount || 0) > 0 ? Math.round(allTimeRev / (usersCount || 1)) : 0);
 
         const monthlyData: Record<string, { basic: number; premium: number; advertising: number; addons: number }> = {};
         receipts.forEach(r => {
@@ -369,8 +368,6 @@ export default function ExecutivePage() {
       } catch { /* influencer tables may not exist */ }
 
       // ---- SURGE PRICING & AD CAMPAIGNS ----
-      let adRevLocal = 0;
-      let surgeFeesLocal = 0;
       try {
         const { count: surgeTotal } = await supabaseBrowser.from("surge_pricing_events").select("*", { count: "exact", head: true });
         setTotalSurgeEvents(surgeTotal || 0);
@@ -380,10 +377,10 @@ export default function ExecutivePage() {
         setActiveSurgeNow(surgeActive || 0);
 
         const { data: adCampaigns } = await supabaseBrowser.from("business_ad_campaigns").select("total_price_cents, surge_fee_cents");
-        adRevLocal = adCampaigns?.reduce((s, c) => s + (c.total_price_cents || 0), 0) || 0;
-        setTotalAdRevenue(adRevLocal);
-        surgeFeesLocal = adCampaigns?.reduce((s, c) => s + (c.surge_fee_cents || 0), 0) || 0;
-        setTotalSurgeFees(surgeFeesLocal);
+        const adRev = adCampaigns?.reduce((s, c) => s + (c.total_price_cents || 0), 0) || 0;
+        setTotalAdRevenue(adRev);
+        const surgeFees = adCampaigns?.reduce((s, c) => s + (c.surge_fee_cents || 0), 0) || 0;
+        setTotalSurgeFees(surgeFees);
       } catch { /* surge/ad tables may not exist */ }
 
       // ---- CUSTOM TIER ADOPTION ----
@@ -398,39 +395,6 @@ export default function ExecutivePage() {
         const { count: tierChanges } = await supabaseBrowser.from("payout_tier_changes").select("*", { count: "exact", head: true }).gte("created_at", thirtyDaysAgo.toISOString());
         setRecentTierChanges(tierChanges || 0);
       } catch { /* payout_tier_changes may not exist */ }
-
-      // ---- SUBSCRIPTION + ADD-ON REVENUE ----
-      let subscriptionRevLocal = 0;
-      let addonRevLocal = 0;
-      try {
-        // Premium subscriptions: $100/month per premium business
-        const { data: bizConfigs } = await supabaseBrowser.from("business").select("id, billing_plan, config");
-        if (bizConfigs) {
-          const premiumCount = bizConfigs.filter(b => {
-            const plan = (b.billing_plan || "").toLowerCase();
-            const configPlan = ((b.config as Record<string, unknown>)?.plan || "").toString().toLowerCase();
-            return plan === "premium" || configPlan === "premium";
-          }).length;
-          subscriptionRevLocal = premiumCount * 10000; // $100/month in cents
-
-          // Add-on revenue: video ($50), live_15 ($50), live_30 ($100), tpms ($200)
-          const addonPrices: Record<string, number> = {
-            videos_5_day: 5000, live_15: 5000, live_30: 10000, tpms: 20000,
-          };
-          bizConfigs.forEach(b => {
-            const cfg = (b.config || {}) as Record<string, unknown>;
-            const addons = Array.isArray(cfg.selectedAddOns) ? (cfg.selectedAddOns as string[]) : [];
-            addons.forEach(a => { addonRevLocal += addonPrices[a] || 0; });
-            if (cfg.tpms === true) addonRevLocal += 20000;
-          });
-        }
-      } catch { /* billing columns may not exist */ }
-
-      // ---- TOTAL LETSGO REVENUE (fees + subscriptions + addons + ads + surge) ----
-      const combinedRevenue = letsGoFeesFromReceipts + subscriptionRevLocal + addonRevLocal + adRevLocal + surgeFeesLocal;
-      setTotalLetsGoRevenue(combinedRevenue);
-      setAvgRevenuePerBusiness(businessCount ? Math.round(combinedRevenue / businessCount) : 0);
-      setAvgRevenuePerUser((usersCount || 0) > 0 ? Math.round(combinedRevenue / (usersCount || 1)) : 0);
 
       // ---- GAME ENGAGEMENT (via server API to bypass RLS) ----
       try {
