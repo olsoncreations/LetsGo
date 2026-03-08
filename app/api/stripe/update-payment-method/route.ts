@@ -64,7 +64,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     const cfg = (biz.config || {}) as Record<string, string>;
     let customerId = biz.stripe_customer_id;
 
-    // Create Stripe customer if they don't have one
+    // Verify existing customer is valid, or create a new one
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch {
+        // Customer doesn't exist in this Stripe mode (e.g. test→live switch)
+        customerId = null;
+      }
+    }
+
     if (!customerId) {
       const customer = await stripe.customers.create({
         name: biz.business_name || undefined,
@@ -73,7 +82,6 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
       customerId = customer.id;
 
-      // Save to business table
       await supabaseServer
         .from("business")
         .update({ stripe_customer_id: customerId })
