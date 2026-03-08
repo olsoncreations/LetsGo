@@ -52,6 +52,56 @@ export async function GET(req: NextRequest) {
 
   const influencerId = influencer.id as string;
 
+  // Credit any uncredited influencer payouts to profiles.available_balance
+  // This handles payouts generated before the influencer linked their user account
+  const { data: uncreditedPayouts } = await supabaseServer
+    .from("influencer_payouts")
+    .select("id, amount_cents")
+    .eq("influencer_id", influencerId)
+    .eq("credited_to_balance", false);
+
+  if (uncreditedPayouts && uncreditedPayouts.length > 0) {
+    const uncreditedTotal = uncreditedPayouts.reduce((sum, p) => sum + ((p.amount_cents as number) || 0), 0);
+    if (uncreditedTotal > 0) {
+      const { data: profile } = await supabaseServer
+        .from("profiles")
+        .select("available_balance")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile) {
+        const currentBalance = (profile.available_balance as number) || 0;
+        await supabaseServer
+          .from("profiles")
+          .update({ available_balance: currentBalance + uncreditedTotal })
+          .eq("id", user.id);
+
+        const uncreditedIds = uncreditedPayouts.map(p => p.id);
+        await supabaseServer
+          .from("influencer_payouts")
+          .update({ credited_to_balance: true })
+          .in("id", uncreditedIds);
+      }
+    }
+  }
+
+  // Compute balance summary for influencer earnings
+  const { data: creditedPayouts } = await supabaseServer
+    .from("influencer_payouts")
+    .select("amount_cents")
+    .eq("influencer_id", influencerId)
+    .eq("credited_to_balance", true);
+
+  const totalCreditedCents = (creditedPayouts || []).reduce((sum, p) => sum + ((p.amount_cents as number) || 0), 0);
+
+  const { data: stillUncredited } = await supabaseServer
+    .from("influencer_payouts")
+    .select("amount_cents")
+    .eq("influencer_id", influencerId)
+    .eq("credited_to_balance", false);
+
+  const uncreditedCents = (stillUncredited || []).reduce((sum, p) => sum + ((p.amount_cents as number) || 0), 0);
+
   // Fetch recent signups (last 10)
   const { data: signupRows } = await supabaseServer
     .from("influencer_signups")
@@ -84,7 +134,7 @@ export async function GET(req: NextRequest) {
   // Fetch payouts
   const { data: payoutRows } = await supabaseServer
     .from("influencer_payouts")
-    .select("id, amount_cents, signups_count, rate_per_thousand_cents, period_start, period_end, paid, paid_at, created_at")
+    .select("id, amount_cents, signups_count, rate_per_thousand_cents, period_start, period_end, paid, paid_at, created_at, credited_to_balance")
     .eq("influencer_id", influencerId)
     .order("created_at", { ascending: false })
     .limit(20);
@@ -120,6 +170,8 @@ export async function GET(req: NextRequest) {
       rateCents: t.rate_cents,
       label: t.label,
     })),
+    totalCreditedCents,
+    uncreditedCents,
     recentSignups,
     payouts: (payoutRows || []).map(p => ({
       id: p.id,
@@ -130,6 +182,7 @@ export async function GET(req: NextRequest) {
       paid: p.paid,
       paidAt: p.paid_at,
       createdAt: p.created_at,
+      creditedToBalance: p.credited_to_balance,
     })),
   });
 }

@@ -17,6 +17,12 @@ import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 
 /* ==================== TYPES ==================== */
 
+interface PayoutBreakdown {
+  influencer_earnings_cents?: number;
+  receipt_earnings_cents?: number;
+  influencer_details?: { period: string; signups: number; amountCents: number }[];
+}
+
 interface UserPayout {
   id: string;
   user_id: string;
@@ -29,6 +35,7 @@ interface UserPayout {
   processed_by: string | null;
   deny_reason: string | null;
   notes: string | null;
+  breakdown: PayoutBreakdown | null;
   // Joined from profiles
   user_name: string | null;
   user_email: string | null;
@@ -129,7 +136,7 @@ export default function PayoutsPage() {
       // Fetch user payouts with profile join for name/email
       const { data, error } = await supabaseBrowser
         .from("user_payouts")
-        .select("*, profiles!user_payouts_user_id_fkey(full_name, email)")
+        .select("*, breakdown, profiles!user_payouts_user_id_fkey(full_name, email)")
         .order("requested_at", { ascending: false })
         .limit(500);
 
@@ -792,7 +799,22 @@ export default function PayoutsPage() {
                     key: "amount_cents",
                     label: "Amount",
                     align: "right",
-                    render: (v) => <span style={{ fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(Number(v))}</span>,
+                    render: (v, row) => {
+                      const bd = row.breakdown as PayoutBreakdown | null;
+                      const hasBreakdown = bd && ((bd.influencer_earnings_cents || 0) > 0 || (bd.receipt_earnings_cents || 0) > 0);
+                      return (
+                        <div>
+                          <span style={{ fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(Number(v))}</span>
+                          {hasBreakdown && (
+                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }}>
+                              {(bd.receipt_earnings_cents || 0) > 0 && <span>Receipts: {formatMoney(bd.receipt_earnings_cents || 0)}</span>}
+                              {(bd.receipt_earnings_cents || 0) > 0 && (bd.influencer_earnings_cents || 0) > 0 && <span> · </span>}
+                              {(bd.influencer_earnings_cents || 0) > 0 && <span style={{ color: COLORS.neonOrange }}>Influencer: {formatMoney(bd.influencer_earnings_cents || 0)}</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    },
                   },
                   {
                     key: "method",

@@ -87,7 +87,76 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Insert payout request
+  // Compute itemized breakdown of balance sources
+  let influencerPortionCents = 0;
+  const influencerDetails: { period: string; signups: number; amountCents: number }[] = [];
+
+  // Check if this user is an influencer
+  const { data: influencerRecord } = await supabaseServer
+    .from("influencers")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (influencerRecord) {
+    // Total influencer earnings credited to balance
+    const { data: creditedPayouts } = await supabaseServer
+      .from("influencer_payouts")
+      .select("amount_cents, signups_count, period_start, period_end")
+      .eq("influencer_id", influencerRecord.id)
+      .eq("credited_to_balance", true)
+      .order("period_start", { ascending: true });
+
+    const totalCredited = (creditedPayouts || []).reduce((s, p) => s + ((p.amount_cents as number) || 0), 0);
+
+    // Total influencer portion already cashed out from previous cashouts
+    const { data: prevCashouts } = await supabaseServer
+      .from("user_payouts")
+      .select("breakdown")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing", "completed"]);
+
+    let alreadyCashedInfluencer = 0;
+    for (const c of prevCashouts || []) {
+      const bd = c.breakdown as Record<string, unknown> | null;
+      if (bd && typeof bd.influencer_earnings_cents === "number") {
+        alreadyCashedInfluencer += bd.influencer_earnings_cents as number;
+      }
+    }
+
+    // Influencer portion still in balance
+    influencerPortionCents = Math.max(0, totalCredited - alreadyCashedInfluencer);
+
+    // If requesting less than full balance, split proportionally
+    if (requestedAmount < availableBalance && influencerPortionCents > 0) {
+      const ratio = requestedAmount / availableBalance;
+      influencerPortionCents = Math.round(influencerPortionCents * ratio);
+    }
+
+    // Cap at requested amount
+    influencerPortionCents = Math.min(influencerPortionCents, requestedAmount);
+
+    // Build period details
+    for (const p of creditedPayouts || []) {
+      const start = new Date((p.period_start as string) + "T00:00:00");
+      const period = start.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      influencerDetails.push({
+        period,
+        signups: (p.signups_count as number) || 0,
+        amountCents: (p.amount_cents as number) || 0,
+      });
+    }
+  }
+
+  const receiptPortionCents = requestedAmount - influencerPortionCents;
+
+  const breakdown = {
+    influencer_earnings_cents: influencerPortionCents,
+    receipt_earnings_cents: receiptPortionCents,
+    influencer_details: influencerDetails.length > 0 ? influencerDetails : undefined,
+  };
+
+  // Insert payout request with breakdown
   const { data: payout, error: payoutErr } = await supabaseServer
     .from("user_payouts")
     .insert({
@@ -97,6 +166,7 @@ export async function POST(req: NextRequest) {
       account: profile.payout_identifier,
       status: "pending",
       requested_at: new Date().toISOString(),
+      breakdown,
     })
     .select("id, amount_cents, method, status, requested_at")
     .single();

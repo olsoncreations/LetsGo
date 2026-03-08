@@ -475,7 +475,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
 // ═══════════════════════════════════════════════════
 
 interface CalcBiz { id: string; name: string; type: string; visits: number; level: number; rates: number[]; earned: number; balance: number; }
-interface CashoutDisplay { id: string; date: string; amount: number; method: string; status: string; }
+interface CashoutDisplay { id: string; date: string; amount: number; method: string; status: string; breakdown?: { influencer_earnings_cents?: number; receipt_earnings_cents?: number; influencer_details?: { period: string; signups: number; amountCents: number }[] } | null; }
 interface ExperienceDisplay { id: string; businessId: string; businessName: string; mediaUrl: string; mediaType: string; caption: string; status: string; createdAt: string; }
 
 export default function LetsGoProfile() {
@@ -558,9 +558,11 @@ export default function LetsGoProfile() {
       instagramHandle: string | null; tiktokHandle: string | null;
       youtubeHandle: string | null; twitterHandle: string | null;
     };
+    totalCreditedCents: number;
+    uncreditedCents: number;
     rateTiers: { tierIndex: number; minSignups: number; maxSignups: number | null; rateCents: number; label: string | null }[];
     recentSignups: { userName: string; createdAt: string }[];
-    payouts: { id: string; amountCents: number; signupsCount: number; periodStart: string; periodEnd: string; paid: boolean; paidAt: string | null; createdAt: string }[];
+    payouts: { id: string; amountCents: number; signupsCount: number; periodStart: string; periodEnd: string; paid: boolean; paidAt: string | null; createdAt: string; creditedToBalance: boolean }[];
   } | null>(null);
   const [influencerLinkCopied, setInfluencerLinkCopied] = useState(false);
 
@@ -665,7 +667,7 @@ export default function LetsGoProfile() {
       // Fetch cashouts
       const { data: cashoutRows } = await supabaseBrowser
         .from("user_payouts")
-        .select("id, amount_cents, method, status, requested_at")
+        .select("id, amount_cents, method, status, requested_at, breakdown")
         .eq("user_id", uid)
         .order("requested_at", { ascending: false })
         .limit(50);
@@ -677,6 +679,7 @@ export default function LetsGoProfile() {
           amount: (c.amount_cents as number) / 100,
           method: ((c.method as string) === "paypal" ? "PayPal" : (c.method as string) === "venmo" ? "Venmo" : (c.method as string)) || "Venmo",
           status: (c.status as string) || "pending",
+          breakdown: c.breakdown as CashoutDisplay["breakdown"],
         })));
       }
 
@@ -809,7 +812,7 @@ export default function LetsGoProfile() {
         if (infRes.ok) {
           const infData = await infRes.json();
           if (infData.isInfluencer) {
-            setInfluencerData({ influencer: infData.influencer, rateTiers: infData.rateTiers || [], recentSignups: infData.recentSignups, payouts: infData.payouts });
+            setInfluencerData({ influencer: infData.influencer, totalCreditedCents: infData.totalCreditedCents || 0, uncreditedCents: infData.uncreditedCents || 0, rateTiers: infData.rateTiers || [], recentSignups: infData.recentSignups, payouts: infData.payouts });
           }
         }
       } catch { /* influencer tables may not exist yet */ }
@@ -1458,8 +1461,8 @@ export default function LetsGoProfile() {
                       <div style={{ fontSize: 18, fontWeight: 700, color: NEON.orange }}>{(influencerData.influencer.totalSignups || 0).toLocaleString()}</div>
                     </div>
                     <div style={{ padding: "12px 14px", borderRadius: 4, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", marginBottom: 4 }}>Earned</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: NEON.green }}>${((influencerData.influencer.totalPaidCents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                      <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", marginBottom: 4 }}>Credited</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: NEON.green }}>${((influencerData.totalCreditedCents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                     </div>
                     <div style={{ padding: "12px 14px", borderRadius: 4, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
                       <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", marginBottom: 4 }}>Clicks</div>
@@ -1467,63 +1470,24 @@ export default function LetsGoProfile() {
                     </div>
                   </div>
 
-                  {/* Tier + Rate */}
-                  {(() => {
-                    const TIER_INFO: Record<string, { label: string; icon: string; color: string; nextMin: number }> = {
-                      seed: { label: "Seed", icon: "\uD83C\uDF31", color: "#6b7280", nextMin: 250 },
-                      sprout: { label: "Sprout", icon: "\uD83C\uDF3F", color: "#4ade80", nextMin: 1000 },
-                      bronze: { label: "Bronze", icon: "\uD83E\uDD49", color: "#cd7f32", nextMin: 2500 },
-                      silver: { label: "Silver", icon: "\uD83E\uDD48", color: "#c0c0c0", nextMin: 5000 },
-                      gold: { label: "Gold", icon: "\uD83E\uDD47", color: "#ffd700", nextMin: 10000 },
-                      platinum: { label: "Platinum", icon: "\uD83D\uDC8E", color: "#e5e4e2", nextMin: 25000 },
-                      diamond: { label: "Diamond", icon: "\u2728", color: "#b9f2ff", nextMin: 50000 },
-                      ruby: { label: "Ruby", icon: "\uD83D\uDD34", color: "#e0115f", nextMin: 75000 },
-                      emerald: { label: "Emerald", icon: "\uD83D\uDFE2", color: "#50c878", nextMin: 100000 },
-                      sapphire: { label: "Sapphire", icon: "\uD83D\uDD35", color: "#0f52ba", nextMin: 150000 },
-                      obsidian: { label: "Obsidian", icon: "\u26AB", color: "#1c1c1c", nextMin: 200000 },
-                      titan: { label: "Titan", icon: "\u2694\uFE0F", color: "#ff6b35", nextMin: 250000 },
-                      celestial: { label: "Celestial", icon: "\uD83C\uDF1F", color: "#fff700", nextMin: 350000 },
-                      legend: { label: "Legend", icon: "\uD83D\uDC51", color: "#ff2d92", nextMin: 500000 },
-                      icon: { label: "Icon", icon: "\uD83C\uDFC6", color: "#ffd600", nextMin: 999999 },
-                    };
-                    const tier = TIER_INFO[influencerData.influencer.tier] || TIER_INFO.seed;
+                  {/* Rate Tiers */}
+                  {influencerData.rateTiers && influencerData.rateTiers.length > 0 && (() => {
                     const signups = influencerData.influencer.totalSignups || 0;
-                    const progress = Math.min(signups / tier.nextMin, 1);
                     return (
-                      <div style={{ marginBottom: 18 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: tier.color }}>
-                            {tier.icon} {tier.label}
-                          </span>
-                          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
-                            {signups.toLocaleString()} signups
-                          </span>
-                        </div>
-                        <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${progress * 100}%`, background: tier.color, borderRadius: 2, boxShadow: `0 0 8px ${tier.color}60`, transition: "width 0.5s ease" }} />
-                        </div>
-                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 4 }}>
-                          {signups.toLocaleString()} / {tier.nextMin.toLocaleString()} signups to next tier
-                        </div>
-
-                        {/* Rate Tiers */}
-                        {influencerData.rateTiers && influencerData.rateTiers.length > 0 && (
-                          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 8 }}>Your Rate Tiers</div>
-                            {influencerData.rateTiers.map((rt, i) => {
-                              const isActive = signups >= rt.minSignups && (rt.maxSignups === null || signups <= rt.maxSignups);
-                              return (
-                                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11, color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
-                                  <span>
-                                    {isActive && <span style={{ color: "#39ff14", marginRight: 4 }}>●</span>}
-                                    {rt.label || `Tier ${rt.tierIndex}`}: {rt.minSignups}–{rt.maxSignups ?? "∞"}
-                                  </span>
-                                  <span style={{ fontWeight: 600, color: isActive ? "#ffff00" : "rgba(255,255,255,0.2)" }}>${(rt.rateCents / 100).toFixed(2)}/signup</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                      <div style={{ padding: "10px 12px", borderRadius: 6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 18 }}>
+                        <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 8 }}>Your Rate Tiers</div>
+                        {influencerData.rateTiers.map((rt, i) => {
+                          const isActive = signups >= rt.minSignups && (rt.maxSignups === null || signups <= rt.maxSignups);
+                          return (
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", fontSize: 11, color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
+                              <span>
+                                {isActive && <span style={{ color: "#39ff14", marginRight: 4 }}>●</span>}
+                                {rt.label || `Tier ${rt.tierIndex}`}: {rt.minSignups}–{rt.maxSignups ?? "∞"}
+                              </span>
+                              <span style={{ fontWeight: 600, color: isActive ? "#ffff00" : "rgba(255,255,255,0.2)" }}>${(rt.rateCents / 100).toFixed(2)}/signup</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}
@@ -1563,49 +1527,29 @@ export default function LetsGoProfile() {
                     </div>
                   </div>
 
-                  {/* Recent Signups */}
-                  {influencerData.recentSignups.length > 0 && (
-                    <div style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>Recent Signups</div>
+                  {/* Earnings History */}
+                  {influencerData.payouts.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>Earnings History</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {influencerData.recentSignups.slice(0, 5).map((s, i) => {
-                          const ago = (() => {
-                            const diff = Date.now() - new Date(s.createdAt).getTime();
-                            const mins = Math.floor(diff / 60000);
-                            if (mins < 60) return `${mins}m ago`;
-                            const hrs = Math.floor(mins / 60);
-                            if (hrs < 24) return `${hrs}h ago`;
-                            const days = Math.floor(hrs / 24);
-                            return `${days}d ago`;
-                          })();
+                        {influencerData.payouts.slice(0, 5).map(p => {
+                          const statusColor = p.creditedToBalance ? NEON.green : NEON.yellow;
+                          const statusLabel = p.creditedToBalance ? "In Balance" : "Pending";
+                          const periodStart = new Date(p.periodStart + "T00:00:00");
+                          const periodLabel = periodStart.toLocaleDateString("en-US", { month: "short", year: "numeric" });
                           return (
-                            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", borderRadius: 3, background: "rgba(255,255,255,0.02)" }}>
-                              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{s.userName}</span>
-                              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)" }}>{ago}</span>
+                            <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", borderRadius: 3, background: "rgba(255,255,255,0.02)" }}>
+                              <div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: statusColor }}>${((p.amountCents || 0) / 100).toFixed(2)}</span>
+                                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", marginLeft: 6 }}>{p.signupsCount || 0} signups · {periodLabel}</span>
+                              </div>
+                              <span style={{ fontSize: 9, fontWeight: 600, color: statusColor, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ width: 4, height: 4, borderRadius: "50%", background: statusColor, boxShadow: `0 0 4px ${statusColor}` }} />
+                                {statusLabel}
+                              </span>
                             </div>
                           );
                         })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Payout History */}
-                  {influencerData.payouts.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>Payout History</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {influencerData.payouts.slice(0, 5).map(p => (
-                          <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", borderRadius: 3, background: "rgba(255,255,255,0.02)" }}>
-                            <div>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: p.paid ? NEON.green : NEON.yellow }}>${((p.amountCents || 0) / 100).toFixed(2)}</span>
-                              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", marginLeft: 6 }}>{p.signupsCount || 0} signups</span>
-                            </div>
-                            <span style={{ fontSize: 9, fontWeight: 600, color: p.paid ? NEON.green : NEON.yellow, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 4 }}>
-                              <span style={{ width: 4, height: 4, borderRadius: "50%", background: p.paid ? NEON.green : NEON.yellow, boxShadow: `0 0 4px ${p.paid ? NEON.green : NEON.yellow}` }} />
-                              {p.paid ? "Paid" : "Pending"}
-                            </span>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   )}
@@ -2217,24 +2161,40 @@ export default function LetsGoProfile() {
             {/* Cash Out History */}
             {historyTab === "cashouts" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {cashouts.map((c) => (
-                  <div key={c.id} style={{ display: "flex", alignItems: "center", padding: "14px 18px", borderRadius: 4, background: "#0C0C14", border: "1px solid rgba(255,255,255,0.04)", gap: 16 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 4, background: `rgba(${NEON.yellowRGB},0.08)`, border: `1px solid rgba(${NEON.yellowRGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\uD83D\uDCB8"}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: "'DM Sans', sans-serif" }}>Cash Out</div>
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>{c.date} {"\u00b7"} {c.method}</div>
+                {cashouts.map((c) => {
+                  const bd = c.breakdown;
+                  const hasBreakdown = bd && ((bd.influencer_earnings_cents || 0) > 0 || (bd.receipt_earnings_cents || 0) > 0);
+                  return (
+                    <div key={c.id} style={{ borderRadius: 4, background: "#0C0C14", border: "1px solid rgba(255,255,255,0.04)" }}>
+                      <div style={{ display: "flex", alignItems: "center", padding: "14px 18px", gap: 16 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 4, background: `rgba(${NEON.yellowRGB},0.08)`, border: `1px solid rgba(${NEON.yellowRGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\uD83D\uDCB8"}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: "'DM Sans', sans-serif" }}>Cash Out</div>
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>{c.date} {"\u00b7"} {c.method}</div>
+                        </div>
+                        <div style={{ textAlign: "right", minWidth: 80 }}>
+                          <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: NEON.yellow, textShadow: `0 0 8px rgba(${NEON.yellowRGB},0.25)` }}>${c.amount.toFixed(2)}</div>
+                        </div>
+                        <div style={{ minWidth: 80, textAlign: "right" }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: c.status === "completed" ? NEON.green : NEON.yellow, display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
+                            <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.status === "completed" ? NEON.green : NEON.yellow, boxShadow: `0 0 4px ${c.status === "completed" ? NEON.green : NEON.yellow}` }} />
+                            {c.status === "completed" ? "Completed" : "Processing"}
+                          </span>
+                        </div>
+                      </div>
+                      {hasBreakdown && (
+                        <div style={{ padding: "0 18px 12px 72px", display: "flex", gap: 16, fontSize: 10, color: "rgba(255,255,255,0.25)" }}>
+                          {(bd.receipt_earnings_cents || 0) > 0 && (
+                            <span>Receipt Cashback: <span style={{ color: NEON.green }}>${((bd.receipt_earnings_cents || 0) / 100).toFixed(2)}</span></span>
+                          )}
+                          {(bd.influencer_earnings_cents || 0) > 0 && (
+                            <span>Influencer Earnings: <span style={{ color: NEON.orange }}>${((bd.influencer_earnings_cents || 0) / 100).toFixed(2)}</span></span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ textAlign: "right", minWidth: 80 }}>
-                      <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: NEON.yellow, textShadow: `0 0 8px rgba(${NEON.yellowRGB},0.25)` }}>${c.amount.toFixed(2)}</div>
-                    </div>
-                    <div style={{ minWidth: 80, textAlign: "right" }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: c.status === "completed" ? NEON.green : NEON.yellow, display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
-                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: c.status === "completed" ? NEON.green : NEON.yellow, boxShadow: `0 0 4px ${c.status === "completed" ? NEON.green : NEON.yellow}` }} />
-                        {c.status === "completed" ? "Completed" : "Processing"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {cashouts.length === 0 && (
                   <div style={{ padding: "30px 0", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>No cash outs yet. Reach ${(minCashoutCents/100).toFixed(0)} at any business to cash out!</div>
                 )}

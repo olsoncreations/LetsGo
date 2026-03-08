@@ -56,7 +56,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Fetch all active influencers
     const { data: influencers, error: infError } = await supabaseServer
       .from("influencers")
-      .select("id, name, rate_per_thousand_cents, total_signups")
+      .select("id, name, rate_per_thousand_cents, total_signups, user_id")
       .eq("status", "active");
 
     if (infError) {
@@ -171,6 +171,29 @@ export async function POST(req: NextRequest): Promise<Response> {
         console.error(`[generate-influencer-payouts] Error inserting payout for ${influencer.name}:`, insertErr);
         skipped++;
         continue;
+      }
+
+      // Credit influencer earnings to profiles.available_balance (unified cashout flow)
+      const influencerUserId = influencer.user_id as string | null;
+      if (influencerUserId) {
+        const { data: profile } = await supabaseServer
+          .from("profiles")
+          .select("available_balance")
+          .eq("id", influencerUserId)
+          .maybeSingle();
+
+        if (profile) {
+          const currentBalance = (profile.available_balance as number) || 0;
+          await supabaseServer
+            .from("profiles")
+            .update({ available_balance: currentBalance + amountCents })
+            .eq("id", influencerUserId);
+
+          await supabaseServer
+            .from("influencer_payouts")
+            .update({ credited_to_balance: true })
+            .eq("id", payout.id);
+        }
       }
 
       generated++;
