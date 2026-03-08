@@ -568,10 +568,15 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
     return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
   }, [tagCats]);
   // Smart visibility: hide food-related categories when non-food category selected in step 1
-  const showCuisine = useMemo(() => {
+  const showFoodCategories = useMemo(() => {
     if (selectedCategories.length === 0 || selectedCategories.includes("anything")) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
-    if (!bt) return true;
+    if (!bt) {
+      // DB not loaded yet — use hardcoded food-type list as fallback
+      const FOOD_IDS = new Set(["restaurant", "bar", "coffee", "bakery", "deli", "ice-cream", "juice-bar",
+        "lounge", "pub", "sports-bar", "food-truck", "brewery", "winery"]);
+      return selectedCategories.some(id => FOOD_IDS.has(id));
+    }
     // Check if any selected step-1 category is food-related
     return selectedCategories.some(catId => {
       const tag = bt.tags.find(t => t.slug === catId || t.name.toLowerCase().replace(/[/ ]/g, "_") === catId);
@@ -1063,7 +1068,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
           {/* Dynamic tag filter sections from DB (excludes Business Type) */}
           {tagCats
             .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
-            .filter(c => !c.requires_food || showCuisine)
+            .filter(c => !c.requires_food || showFoodCategories)
             .map(c => {
               const catTags = c.tags.map(t => t.name);
               return (
@@ -1085,6 +1090,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
           {/* Fallback if DB hasn't loaded */}
           {tagCats.length === 0 && (
             <>
+              {showFoodCategories && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Cuisine</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1095,6 +1101,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                   ))}
                 </div>
               </div>
+              )}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Vibe & Atmosphere</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
