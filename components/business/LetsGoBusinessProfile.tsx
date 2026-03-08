@@ -85,16 +85,17 @@ const [invoiceLines, setInvoiceLines] = useState<any[]>([]);
     { id: 1, campaign: '7-Day Spotlight', startDate: 'Jan 15, 2025', endDate: 'Jan 21, 2025', cost: 599, status: 'Scheduled' }
   ];
   
-  // Available tags for autocomplete
-  const availableTags = [
-    'bakery', 'fresh bread', 'pastries', 'custom cakes', 'coffee', 'breakfast', 'lunch', 'dinner',
-    'local', 'organic', 'gluten-free', 'vegan', 'vegetarian', 'family-friendly', 'outdoor seating',
-    'delivery', 'takeout', 'catering', 'brunch', 'desserts', 'wine', 'beer', 'cocktails',
-    'live music', 'pet-friendly', 'wifi', 'parking', 'reservations'
-  ];
+  // Available tags for autocomplete — fetched from DB
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState(['bakery', 'fresh bread', 'pastries', 'custom cakes', 'coffee', 'breakfast', 'local']);
   const [tagInput, setTagInput] = useState('');
   const [filteredTags, setFilteredTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    import("@/lib/availableTags").then(({ fetchAvailableTags }) => {
+      fetchAvailableTags().then(setAvailableTags);
+    });
+  }, []);
 
 
   // Current subscription info

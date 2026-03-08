@@ -10,7 +10,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { fetchAvailableTags } from "@/lib/availableTags";
+import { fetchTagsByCategory, getVisibleCategories, type TagCategory } from "@/lib/availableTags";
 import { AlertCircle, Settings, Clock, User, Mail, Tag, X, CheckCircle } from "lucide-react";
 
 // ============================================================================
@@ -205,7 +205,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   const [hours, setHours] = useState<BusinessHours>({ ...DEFAULT_HOURS });
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [availableTagList, setAvailableTagList] = useState<string[]>([]);
+  const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
 
   // Password change state
   const [newPassword, setNewPassword] = useState("");
@@ -450,9 +450,9 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     return () => { cancelled = true; };
   }, [businessId]);
 
-  // Fetch available tags from DB
+  // Fetch available tags from DB (grouped by category)
   useEffect(() => {
-    fetchAvailableTags().then(setAvailableTagList);
+    fetchTagsByCategory("business").then(setTagCategories);
   }, []);
 
   // ============================================================================
@@ -596,14 +596,30 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     setTags((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const filteredSuggestions = useMemo(() => {
-    if (!tagInput.trim()) return [];
+  // Smart visibility: determine which categories to show based on selected tags
+  const visibleCategories = useMemo(() => {
+    if (!tagCategories.length) return [];
+    return getVisibleCategories(tagCategories, tags);
+  }, [tagCategories, tags]);
+
+  // Grouped suggestions filtered by input text
+  const groupedSuggestions = useMemo(() => {
+    if (!tagInput.trim() || !visibleCategories.length) return [] as { category: string; icon: string; tags: string[] }[];
     const lower = tagInput.toLowerCase();
-    const tagsLower = tags.map(t => t.toLowerCase());
-    return availableTagList.filter(
-      (t) => t.toLowerCase().includes(lower) && !tagsLower.includes(t.toLowerCase())
-    ).slice(0, 5);
-  }, [tagInput, tags, availableTagList]);
+    const tagsLower = new Set(tags.map(t => t.toLowerCase()));
+    const groups: { category: string; icon: string; tags: string[] }[] = [];
+    for (const cat of visibleCategories) {
+      const matching = cat.tags
+        .filter(t => t.name.toLowerCase().includes(lower) && !tagsLower.has(t.name.toLowerCase()))
+        .map(t => t.name);
+      if (matching.length > 0) {
+        groups.push({ category: cat.name, icon: cat.icon, tags: matching.slice(0, 5) });
+      }
+    }
+    return groups;
+  }, [tagInput, tags, visibleCategories]);
+
+  const hasSuggestions = groupedSuggestions.some(g => g.tags.length > 0);
 
   // ============================================================================
   // Styles
@@ -981,7 +997,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 placeholder="Type to add tags (press Enter)..."
                 style={inputStyle}
               />
-              {filteredSuggestions.length > 0 && (
+              {hasSuggestions && (
                 <div
                   style={{
                     position: "absolute",
@@ -994,29 +1010,48 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                     marginTop: "4px",
                     zIndex: 10,
                     overflow: "hidden",
+                    maxHeight: "280px",
+                    overflowY: "auto",
                   }}
                 >
-                  {filteredSuggestions.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => addTag(tag)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "0.75rem 1rem",
-                        background: "transparent",
-                        border: "none",
-                        color: "white",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        fontSize: "0.875rem",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      {tag}
-                    </button>
+                  {groupedSuggestions.map((group) => (
+                    <div key={group.category}>
+                      <div
+                        style={{
+                          padding: "0.5rem 1rem",
+                          fontSize: "0.7rem",
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: "rgba(255,255,255,0.45)",
+                          borderTop: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        {group.icon} {group.category}
+                      </div>
+                      {group.tags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => addTag(tag)}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            padding: "0.6rem 1rem 0.6rem 1.5rem",
+                            background: "transparent",
+                            border: "none",
+                            color: "white",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            fontSize: "0.875rem",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}

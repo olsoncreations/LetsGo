@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import "./onboarding.css";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, DEFAULT_PRESET_BPS, type VisitThreshold } from "@/lib/platformSettings";
+import { fetchTagsByCategory, getVisibleCategories, type TagCategory, type TagItem } from "@/lib/availableTags";
 import type { User } from "@supabase/supabase-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -76,6 +77,8 @@ type OnboardingData = {
   // Step 1
   businessName: string;
   businessType: BusinessType | "";
+  businessTypeTag: string; // DB-driven business type (e.g. "Bowling", "Restaurant")
+  selectedTags: string[]; // Tags selected from DB categories (Cuisine, Vibe, etc.)
   fullName: string;
   email: string;
   phone: string;
@@ -186,6 +189,8 @@ function initialData(): OnboardingData {
   return {
     businessName: "",
     businessType: "",
+    businessTypeTag: "",
+    selectedTags: [],
     fullName: "",
     email: "",
     phone: "",
@@ -425,6 +430,17 @@ export default function PartnerOnboardingPage() {
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const [mapsLoaded, setMapsLoaded] = useState(false);
+
+  // DB-driven tag categories for business type selection + tag pickers
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  const businessTypeTags = useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    return bt?.tags ?? [];
+  }, [tagCats]);
+  const visibleTagCategories = useMemo(() => {
+    return getVisibleCategories(tagCats, data.businessTypeTag ? [data.businessTypeTag] : []);
+  }, [tagCats, data.businessTypeTag]);
 
   // Pricing from platform_settings (fetched on mount, falls back to defaults)
   const [pkgPricing, setPkgPricing] = useState({
@@ -790,7 +806,7 @@ async function completeSignup() {
           </div>
         ) : null}
 
-        {step === 1 && <Step1 data={data} setData={setData} onSaveExit={saveAndExit} authUserEmail={authUser?.email} />}
+        {step === 1 && <Step1 data={data} setData={setData} onSaveExit={saveAndExit} authUserEmail={authUser?.email} businessTypeTags={businessTypeTags} visibleTagCategories={visibleTagCategories} />}
         {step === 2 && <Step2 data={data} setData={setData} mapsLoaded={mapsLoaded} />}
         {step === 3 && <Step3 data={data} setData={setData} pkgPricing={pkgPricing} dynamicAds={dynamicAds} ccFeeBps={ccFeeBps} />}
         {step === 4 && <Step4 data={data} setData={setData} tiers={dynamicTiers} presetBps={presetBps} />}
@@ -918,11 +934,15 @@ function Step1({
   setData,
   onSaveExit,
   authUserEmail,
+  businessTypeTags,
+  visibleTagCategories,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
   onSaveExit: () => void;
   authUserEmail?: string;
+  businessTypeTags: TagItem[];
+  visibleTagCategories: TagCategory[];
 }) {
   const displayEmail = data.email || authUserEmail || "";
   return (
@@ -951,44 +971,93 @@ function Step1({
           </label>
 
           <div className="category-grid">
-            <CategoryCard
-              title="Restaurant/Bar"
-              icon="🍽️"
-              selected={data.businessType === "restaurant_bar"}
-              onClick={() => setData((p) => ({ ...p, businessType: "restaurant_bar" }))}
-            />
-            <CategoryCard
-              title="Activity"
-              icon="🎯"
-              selected={data.businessType === "activity"}
-              onClick={() => setData((p) => ({ ...p, businessType: "activity" }))}
-            />
-            <CategoryCard
-              title="Salon/Beauty"
-              icon="💇"
-              selected={data.businessType === "salon_beauty"}
-              onClick={() => setData((p) => ({ ...p, businessType: "salon_beauty" }))}
-            />
-            <CategoryCard
-              title="Retail"
-              icon="🛍️"
-              selected={data.businessType === "retail"}
-              onClick={() => setData((p) => ({ ...p, businessType: "retail" }))}
-            />
-            <CategoryCard
-              title="Event Venue"
-              icon="🎉"
-              selected={data.businessType === "event_venue"}
-              onClick={() => setData((p) => ({ ...p, businessType: "event_venue" }))}
-            />
-            <CategoryCard
-              title="Other"
-              icon="✨"
-              selected={data.businessType === "other"}
-              onClick={() => setData((p) => ({ ...p, businessType: "other" }))}
-            />
+            {businessTypeTags.length > 0 ? (
+              businessTypeTags.map(tag => (
+                <CategoryCard
+                  key={tag.id}
+                  title={tag.name}
+                  icon={tag.icon || "🏢"}
+                  selected={data.businessTypeTag === tag.name}
+                  onClick={() => {
+                    // Map to legacy businessType for backward compat
+                    const legacyMap: Record<string, BusinessType> = {
+                      "Restaurant": "restaurant_bar", "Bar": "restaurant_bar", "Coffee": "restaurant_bar",
+                      "Bakery": "restaurant_bar", "Deli": "restaurant_bar", "Ice Cream": "restaurant_bar",
+                      "Juice Bar": "restaurant_bar", "Food Truck": "restaurant_bar", "Brewery": "restaurant_bar",
+                      "Winery": "restaurant_bar", "Lounge": "restaurant_bar", "Pub": "restaurant_bar",
+                      "Sports Bar": "restaurant_bar", "Salon/Beauty": "salon_beauty",
+                      "Spa": "salon_beauty", "Gym": "activity", "Yoga Studio": "activity",
+                      "Dance Studio": "activity", "Entertainment": "activity", "Activity": "activity",
+                      "Nightclub": "activity", "Karaoke": "activity", "Arcade": "activity",
+                      "Bowling": "activity", "Mini Golf": "activity", "Escape Room": "activity",
+                      "Theater": "activity", "Comedy Club": "activity", "Art Gallery": "activity",
+                      "Museum": "activity",
+                    };
+                    setData((p) => ({
+                      ...p,
+                      businessTypeTag: tag.name,
+                      businessType: legacyMap[tag.name] || "other",
+                      selectedTags: [], // Reset tags when type changes
+                    }));
+                  }}
+                />
+              ))
+            ) : (
+              // Fallback: original 6 categories if DB not loaded yet
+              <>
+                <CategoryCard title="Restaurant/Bar" icon="🍽️" selected={data.businessType === "restaurant_bar"} onClick={() => setData((p) => ({ ...p, businessType: "restaurant_bar", businessTypeTag: "Restaurant" }))} />
+                <CategoryCard title="Activity" icon="🎯" selected={data.businessType === "activity"} onClick={() => setData((p) => ({ ...p, businessType: "activity", businessTypeTag: "Activity" }))} />
+                <CategoryCard title="Salon/Beauty" icon="💇" selected={data.businessType === "salon_beauty"} onClick={() => setData((p) => ({ ...p, businessType: "salon_beauty", businessTypeTag: "Salon/Beauty" }))} />
+                <CategoryCard title="Retail" icon="🛍️" selected={data.businessType === "retail"} onClick={() => setData((p) => ({ ...p, businessType: "retail", businessTypeTag: "" }))} />
+                <CategoryCard title="Event Venue" icon="🎉" selected={data.businessType === "event_venue"} onClick={() => setData((p) => ({ ...p, businessType: "event_venue", businessTypeTag: "" }))} />
+                <CategoryCard title="Other" icon="✨" selected={data.businessType === "other"} onClick={() => setData((p) => ({ ...p, businessType: "other", businessTypeTag: "" }))} />
+              </>
+            )}
           </div>
         </div>
+
+        {/* Tag pickers — shown after selecting business type */}
+        {data.businessTypeTag && visibleTagCategories.length > 0 && (
+          <div className="form-group">
+            <label>Describe Your Business</label>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-medium)", marginBottom: "1rem" }}>
+              Select tags that describe your business. These help customers find you.
+            </p>
+            {visibleTagCategories.map(cat => (
+              <div key={cat.id} style={{ marginBottom: "1rem" }}>
+                <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-medium)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {cat.icon} {cat.name}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                  {cat.tags.map(tag => {
+                    const isSelected = data.selectedTags.includes(tag.name);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => setData(p => ({
+                          ...p,
+                          selectedTags: isSelected
+                            ? p.selectedTags.filter(t => t !== tag.name)
+                            : [...p.selectedTags, tag.name],
+                        }))}
+                        style={{
+                          padding: "6px 14px", borderRadius: 20, fontSize: "0.8rem", fontWeight: 500,
+                          border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border-light)",
+                          background: isSelected ? "rgba(255,107,53,0.1)" : "var(--bg-light)",
+                          color: isSelected ? "var(--primary)" : "var(--text-medium)",
+                          cursor: "pointer", transition: "all 0.2s",
+                        }}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="form-section">

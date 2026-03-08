@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -361,19 +362,11 @@ async function apiFetch(path: string, token: string, options: RequestInit = {}) 
   return data;
 }
 
-const BUSINESS_CATEGORIES = [
-  { id: "all", label: "All", icon: "✦" },
-  { id: "bars", label: "Bars & Lounges", icon: "🍸" },
-  { id: "restaurants", label: "Restaurants", icon: "🍽️" },
-  { id: "clubs", label: "Clubs", icon: "🎵" },
-  { id: "experiences", label: "Experiences", icon: "✨" },
-  { id: "outdoors", label: "Outdoors", icon: "🌿" },
-];
-
-const FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym"];
+// Fallbacks if DB fetch fails
+const DEFAULT_FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym"];
+const DEFAULT_CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "BBQ", "Seafood", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Farm-to-Table", "Fusion"];
+const DEFAULT_VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
 const PRICE_FILTERS = ["Any", "$", "$$", "$$$", "$$$$"];
-const CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "BBQ", "Seafood", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Farm-to-Table", "Fusion"];
-const VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
 const SORT_OPTIONS = ["Nearest", "Most Popular", "Highest Payout", "Highest Rated", "Trending"];
 
 // (Mock data removed — real data fetched from API)
@@ -1595,6 +1588,29 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
     category: "All", price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [], browseFrom: "All Businesses",
   });
 
+  // DB-driven tag categories
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  const FILTER_CATEGORIES = useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
+  }, [tagCats]);
+  const CUISINE_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Cuisine");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_CUISINE_FILTERS;
+  }, [tagCats]);
+  const VIBE_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Vibe");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
+  }, [tagCats]);
+  // Smart visibility: hide Cuisine/Dietary when non-food category selected
+  const selectedCatIsFood = useMemo(() => {
+    if (filters.category === "All") return true;
+    const bt = tagCats.find(c => c.name === "Business Type");
+    const tag = bt?.tags.find(t => t.name === filters.category);
+    return tag?.is_food ?? true;
+  }, [filters.category, tagCats]);
+
   // Sync selections from server (private pool — only current user's picks)
   useEffect(() => {
     if (!game?.selections || businesses.length === 0) return;
@@ -1794,7 +1810,8 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                   </button>
                 </div>
 
-                {/* Cuisine */}
+                {/* Cuisine (hidden for non-food business types) */}
+                {selectedCatIsFood && (
                 <div style={{ marginBottom: 16 }}>
                   {sectionLabel("Cuisine")}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1804,6 +1821,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                     })), { fontSize: 11, padding: "6px 14px" }))}
                   </div>
                 </div>
+                )}
 
                 {/* Vibe & Atmosphere */}
                 <div style={{ marginBottom: 16 }}>

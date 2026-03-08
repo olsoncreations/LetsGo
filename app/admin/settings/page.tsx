@@ -196,8 +196,8 @@ export default function SettingsPage() {
   const [newRole, setNewRole] = useState<{ name: string; permissions: string[] }>({ name: "", permissions: [] });
 
   // Tag management state
-  interface TagCategory { id: string; name: string; icon: string }
-  interface TagItem { id: string; name: string; slug: string; color: string | null; category_id: string; category_name: string; category_icon: string }
+  interface TagCategory { id: string; name: string; icon: string; scope: string[]; requires_food: boolean }
+  interface TagItem { id: string; name: string; slug: string; color: string | null; icon: string | null; sort_order: number; is_food: boolean; category_id: string; category_name: string; category_icon: string }
   const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
   const [tagItems, setTagItems] = useState<TagItem[]>([]);
   const [tagsLoading, setTagsLoading] = useState(false);
@@ -205,15 +205,25 @@ export default function SettingsPage() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagCategory, setNewTagCategory] = useState("");
   const [newTagColor, setNewTagColor] = useState("#39ff14");
+  const [newTagIcon, setNewTagIcon] = useState("");
+  const [newTagSortOrder, setNewTagSortOrder] = useState(0);
+  const [newTagIsFood, setNewTagIsFood] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editTagName, setEditTagName] = useState("");
   const [editTagColor, setEditTagColor] = useState("");
   const [editTagCategory, setEditTagCategory] = useState("");
+  const [editTagIcon, setEditTagIcon] = useState("");
+  const [editTagSortOrder, setEditTagSortOrder] = useState(0);
+  const [editTagIsFood, setEditTagIsFood] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("");
+  const [newCatScope, setNewCatScope] = useState<string[]>(["business"]);
+  const [newCatRequiresFood, setNewCatRequiresFood] = useState(false);
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editCatName, setEditCatName] = useState("");
   const [editCatIcon, setEditCatIcon] = useState("");
+  const [editCatScope, setEditCatScope] = useState<string[]>(["business"]);
+  const [editCatRequiresFood, setEditCatRequiresFood] = useState(false);
 
   // ==================== DATA FETCHING ====================
   const fetchData = useCallback(async () => {
@@ -260,13 +270,20 @@ export default function SettingsPage() {
   const fetchTags = useCallback(async () => {
     setTagsLoading(true);
     try {
-      const { data: cats } = await supabaseBrowser.from("tag_categories").select("id, name, icon").order("name");
-      setTagCategories(cats ?? []);
-      if (cats && cats.length > 0 && !newTagCategory) setNewTagCategory(cats[0].id);
+      const { data: cats } = await supabaseBrowser.from("tag_categories").select("id, name, icon, scope, requires_food").order("name");
+      setTagCategories((cats ?? []).map((c: Record<string, unknown>) => ({
+        id: c.id as string,
+        name: c.name as string,
+        icon: (c.icon as string) ?? "🏷️",
+        scope: (c.scope as string[]) ?? ["business"],
+        requires_food: (c.requires_food as boolean) ?? false,
+      })));
+      if (cats && cats.length > 0 && !newTagCategory) setNewTagCategory((cats[0] as { id: string }).id);
 
       const { data: tags } = await supabaseBrowser
         .from("tags")
-        .select("id, name, slug, color, category_id, tag_categories ( name, icon )")
+        .select("id, name, slug, color, icon, sort_order, is_food, category_id, tag_categories ( name, icon )")
+        .order("sort_order")
         .order("name");
       const mapped = (tags ?? []).map((t: Record<string, unknown>) => {
         const cat = t.tag_categories as { name: string; icon: string } | null;
@@ -275,6 +292,9 @@ export default function SettingsPage() {
           name: t.name as string,
           slug: t.slug as string,
           color: t.color as string | null,
+          icon: t.icon as string | null,
+          sort_order: (t.sort_order as number) ?? 0,
+          is_food: (t.is_food as boolean) ?? false,
           category_id: t.category_id as string,
           category_name: cat?.name ?? "Uncategorized",
           category_icon: cat?.icon ?? "",
@@ -294,10 +314,13 @@ export default function SettingsPage() {
     const trimmed = newTagName.trim().toLowerCase();
     if (!trimmed || !newTagCategory) return;
     const slug = trimmed.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const { error } = await supabaseBrowser.from("tags").insert({ name: trimmed, slug, color: newTagColor, category_id: newTagCategory });
+    const { error } = await supabaseBrowser.from("tags").insert({
+      name: trimmed, slug, color: newTagColor, category_id: newTagCategory,
+      icon: newTagIcon || null, sort_order: newTagSortOrder, is_food: newTagIsFood,
+    });
     if (error) { alert(error.message); return; }
     logAudit({ action: "add_tag", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag", entityName: trimmed, details: `Added tag "${trimmed}"` });
-    setNewTagName("");
+    setNewTagName(""); setNewTagIcon(""); setNewTagSortOrder(0); setNewTagIsFood(false);
     fetchTags();
   };
 
@@ -305,7 +328,10 @@ export default function SettingsPage() {
     const trimmed = editTagName.trim().toLowerCase();
     if (!trimmed) return;
     const slug = trimmed.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    const { error } = await supabaseBrowser.from("tags").update({ name: trimmed, slug, color: editTagColor, category_id: editTagCategory }).eq("id", id);
+    const { error } = await supabaseBrowser.from("tags").update({
+      name: trimmed, slug, color: editTagColor, category_id: editTagCategory,
+      icon: editTagIcon || null, sort_order: editTagSortOrder, is_food: editTagIsFood,
+    }).eq("id", id);
     if (error) { alert(error.message); return; }
     logAudit({ action: "update_tag", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag", targetId: id, entityName: trimmed, details: `Updated tag "${trimmed}"` });
     setEditingTagId(null);
@@ -323,18 +349,17 @@ export default function SettingsPage() {
   const addCategory = async () => {
     const trimmed = newCatName.trim();
     if (!trimmed) return;
-    const { error } = await supabaseBrowser.from("tag_categories").insert({ name: trimmed, icon: newCatIcon || "🏷️" });
+    const { error } = await supabaseBrowser.from("tag_categories").insert({ name: trimmed, icon: newCatIcon || "🏷️", scope: newCatScope, requires_food: newCatRequiresFood });
     if (error) { alert(error.message); return; }
     logAudit({ action: "add_tag_category", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag_category", entityName: trimmed, details: `Added category "${trimmed}"` });
-    setNewCatName("");
-    setNewCatIcon("");
+    setNewCatName(""); setNewCatIcon(""); setNewCatScope(["business"]); setNewCatRequiresFood(false);
     fetchTags();
   };
 
   const updateCategory = async (id: string) => {
     const trimmed = editCatName.trim();
     if (!trimmed) return;
-    const { error } = await supabaseBrowser.from("tag_categories").update({ name: trimmed, icon: editCatIcon }).eq("id", id);
+    const { error } = await supabaseBrowser.from("tag_categories").update({ name: trimmed, icon: editCatIcon, scope: editCatScope, requires_food: editCatRequiresFood }).eq("id", id);
     if (error) { alert(error.message); return; }
     logAudit({ action: "update_tag_category", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag_category", targetId: id, entityName: trimmed, details: `Updated category "${trimmed}"` });
     setEditingCatId(null);
@@ -1787,7 +1812,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Add category form */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                   <input
                     value={newCatIcon}
                     onChange={e => setNewCatIcon(e.target.value)}
@@ -1799,7 +1824,7 @@ export default function SettingsPage() {
                     onChange={e => setNewCatName(e.target.value)}
                     placeholder="New category name..."
                     onKeyDown={e => { if (e.key === "Enter") addCategory(); }}
-                    style={{ flex: 1, padding: "10px 14px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 13 }}
+                    style={{ flex: 1, minWidth: 160, padding: "10px 14px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 13 }}
                   />
                   <button
                     onClick={addCategory}
@@ -1809,6 +1834,19 @@ export default function SettingsPage() {
                     Add
                   </button>
                 </div>
+                <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Scope:</span>
+                  {["business", "event", "game"].map(s => (
+                    <label key={s} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#fff", cursor: "pointer" }}>
+                      <input type="checkbox" checked={newCatScope.includes(s)} onChange={() => setNewCatScope(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} />
+                      {s}
+                    </label>
+                  ))}
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: COLORS.neonOrange, cursor: "pointer", marginLeft: 8 }}>
+                    <input type="checkbox" checked={newCatRequiresFood} onChange={() => setNewCatRequiresFood(!newCatRequiresFood)} />
+                    Food-only
+                  </label>
+                </div>
 
                 {/* Category list */}
                 <div style={{ display: "grid", gap: 8 }}>
@@ -1816,22 +1854,45 @@ export default function SettingsPage() {
                     const count = tagItems.filter(t => t.category_id === cat.id).length;
                     const isEditing = editingCatId === cat.id;
                     return (
-                      <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: COLORS.darkBg, borderRadius: 10 }}>
+                      <div key={cat.id} style={{ padding: "12px 16px", background: COLORS.darkBg, borderRadius: 10 }}>
                         {isEditing ? (
-                          <>
-                            <input value={editCatIcon} onChange={e => setEditCatIcon(e.target.value)} style={{ width: 50, padding: "6px 8px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: "#fff", fontSize: 16, textAlign: "center" }} />
-                            <input value={editCatName} onChange={e => setEditCatName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") updateCategory(cat.id); }} style={{ flex: 1, padding: "6px 10px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: "#fff", fontSize: 13 }} />
-                            <button onClick={() => updateCategory(cat.id)} style={{ padding: "6px 14px", background: COLORS.neonGreen, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Save</button>
-                            <button onClick={() => setEditingCatId(null)} style={{ padding: "6px 14px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
-                          </>
+                          <div style={{ display: "grid", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <input value={editCatIcon} onChange={e => setEditCatIcon(e.target.value)} style={{ width: 50, padding: "6px 8px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: "#fff", fontSize: 16, textAlign: "center" }} />
+                              <input value={editCatName} onChange={e => setEditCatName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") updateCategory(cat.id); }} style={{ flex: 1, padding: "6px 10px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: "#fff", fontSize: 13 }} />
+                              <button onClick={() => updateCategory(cat.id)} style={{ padding: "6px 14px", background: COLORS.neonGreen, border: "none", borderRadius: 6, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Save</button>
+                              <button onClick={() => setEditingCatId(null)} style={{ padding: "6px 14px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                            </div>
+                            <div style={{ display: "flex", gap: 12, alignItems: "center", paddingLeft: 58 }}>
+                              <span style={{ fontSize: 11, color: COLORS.textSecondary }}>Scope:</span>
+                              {["business", "event", "game"].map(s => (
+                                <label key={s} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#fff", cursor: "pointer" }}>
+                                  <input type="checkbox" checked={editCatScope.includes(s)} onChange={() => setEditCatScope(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} />
+                                  {s}
+                                </label>
+                              ))}
+                              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: COLORS.neonOrange, cursor: "pointer", marginLeft: 8 }}>
+                                <input type="checkbox" checked={editCatRequiresFood} onChange={() => setEditCatRequiresFood(!editCatRequiresFood)} />
+                                Food-only
+                              </label>
+                            </div>
+                          </div>
                         ) : (
-                          <>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             <span style={{ fontSize: 20 }}>{cat.icon}</span>
-                            <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{cat.name}</span>
+                            <span style={{ fontWeight: 600, fontSize: 14 }}>{cat.name}</span>
+                            <div style={{ display: "flex", gap: 4, flex: 1 }}>
+                              {cat.scope.map(s => (
+                                <span key={s} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: s === "business" ? "rgba(0,212,255,0.15)" : s === "event" ? "rgba(191,95,255,0.15)" : "rgba(255,255,0,0.15)", color: s === "business" ? COLORS.neonBlue : s === "event" ? COLORS.neonPurple : COLORS.neonYellow }}>{s}</span>
+                              ))}
+                              {cat.requires_food && (
+                                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(255,107,53,0.15)", color: COLORS.neonOrange }}>food-only</span>
+                              )}
+                            </div>
                             <span style={{ fontSize: 12, color: COLORS.textSecondary, background: "rgba(255,255,255,0.05)", padding: "4px 10px", borderRadius: 20 }}>{count} tag{count !== 1 ? "s" : ""}</span>
-                            <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); setEditCatIcon(cat.icon); }} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.neonBlue, fontSize: 12, cursor: "pointer" }}>Edit</button>
+                            <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); setEditCatIcon(cat.icon); setEditCatScope(cat.scope); setEditCatRequiresFood(cat.requires_food); }} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.neonBlue, fontSize: 12, cursor: "pointer" }}>Edit</button>
                             <button onClick={() => deleteCategory(cat.id, cat.name)} style={{ padding: "6px 12px", background: "transparent", border: "1px solid rgba(255,49,49,0.3)", borderRadius: 6, color: COLORS.neonRed, fontSize: 12, cursor: "pointer" }}>Delete</button>
-                          </>
+                          </div>
                         )}
                       </div>
                     );
@@ -1849,18 +1910,24 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Add tag form */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                   <input
                     value={newTagName}
                     onChange={e => setNewTagName(e.target.value)}
                     placeholder="New tag name..."
                     onKeyDown={e => { if (e.key === "Enter") addTag(); }}
-                    style={{ flex: 2, minWidth: 180, padding: "10px 14px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 13 }}
+                    style={{ flex: 2, minWidth: 160, padding: "10px 14px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 13 }}
+                  />
+                  <input
+                    value={newTagIcon}
+                    onChange={e => setNewTagIcon(e.target.value)}
+                    placeholder="Icon"
+                    style={{ width: 50, padding: "10px 8px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 16, textAlign: "center" }}
                   />
                   <select
                     value={newTagCategory}
                     onChange={e => setNewTagCategory(e.target.value)}
-                    style={{ flex: 1, minWidth: 140, padding: "10px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 13 }}
+                    style={{ flex: 1, minWidth: 130, padding: "10px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: "#fff", fontSize: 13 }}
                   >
                     {tagCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                   </select>
@@ -1878,6 +1945,16 @@ export default function SettingsPage() {
                   >
                     Add Tag
                   </button>
+                </div>
+                <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: COLORS.textSecondary }}>
+                    Order:
+                    <input type="number" value={newTagSortOrder} onChange={e => setNewTagSortOrder(Number(e.target.value))} style={{ width: 60, padding: "4px 8px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: "#fff", fontSize: 12 }} />
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: COLORS.neonOrange, cursor: "pointer" }}>
+                    <input type="checkbox" checked={newTagIsFood} onChange={() => setNewTagIsFood(!newTagIsFood)} />
+                    Food type
+                  </label>
                 </div>
 
                 {/* Search filter */}
@@ -1907,12 +1984,18 @@ export default function SettingsPage() {
                           const isEditing = editingTagId === tag.id;
                           if (isEditing) {
                             return (
-                              <div key={tag.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: COLORS.darkBg, borderRadius: 8, border: "1px solid " + COLORS.neonBlue }}>
+                              <div key={tag.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: COLORS.darkBg, borderRadius: 8, border: "1px solid " + COLORS.neonBlue, flexWrap: "wrap" }}>
+                                <input value={editTagIcon} onChange={e => setEditTagIcon(e.target.value)} placeholder="Icon" style={{ width: 36, padding: "4px 4px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: "#fff", fontSize: 14, textAlign: "center" }} />
                                 <input value={editTagName} onChange={e => setEditTagName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") updateTag(tag.id); }} style={{ width: 120, padding: "4px 8px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: "#fff", fontSize: 12 }} />
                                 <select value={editTagCategory} onChange={e => setEditTagCategory(e.target.value)} style={{ padding: "4px 6px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: "#fff", fontSize: 11 }}>
                                   {tagCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
                                 <input type="color" value={editTagColor} onChange={e => setEditTagColor(e.target.value)} style={{ width: 28, height: 28, padding: 1, border: "none", borderRadius: 4, cursor: "pointer" }} />
+                                <input type="number" value={editTagSortOrder} onChange={e => setEditTagSortOrder(Number(e.target.value))} title="Sort order" style={{ width: 48, padding: "4px 6px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: "#fff", fontSize: 11 }} />
+                                <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: COLORS.neonOrange, cursor: "pointer" }}>
+                                  <input type="checkbox" checked={editTagIsFood} onChange={() => setEditTagIsFood(!editTagIsFood)} />
+                                  Food
+                                </label>
                                 <button onClick={() => updateTag(tag.id)} style={{ padding: "4px 10px", background: COLORS.neonGreen, border: "none", borderRadius: 4, color: "#000", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Save</button>
                                 <button onClick={() => setEditingTagId(null)} style={{ padding: "4px 8px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textSecondary, fontSize: 11, cursor: "pointer" }}>X</button>
                               </div>
@@ -1922,11 +2005,13 @@ export default function SettingsPage() {
                             <div
                               key={tag.id}
                               style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: color + "18", border: "1px solid " + color + "40", borderRadius: 20, fontSize: 13, color, cursor: "pointer" }}
-                              onClick={() => { setEditingTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color || COLORS.neonGreen); setEditTagCategory(tag.category_id); }}
+                              onClick={() => { setEditingTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color || COLORS.neonGreen); setEditTagCategory(tag.category_id); setEditTagIcon(tag.icon || ""); setEditTagSortOrder(tag.sort_order); setEditTagIsFood(tag.is_food); }}
                               title="Click to edit"
                             >
-                              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                              {tag.icon && <span style={{ fontSize: 14 }}>{tag.icon}</span>}
+                              {!tag.icon && <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />}
                               {tag.name}
+                              {tag.is_food && <span style={{ fontSize: 9, opacity: 0.6 }} title="Food type">🍴</span>}
                               <button
                                 onClick={e => { e.stopPropagation(); deleteTag(tag.id, tag.name); }}
                                 style={{ background: "transparent", border: "none", color: "rgba(255,49,49,0.6)", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}

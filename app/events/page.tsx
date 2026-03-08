@@ -9,6 +9,7 @@ import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { EventCalendarAnim, FilterAnim, EventCardAnim } from "@/components/TourIllustrations";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 
 // ═══════════════════════════════════════════════════════════════
 // LETSGO — EVENTS PAGE v2
@@ -88,8 +89,8 @@ type Filters = {
   search: string;
 };
 
-// ── Filter Options ─────────────────────────────────────────
-const EVENT_CATEGORIES = [
+// ── Filter Options (fallbacks if DB fetch fails) ──────────
+const DEFAULT_EVENT_CATEGORIES = [
   { id: "all", label: "All Events", icon: "◈" },
   { id: "Music", label: "Music", icon: "🎵" },
   { id: "Games", label: "Games", icon: "🎯" },
@@ -131,7 +132,7 @@ const DISTANCE_FILTERS = [
   { id: "25", label: "< 25 mi" },
 ];
 
-const VIBE_FILTERS = [
+const DEFAULT_VIBE_FILTERS = [
   "Date Night", "Girls Night", "Guys Night", "Family Friendly", "21+", "Outdoor",
   "Intimate", "High Energy", "Chill", "Upscale", "Casual", "Trendy",
   "Rooftop", "Late Night", "Day Event", "Beginner Friendly",
@@ -1013,6 +1014,7 @@ const FiltersPanel = ({
   filters, setFilters, filtersOpen, setFiltersOpen, userZip, setUserZip,
   showSavedOnly, setShowSavedOnly, savedCount,
   showFollowedOnly, setShowFollowedOnly, followedCount,
+  EVENT_CATEGORIES, VIBE_FILTERS,
 }: {
   filters: Filters;
   setFilters: React.Dispatch<React.SetStateAction<Filters>>;
@@ -1026,6 +1028,8 @@ const FiltersPanel = ({
   showFollowedOnly: boolean;
   setShowFollowedOnly: (v: boolean) => void;
   followedCount: number;
+  EVENT_CATEGORIES: { id: string; label: string; icon: string }[];
+  VIBE_FILTERS: string[];
 }) => {
   const activeCount = [
     filters.category !== "all",
@@ -1283,6 +1287,21 @@ export default function EventsPage() {
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [timeStr, setTimeStr] = useState("");
+
+  // DB-driven tag categories for events
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("event").then(setTagCats).catch(() => {}); }, []);
+  const EVENT_CATEGORIES = useMemo(() => {
+    const et = tagCats.find(c => c.name === "Event Type");
+    if (!et || et.tags.length === 0) return DEFAULT_EVENT_CATEGORIES;
+    return [{ id: "all", label: "All Events", icon: "◈" }, ...et.tags.map(t => ({ id: t.name, label: t.name, icon: t.icon || "📌" }))];
+  }, [tagCats]);
+  const VIBE_FILTERS = useMemo(() => {
+    const vibe = tagCats.find(c => c.name === "Vibe");
+    const eventVibe = tagCats.find(c => c.name === "Event Vibe");
+    const combined = [...(vibe?.tags ?? []), ...(eventVibe?.tags ?? [])];
+    return combined.length > 0 ? combined.map(t => t.name) : DEFAULT_VIBE_FILTERS;
+  }, [tagCats]);
   const [view, setView] = useState<"list" | "detail">("list");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
@@ -1800,6 +1819,8 @@ export default function EventsPage() {
                   showFollowedOnly={showFollowedOnly}
                   setShowFollowedOnly={setShowFollowedOnly}
                   followedCount={followedBusinessIds.size}
+                  EVENT_CATEGORIES={EVENT_CATEGORIES}
+                  VIBE_FILTERS={VIBE_FILTERS}
                 />
 
                 {/* Events content area */}

@@ -10,6 +10,7 @@ import {
 import { getDistanceBetweenZips } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { CategoryGridAnim, FilterAnim, FriendSelectAnim, PickFiveAnim, MiniGamesAnim, FunnelGameAnim, PickWinnerAnim, CelebrationAnim, GameHistoryAnim } from "@/components/TourIllustrations";
@@ -82,8 +83,8 @@ type CategoryOption = {
   emoji: string;
 };
 
-// ─── Category options with emojis ───
-const CATEGORIES: CategoryOption[] = [
+// ─── Fallback arrays (used if DB fetch fails) ───
+const DEFAULT_CATEGORIES: CategoryOption[] = [
   { id: "restaurant", label: "Restaurant", emoji: "🍽️" },
   { id: "bar", label: "Bar / Lounge", emoji: "🍸" },
   { id: "coffee", label: "Coffee Shop", emoji: "☕" },
@@ -98,10 +99,10 @@ const CATEGORIES: CategoryOption[] = [
   { id: "anything", label: "Surprise Me!", emoji: "🎲" },
 ];
 
-const FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym"];
+const DEFAULT_FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym"];
 const PRICE_FILTERS = ["Any", "$", "$$", "$$$", "$$$$"];
-const CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "BBQ", "Seafood", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Farm-to-Table", "Fusion"];
-const VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
+const DEFAULT_CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "BBQ", "Seafood", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Farm-to-Table", "Fusion"];
+const DEFAULT_VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
 
 
 
@@ -551,6 +552,39 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
   const [activeSection, setActiveSection] = useState("category");
   const [friendSearch, setFriendSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  // DB-driven tag categories
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  const CATEGORIES = useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (!bt || bt.tags.length === 0) return DEFAULT_CATEGORIES;
+    const mapped: CategoryOption[] = bt.tags.map(t => ({ id: t.slug, label: t.name, emoji: t.icon || "🏢" }));
+    mapped.push({ id: "anything", label: "Surprise Me!", emoji: "🎲" });
+    return mapped;
+  }, [tagCats]);
+  const FILTER_CATEGORIES = useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
+  }, [tagCats]);
+  const CUISINE_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Cuisine");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_CUISINE_FILTERS;
+  }, [tagCats]);
+  const VIBE_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Vibe");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
+  }, [tagCats]);
+  // Smart visibility: hide Cuisine when non-food category selected
+  const showCuisine = useMemo(() => {
+    if (filters.categories.includes("All") || filters.categories.length === 0) return true;
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (!bt) return true;
+    return filters.categories.some(cat => {
+      const tag = bt.tags.find(t => t.name === cat);
+      return tag?.is_food ?? true;
+    });
+  }, [filters.categories, tagCats]);
   const [editingZip, setEditingZip] = useState(false);
   const [zipInput, setZipInput] = useState("");
   const [locationName, setLocationName] = useState("");
@@ -1045,6 +1079,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
               Open Now Only
             </button>
           </div>
+          {showCuisine && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Cuisine</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1058,6 +1093,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
               ))}
             </div>
           </div>
+          )}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Vibe & Atmosphere</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

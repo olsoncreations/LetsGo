@@ -10,6 +10,7 @@ import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { SwipeVerticalAnim, SwipeLeftAnim, FilterAnim, HeartAnim, ScrollIndicatorAnim } from "@/components/TourIllustrations";
 import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips } from "@/lib/zipUtils";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import {
   type BusinessRow, type MediaRow, type DiscoveryImage, type DiscoveryBusiness,
   buildMediaUrl, getBusinessGradient, getBusinessEmoji, formatBusinessType,
@@ -49,15 +50,22 @@ type FilterState = {
   tags: string[];
 };
 
-// ─── Filter options ───
+// ─── Filter options (fallbacks if DB fetch fails) ───
 
-const FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Deli", "Ice Cream", "Juice Bar", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym", "Yoga Studio", "Dance Studio"];
+const DEFAULT_FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Deli", "Ice Cream", "Juice Bar", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym", "Yoga Studio", "Dance Studio"];
 const PRICE_FILTERS = ["Any", "$", "$$", "$$$", "$$$$"];
 const SORT_OPTIONS = ["Nearest", "Most Popular", "Highest Payout", "Newest", "Highest Rated", "Most Reviewed", "Trending", "Recently Updated"];
-const CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "Spanish", "Caribbean", "Ethiopian", "Peruvian", "Brazilian", "Middle Eastern", "Moroccan", "Southern", "Cajun", "BBQ", "Seafood", "Steakhouse", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Poke", "Farm-to-Table", "Fusion"];
-const VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rustic", "Industrial", "Bohemian", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
-const AMENITY_FILTERS = ["Free WiFi", "Parking", "Wheelchair Accessible", "Reservations", "Takeout", "Delivery", "Dine-in", "Patio Seating", "Private Rooms", "Full Bar", "Beer Garden", "Fireplace", "Pool Table", "Dart Board", "TV Screens", "Projector", "Stage", "Dance Floor", "Valet", "EV Charging"];
-const DIETARY_FILTERS = ["Vegetarian", "Vegan", "Gluten-Free", "Halal", "Kosher", "Keto-Friendly", "Dairy-Free", "Nut-Free", "Organic", "Locally Sourced"];
+const DEFAULT_CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "Spanish", "Caribbean", "Ethiopian", "Peruvian", "Brazilian", "Middle Eastern", "Moroccan", "Southern", "Cajun", "BBQ", "Seafood", "Steakhouse", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Poke", "Farm-to-Table", "Fusion"];
+const DEFAULT_VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rustic", "Industrial", "Bohemian", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
+const DEFAULT_AMENITY_FILTERS = ["Free WiFi", "Parking", "Wheelchair Accessible", "Reservations", "Takeout", "Delivery", "Dine-in", "Patio Seating", "Private Rooms", "Full Bar", "Beer Garden", "Fireplace", "Pool Table", "Dart Board", "TV Screens", "Projector", "Stage", "Dance Floor", "Valet", "EV Charging"];
+const DEFAULT_DIETARY_FILTERS = ["Vegetarian", "Vegan", "Gluten-Free", "Halal", "Kosher", "Keto-Friendly", "Dairy-Free", "Nut-Free", "Organic", "Locally Sourced"];
+const DEFAULT_POPULAR_TAGS = [
+  "Date Night", "Happy Hour", "Family", "Live Music", "Outdoor", "Late Night", "Brunch",
+  "Pet Friendly", "Kid Friendly", "Group Friendly", "Solo Dining", "First Date", "Anniversary",
+  "Birthday", "Business Lunch", "Girls Night", "Guys Night", "Game Day", "Watch Party",
+  "Trivia Night", "Open Mic", "DJ Night", "Craft Cocktails", "Wine List", "Beer Flight",
+  "Tasting Menu", "All You Can Eat", "Bottomless Mimosas", "Weekend Special", "After Hours",
+];
 
 function buildPayoutLevels(thresholds: VisitThreshold[]) {
   return thresholds.map((t) => ({
@@ -181,6 +189,41 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
   const autocompleteRef = useRef<any>(null);
   const NEON = "#FF2D78";
   const NEON_RGB = "255,45,120";
+
+  // DB-driven tag categories
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  const FILTER_CATEGORIES = useMemo(() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
+  }, [tagCats]);
+  const CUISINE_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Cuisine");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_CUISINE_FILTERS;
+  }, [tagCats]);
+  const VIBE_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Vibe");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
+  }, [tagCats]);
+  const AMENITY_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Amenities");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_AMENITY_FILTERS;
+  }, [tagCats]);
+  const DIETARY_FILTERS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Dietary");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_DIETARY_FILTERS;
+  }, [tagCats]);
+  const POPULAR_TAGS = useMemo(() => {
+    const c = tagCats.find(c => c.name === "Popular");
+    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_POPULAR_TAGS;
+  }, [tagCats]);
+  // Smart visibility: hide Cuisine/Dietary when non-food category selected
+  const selectedCatIsFood = useMemo(() => {
+    if (filters.category === "All") return true;
+    const bt = tagCats.find(c => c.name === "Business Type");
+    const tag = bt?.tags.find(t => t.name === filters.category);
+    return tag?.is_food ?? true;
+  }, [filters.category, tagCats]);
 
   const ZIP_LOOKUP: Record<string, [string, string]> = {
     "68102": ["Omaha", "NE"], "68131": ["Omaha", "NE"], "68124": ["Omaha", "NE"], "68114": ["Omaha", "NE"], "68106": ["Omaha", "NE"],
@@ -552,17 +595,11 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
             style={{ width: "100%", accentColor: COLORS.neonBlue, height: 4 }} />
         </div>
 
-        <TagFilterSection label="Cuisine" items={CUISINE_FILTERS} filters={filters} setFilters={setFilters} />
+        {selectedCatIsFood && <TagFilterSection label="Cuisine" items={CUISINE_FILTERS} filters={filters} setFilters={setFilters} />}
         <TagFilterSection label="Vibe & Atmosphere" items={VIBE_FILTERS} filters={filters} setFilters={setFilters} />
         <TagFilterSection label="Amenities" items={AMENITY_FILTERS} filters={filters} setFilters={setFilters} />
-        <TagFilterSection label="Dietary" items={DIETARY_FILTERS} filters={filters} setFilters={setFilters} />
-        <TagFilterSection label="Popular Tags" items={[
-          "Date Night", "Happy Hour", "Family", "Live Music", "Outdoor", "Late Night", "Brunch",
-          "Pet Friendly", "Kid Friendly", "Group Friendly", "Solo Dining", "First Date", "Anniversary",
-          "Birthday", "Business Lunch", "Girls Night", "Guys Night", "Game Day", "Watch Party",
-          "Trivia Night", "Open Mic", "DJ Night", "Craft Cocktails", "Wine List", "Beer Flight",
-          "Tasting Menu", "All You Can Eat", "Bottomless Mimosas", "Weekend Special", "After Hours",
-        ]} filters={filters} setFilters={setFilters} />
+        {selectedCatIsFood && <TagFilterSection label="Dietary" items={DIETARY_FILTERS} filters={filters} setFilters={setFilters} />}
+        <TagFilterSection label="Popular Tags" items={POPULAR_TAGS} filters={filters} setFilters={setFilters} />
 
         {/* Apply & Clear buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>
