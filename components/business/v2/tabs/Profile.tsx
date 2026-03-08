@@ -602,6 +602,47 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     return getVisibleCategories(tagCategories, tags);
   }, [tagCategories, tags]);
 
+  // DB-driven Business Type options
+  const businessTypeOptions = useMemo(() => {
+    const bt = tagCategories.find(c => c.name === "Business Type");
+    if (!bt || bt.tags.length === 0) {
+      return [
+        { value: "restaurant_bar", label: "Restaurant / Bar" },
+        { value: "activity", label: "Activity" },
+        { value: "salon_beauty", label: "Salon / Beauty" },
+        { value: "retail", label: "Retail" },
+        { value: "event_venue", label: "Event Venue" },
+        { value: "other", label: "Other" },
+      ];
+    }
+    return bt.tags.map(t => ({
+      value: t.name.toLowerCase().replace(/[/ ]/g, "_"),
+      label: `${t.icon || ""} ${t.name}`.trim(),
+    }));
+  }, [tagCategories]);
+
+  // DB-driven Cuisine/Category options
+  const cuisineOptions = useMemo(() => {
+    const cu = tagCategories.find(c => c.name === "Cuisine");
+    if (!cu || cu.tags.length === 0) {
+      return [
+        { value: "American", label: "American" },
+        { value: "Italian", label: "Italian" },
+        { value: "Mexican", label: "Mexican" },
+        { value: "Asian", label: "Asian" },
+        { value: "Seafood", label: "Seafood" },
+        { value: "Bakery", label: "Bakery" },
+        { value: "Coffee", label: "Coffee" },
+        { value: "Bar", label: "Bar" },
+        { value: "Other", label: "Other" },
+      ];
+    }
+    return cu.tags.map(t => ({
+      value: t.name,
+      label: `${t.icon || ""} ${t.name}`.trim(),
+    }));
+  }, [tagCategories]);
+
   // Grouped suggestions filtered by input text
   const groupedSuggestions = useMemo(() => {
     if (!tagInput.trim() || !visibleCategories.length) return [] as { category: string; icon: string; tags: string[] }[];
@@ -756,12 +797,9 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 <div>
                   <label style={labelStyle}>Business Type</label>
                   <select ref={typeRef} defaultValue="restaurant_bar" style={selectStyle}>
-                    <option style={optionStyle} value="restaurant_bar">Restaurant / Bar</option>
-                    <option style={optionStyle} value="activity">Activity</option>
-                    <option style={optionStyle} value="salon_beauty">Salon / Beauty</option>
-                    <option style={optionStyle} value="retail">Retail</option>
-                    <option style={optionStyle} value="event_venue">Event Venue</option>
-                    <option style={optionStyle} value="other">Other</option>
+                    {businessTypeOptions.map(opt => (
+                      <option key={opt.value} style={optionStyle} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -839,15 +877,9 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 <div>
                   <label style={labelStyle}>Category</label>
                   <select ref={cuisineRef} defaultValue="Other" style={selectStyle}>
-                    <option style={optionStyle} value="American">American</option>
-                    <option style={optionStyle} value="Italian">Italian</option>
-                    <option style={optionStyle} value="Mexican">Mexican</option>
-                    <option style={optionStyle} value="Asian">Asian</option>
-                    <option style={optionStyle} value="Seafood">Seafood</option>
-                    <option style={optionStyle} value="Bakery">Bakery</option>
-                    <option style={optionStyle} value="Coffee">Coffee</option>
-                    <option style={optionStyle} value="Bar">Bar</option>
-                    <option style={optionStyle} value="Other">Other</option>
+                    {cuisineOptions.map(opt => (
+                      <option key={opt.value} style={optionStyle} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
