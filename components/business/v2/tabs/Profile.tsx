@@ -1040,7 +1040,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                     border: "1px solid rgba(255,255,255,0.1)",
                     borderRadius: "8px",
                     marginTop: "4px",
-                    zIndex: 10,
+                    zIndex: 50,
                     overflow: "hidden",
                     maxHeight: "280px",
                     overflowY: "auto",
