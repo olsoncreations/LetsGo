@@ -685,7 +685,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
 
   return (
     <div ref={contentRef} style={{
-      flex: 1, overflowY: "auto", overflowX: "hidden",
+      flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
       padding: "0 0 100px", scrollbarWidth: "thin",
       scrollbarColor: `${NEON}40 transparent`,
     }}>
@@ -1374,7 +1374,7 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
 
   return (
     <div style={{
-      flex: 1, overflowY: "auto", overflowX: "hidden",
+      flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
       padding: "0 0 120px", scrollbarWidth: "thin",
       scrollbarColor: `${NEON}40 transparent`,
     }}>
@@ -2347,7 +2347,7 @@ function PickThreeStep({ fiveChoices, selectedThree, setSelectedThree, sender, o
 
   return (
     <div style={{
-      flex: 1, overflowY: "auto", overflowX: "hidden",
+      flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
       padding: "0 0 120px", scrollbarWidth: "thin",
       scrollbarColor: `${COLORS.neonPurple}40 transparent`,
     }}>
@@ -2468,7 +2468,7 @@ function PickOneStep({ threeChoices, selectedOne, setSelectedOne, friend, onFina
   onFinalize: () => void;
 }) {
   return (
-    <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 0 120px" }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "0 0 120px" }}>
       <div style={{ padding: "20px 20px 4px", textAlign: "center" }}>
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 8,
@@ -2600,8 +2600,9 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
 
   return (
     <div style={{
-      flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "12px 16px 32px", overflowY: "auto",
+      flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "12px 16px", paddingBottom: "env(safe-area-inset-bottom, 32px)",
+      overflowY: "auto",
       WebkitOverflowScrolling: "touch",
     }}>
       <style>{`
@@ -3025,7 +3026,7 @@ function FiveThreeOne() {
 
       const bizIds = rows.map((r: BusinessRow) => r.id);
       const [{ data: mediaRows }, { data: tierRows }] = await Promise.all([
-        supabaseBrowser.from("business_media").select("*").in("business_id", bizIds),
+        supabaseBrowser.from("business_media").select("business_id, bucket, path, sort_order, caption, meta").in("business_id", bizIds).eq("is_active", true).eq("media_type", "photo").order("sort_order", { ascending: true }),
         supabaseBrowser
           .from("business_payout_tiers")
           .select("business_id, percent_bps, tier_index")
