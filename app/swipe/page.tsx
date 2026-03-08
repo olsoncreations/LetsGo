@@ -197,26 +197,6 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
     const bt = tagCats.find(c => c.name === "Business Type");
     return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
   }, [tagCats]);
-  const CUISINE_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Cuisine");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_CUISINE_FILTERS;
-  }, [tagCats]);
-  const VIBE_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Vibe");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
-  }, [tagCats]);
-  const AMENITY_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Amenities");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_AMENITY_FILTERS;
-  }, [tagCats]);
-  const DIETARY_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Dietary");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_DIETARY_FILTERS;
-  }, [tagCats]);
-  const POPULAR_TAGS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Popular");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_POPULAR_TAGS;
-  }, [tagCats]);
   // Smart visibility: hide Cuisine/Dietary when non-food category selected
   const selectedCatIsFood = useMemo(() => {
     if (filters.category === "All") return true;
@@ -595,11 +575,20 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
             style={{ width: "100%", accentColor: COLORS.neonBlue, height: 4 }} />
         </div>
 
-        {selectedCatIsFood && <TagFilterSection label="Cuisine" items={CUISINE_FILTERS} filters={filters} setFilters={setFilters} />}
-        <TagFilterSection label="Vibe & Atmosphere" items={VIBE_FILTERS} filters={filters} setFilters={setFilters} />
-        <TagFilterSection label="Amenities" items={AMENITY_FILTERS} filters={filters} setFilters={setFilters} />
-        {selectedCatIsFood && <TagFilterSection label="Dietary" items={DIETARY_FILTERS} filters={filters} setFilters={setFilters} />}
-        <TagFilterSection label="Popular Tags" items={POPULAR_TAGS} filters={filters} setFilters={setFilters} />
+        {/* Dynamic tag filter sections from DB (excludes Business Type) */}
+        {tagCats
+          .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
+          .filter(c => !c.requires_food || selectedCatIsFood)
+          .map(c => (
+            <TagFilterSection key={c.id} label={`${c.icon} ${c.name}`} items={c.tags.map(t => t.name)} filters={filters} setFilters={setFilters} />
+          ))}
+        {/* Fallback if DB hasn't loaded yet */}
+        {tagCats.length === 0 && (
+          <>
+            <TagFilterSection label="Cuisine" items={DEFAULT_CUISINE_FILTERS} filters={filters} setFilters={setFilters} />
+            <TagFilterSection label="Vibe & Atmosphere" items={DEFAULT_VIBE_FILTERS} filters={filters} setFilters={setFilters} />
+          </>
+        )}
 
         {/* Apply & Clear buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>

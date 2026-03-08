@@ -567,15 +567,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
     const bt = tagCats.find(c => c.name === "Business Type");
     return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
   }, [tagCats]);
-  const CUISINE_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Cuisine");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_CUISINE_FILTERS;
-  }, [tagCats]);
-  const VIBE_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Vibe");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
-  }, [tagCats]);
-  // Smart visibility: hide Cuisine when non-food category selected in step 1
+  // Smart visibility: hide food-related categories when non-food category selected in step 1
   const showCuisine = useMemo(() => {
     if (selectedCategories.length === 0 || selectedCategories.includes("anything")) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
@@ -1068,34 +1060,53 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
               Open Now Only
             </button>
           </div>
-          {showCuisine && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Cuisine</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <GlassPill active={!filters.tags.some(t => CUISINE_FILTERS.includes(t))} onClick={() => setFilters(p => ({
-                ...p, tags: p.tags.filter(t => !CUISINE_FILTERS.includes(t)),
-              }))} style={{ fontSize: 12, padding: "6px 14px" }}>All</GlassPill>
-              {CUISINE_FILTERS.map(t => (
-                <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
-                  ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
-              ))}
-            </div>
-          </div>
+          {/* Dynamic tag filter sections from DB (excludes Business Type) */}
+          {tagCats
+            .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
+            .filter(c => !c.requires_food || showCuisine)
+            .map(c => {
+              const catTags = c.tags.map(t => t.name);
+              return (
+                <div key={c.id} style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>{c.icon} {c.name}</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <GlassPill active={!filters.tags.some(t => catTags.includes(t))} onClick={() => setFilters(p => ({
+                      ...p, tags: p.tags.filter(t => !catTags.includes(t)),
+                    }))} style={{ fontSize: 12, padding: "6px 14px" }}>All</GlassPill>
+                    {catTags.map(t => (
+                      <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
+                        ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                      }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          {/* Fallback if DB hasn't loaded */}
+          {tagCats.length === 0 && (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Cuisine</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {DEFAULT_CUISINE_FILTERS.map(t => (
+                    <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
+                      ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                    }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Vibe & Atmosphere</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {DEFAULT_VIBE_FILTERS.map(t => (
+                    <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
+                      ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                    }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Vibe & Atmosphere</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <GlassPill active={!filters.tags.some(t => VIBE_FILTERS.includes(t))} onClick={() => setFilters(p => ({
-                ...p, tags: p.tags.filter(t => !VIBE_FILTERS.includes(t)),
-              }))} style={{ fontSize: 12, padding: "6px 14px" }}>All</GlassPill>
-              {VIBE_FILTERS.map(t => (
-                <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
-                  ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
-              ))}
-            </div>
-          </div>
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Browse From</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

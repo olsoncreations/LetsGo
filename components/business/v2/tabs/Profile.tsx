@@ -205,6 +205,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   const [hours, setHours] = useState<BusinessHours>({ ...DEFAULT_HOURS });
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [tagInputFocused, setTagInputFocused] = useState(false);
   const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
 
   // Password change state
@@ -654,22 +655,26 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     }
   }, [businessTypeOptions, cuisineOptions, loadedData]);
 
-  // Grouped suggestions filtered by input text
+  // Grouped suggestions filtered by input text (show all when focused with empty input)
   const groupedSuggestions = useMemo(() => {
-    if (!tagInput.trim() || !visibleCategories.length) return [] as { category: string; icon: string; tags: string[] }[];
+    if (!tagInputFocused || !visibleCategories.length) return [] as { category: string; icon: string; tags: string[] }[];
     const lower = tagInput.toLowerCase();
     const tagsLower = new Set(tags.map(t => t.toLowerCase()));
     const groups: { category: string; icon: string; tags: string[] }[] = [];
     for (const cat of visibleCategories) {
       const matching = cat.tags
-        .filter(t => t.name.toLowerCase().includes(lower) && !tagsLower.has(t.name.toLowerCase()))
+        .filter(t => {
+          if (tagsLower.has(t.name.toLowerCase())) return false; // already added
+          if (!lower) return true; // no filter text — show all
+          return t.name.toLowerCase().includes(lower);
+        })
         .map(t => t.name);
       if (matching.length > 0) {
-        groups.push({ category: cat.name, icon: cat.icon, tags: matching.slice(0, 5) });
+        groups.push({ category: cat.name, icon: cat.icon, tags: matching.slice(0, 8) });
       }
     }
     return groups;
-  }, [tagInput, tags, visibleCategories]);
+  }, [tagInput, tagInputFocused, tags, visibleCategories]);
 
   const hasSuggestions = groupedSuggestions.some(g => g.tags.length > 0);
 
@@ -1031,13 +1036,15 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 type="text"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
+                onFocus={() => setTagInputFocused(true)}
+                onBlur={() => setTimeout(() => setTagInputFocused(false), 200)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && tagInput.trim()) {
                     e.preventDefault();
                     addTag(tagInput);
                   }
                 }}
-                placeholder="Type to add tags (press Enter)..."
+                placeholder="Click to browse tags or type to search..."
                 style={inputStyle}
               />
               {hasSuggestions && (
@@ -1053,7 +1060,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                     marginTop: "4px",
                     zIndex: 50,
                     overflow: "hidden",
-                    maxHeight: "280px",
+                    maxHeight: "350px",
                     overflowY: "auto",
                   }}
                 >

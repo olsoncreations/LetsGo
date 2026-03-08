@@ -1595,14 +1595,6 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
     const bt = tagCats.find(c => c.name === "Business Type");
     return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
   }, [tagCats]);
-  const CUISINE_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Cuisine");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_CUISINE_FILTERS;
-  }, [tagCats]);
-  const VIBE_FILTERS = useMemo(() => {
-    const c = tagCats.find(c => c.name === "Vibe");
-    return c && c.tags.length > 0 ? c.tags.map(t => t.name) : DEFAULT_VIBE_FILTERS;
-  }, [tagCats]);
   // Smart visibility: hide Cuisine/Dietary when non-food category selected
   const selectedCatIsFood = useMemo(() => {
     if (filters.category === "All") return true;
@@ -1810,29 +1802,45 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                   </button>
                 </div>
 
-                {/* Cuisine (hidden for non-food business types) */}
-                {selectedCatIsFood && (
-                <div style={{ marginBottom: 16 }}>
-                  {sectionLabel("Cuisine")}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {glassPill("All", !filters.tags.some(t => CUISINE_FILTERS.includes(t)), () => setFilters(p => ({ ...p, tags: p.tags.filter(t => !CUISINE_FILTERS.includes(t)) })), { fontSize: 11, padding: "6px 14px" })}
-                    {CUISINE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
-                      ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                    })), { fontSize: 11, padding: "6px 14px" }))}
-                  </div>
-                </div>
+                {/* Dynamic tag filter sections from DB (excludes Business Type) */}
+                {tagCats
+                  .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
+                  .filter(c => !c.requires_food || selectedCatIsFood)
+                  .map(c => {
+                    const catTags = c.tags.map(t => t.name);
+                    return (
+                      <div key={c.id} style={{ marginBottom: 16 }}>
+                        {sectionLabel(`${c.icon} ${c.name}`)}
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {glassPill("All", !filters.tags.some(t => catTags.includes(t)), () => setFilters(p => ({ ...p, tags: p.tags.filter(t => !catTags.includes(t)) })), { fontSize: 11, padding: "6px 14px" })}
+                          {catTags.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
+                            ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                          })), { fontSize: 11, padding: "6px 14px" }))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                {/* Fallback if DB hasn't loaded */}
+                {tagCats.length === 0 && (
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      {sectionLabel("Cuisine")}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {DEFAULT_CUISINE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
+                          ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                        })), { fontSize: 11, padding: "6px 14px" }))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      {sectionLabel("Vibe & Atmosphere")}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {DEFAULT_VIBE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
+                          ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                        })), { fontSize: 11, padding: "6px 14px" }))}
+                      </div>
+                    </div>
+                  </>
                 )}
-
-                {/* Vibe & Atmosphere */}
-                <div style={{ marginBottom: 16 }}>
-                  {sectionLabel("Vibe & Atmosphere")}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {glassPill("All", !filters.tags.some(t => VIBE_FILTERS.includes(t)), () => setFilters(p => ({ ...p, tags: p.tags.filter(t => !VIBE_FILTERS.includes(t)) })), { fontSize: 11, padding: "6px 14px" })}
-                    {VIBE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
-                      ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                    })), { fontSize: 11, padding: "6px 14px" }))}
-                  </div>
-                </div>
 
                 {/* Browse From */}
                 <div>
