@@ -457,20 +457,28 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         return;
       }
 
-      // Update profiles table with name + terms acceptance
+      // Save profile data via server-side API (bypasses RLS, works even without session)
       if (data.user) {
-        const profileData: Record<string, unknown> = {
-          id: data.user.id,
-          tos_accepted_at: new Date().toISOString(),
+        const profilePayload: Record<string, string> = {
+          user_id: data.user.id,
+          user_type: type,
         };
         if (type === "user") {
-          profileData.first_name = firstName.trim();
-          profileData.last_name = lastName.trim();
-          profileData.full_name = `${firstName.trim()} ${lastName.trim()}`;
+          profilePayload.first_name = firstName.trim();
+          profilePayload.last_name = lastName.trim();
+          profilePayload.full_name = `${firstName.trim()} ${lastName.trim()}`;
+          profilePayload.zip_code = zipCode.trim();
         } else {
-          profileData.full_name = fullName.trim();
+          profilePayload.full_name = fullName.trim();
         }
-        await supabaseBrowser.from("profiles").upsert(profileData, { onConflict: "id" });
+        const profileRes = await fetch("/api/profiles/init", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(profilePayload),
+        });
+        if (!profileRes.ok) {
+          console.error("Failed to save profile:", await profileRes.text());
+        }
       }
 
       // Attribute signup to influencer (fire-and-forget)
