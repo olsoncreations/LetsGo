@@ -861,8 +861,8 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                         {biz ? (
                           <div>
                             {biz.images.length > 0 && (
-                              <div style={{ width: "100%", height: 100, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
-                                <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={100} />
+                              <div style={{ width: "100%", height: 180, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                                <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={180} />
                               </div>
                             )}
                             <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>{biz.type}</div>
