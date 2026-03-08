@@ -2151,15 +2151,18 @@ export default function SettingsPage() {
                   <div style={{ position: "relative" }}>
                     <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: COLORS.neonYellow, fontWeight: 700, fontSize: 14 }}>$</span>
                     <input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={(tier.rate_cents / 100).toFixed(2)}
+                      type="text"
+                      inputMode="decimal"
+                      defaultValue={(tier.rate_cents / 100).toFixed(2)}
+                      key={`settings-tier-rate-${idx}-${tier.rate_cents}`}
                       disabled={!editing}
-                      onChange={e => {
+                      onBlur={e => {
+                        const val = parseFloat(e.target.value || "0");
+                        if (isNaN(val) || val < 0) { e.target.value = (tier.rate_cents / 100).toFixed(2); return; }
                         const updated = [...settings.default_influencer_tiers];
-                        updated[idx] = { ...updated[idx], rate_cents: Math.round(parseFloat(e.target.value || "0") * 100) };
+                        updated[idx] = { ...updated[idx], rate_cents: Math.round(val * 100) };
                         setSettings({ ...settings, default_influencer_tiers: updated });
+                        e.target.value = val.toFixed(2);
                       }}
                       style={{ padding: 10, paddingLeft: 24, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonYellow, fontSize: 14, fontWeight: 600, width: "100%" }}
                     />
