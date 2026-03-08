@@ -72,9 +72,12 @@ function isRestaurantType(businessType: string, categoryMain: string, tags: stri
   const bt = businessType.toLowerCase();
   const cm = categoryMain.toLowerCase();
   if (RESTAURANT_TYPES.has(bt) || RESTAURANT_TYPES.has(cm)) return true;
-  // Check if tags suggest restaurant
-  const restaurantTags = ["restaurant", "dining", "food", "eat", "brunch", "dinner", "lunch", "cafe", "bar", "grill"];
-  return tags.some(t => restaurantTags.some(rt => t.toLowerCase().includes(rt)));
+  // If there's an explicit business type that isn't a restaurant, trust it —
+  // don't let secondary food/bar tags override the primary classification
+  if (bt) return false;
+  // Only fall back to tag matching when business type is unknown/empty
+  const restaurantTags = new Set(["restaurant", "dining", "cafe", "bar", "grill", "diner", "bakery", "brewery", "pub"]);
+  return tags.some(t => restaurantTags.has(t.toLowerCase()));
 }
 
 function parseTimeString(timeStr: string): number | null {
