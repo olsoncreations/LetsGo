@@ -379,11 +379,11 @@ const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCas
           <div style={{fontSize:40,marginBottom:8}}>{"\uD83D\uDCB0"}</div>
           <h3 style={{fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:22,fontWeight:700,color:"#fff",margin:0}}>Cash Out</h3>
           <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:4}}>Choose how you want to receive your money</p>
-          <div style={{marginTop:12,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-            <span style={{fontSize:22,fontWeight:700,color:"#fff"}}>$</span>
-            <input type="number" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} onBlur={()=>{const v=parseFloat(customAmount)||0;setCustomAmount(Math.min(Math.max(0,v),amount).toFixed(2));}} step="0.01" min="0" max={amount} style={{fontSize:22,fontWeight:700,color:"#fff",background:"transparent",border:"none",borderBottom:"2px solid rgba(255,255,255,0.3)",outline:"none",width:90,textAlign:"center",fontFamily:"'Clash Display','DM Sans',sans-serif"}} />
+          <div style={{marginTop:12,display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,padding:"8px 16px",cursor:"text"}} onClick={()=>{const el=document.getElementById("cashout-amount");if(el)el.focus();}}>
+            <span style={{fontSize:22,fontWeight:700,color:"rgba(255,255,255,0.5)"}}>$</span>
+            <input id="cashout-amount" type="number" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} onBlur={()=>{const v=parseFloat(customAmount)||0;setCustomAmount(Math.min(Math.max(0,v),amount).toFixed(2));}} onFocus={e=>e.target.select()} step="0.01" min="0" max={amount} style={{fontSize:22,fontWeight:700,color:"#fff",background:"transparent",border:"none",outline:"none",width:90,textAlign:"center",fontFamily:"'Clash Display','DM Sans',sans-serif"}} />
           </div>
-          <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:4}}>Available: ${amount.toFixed(2)}</p>
+          <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:6}}>Available: ${amount.toFixed(2)} — tap amount to edit</p>
         </div>
 
         <div style={{display:"flex",gap:10,marginBottom:20}}>
