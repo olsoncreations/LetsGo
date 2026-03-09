@@ -8,6 +8,7 @@ import {
   formatBusinessType,
   resolveHoursFromColumns,
   isBusinessOpenNow,
+  getCentralTime,
   buildMediaUrl,
 } from "@/lib/businessNormalize";
 import { getDistanceBetweenZips } from "@/lib/zipUtils";
@@ -177,10 +178,10 @@ function buildPickResult(row: BusinessRow, score: number, reasons: string[], ima
   const website = row.website || String(cfg.website ?? "");
   // Build hours from individual day columns (single source of truth)
   const hours = resolveHoursFromColumns(row as Record<string, unknown>);
-  // Use business day (before 4 AM = still yesterday)
+  // Use business day in Central time (before 4 AM = still yesterday)
   const dayFullNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const nowForHours = new Date();
-  const bizDayIdx = nowForHours.getHours() < 4 ? (nowForHours.getDay() + 6) % 7 : nowForHours.getDay();
+  const ct = getCentralTime();
+  const bizDayIdx = ct.hour < 4 ? (ct.dayOfWeek + 6) % 7 : ct.dayOfWeek;
   const todayHours = hours[dayFullNames[bizDayIdx]] || "Hours vary";
   const tags = getRowTags(row);
   const emoji = getBusinessEmoji(rawType);

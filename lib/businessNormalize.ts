@@ -213,19 +213,31 @@ export function resolveStructuredHoursFromColumns(
 
 /** Check if a business is open today using day columns. Before 4 AM = previous business day. */
 /**
+ * Get current time in US Central timezone.
+ * Vercel servers run in UTC; all our businesses are Central time.
+ */
+export function getCentralTime(): { hour: number; minute: number; dayOfWeek: number } {
+  const now = new Date();
+  const central = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+  return {
+    hour: central.getHours(),
+    minute: central.getMinutes(),
+    dayOfWeek: central.getDay(),
+  };
+}
+
+/**
  * Check if a business is open RIGHT NOW based on day columns.
  * Uses 4 AM business day cutoff and compares current time to open/close.
  * Handles overnight hours (e.g., 21:00 – 05:00).
  */
 export function isBusinessOpenNow(row: Record<string, unknown>): boolean {
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+  const { hour: currentHour, minute: currentMinute, dayOfWeek } = getCentralTime();
   const currentTime = currentHour * 60 + currentMinute;
 
   // Business day: before 4 AM = still previous day
-  const idx = currentHour < 4 ? (now.getDay() + 6) % 7 : now.getDay();
+  const idx = currentHour < 4 ? (dayOfWeek + 6) % 7 : dayOfWeek;
   const day = dayNames[idx];
 
   const openStr = row[`${day}_open`] as string | null | undefined;
