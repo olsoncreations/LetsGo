@@ -159,7 +159,8 @@ export function normalizeHoursForDisplay(config: Record<string, unknown> | null)
 
 export function computeOpenStatus(hours: Record<string, string>): { isOpen: boolean; closesAt: string | null } {
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const today = dayNames[new Date().getDay()];
+  const { dayOfWeek } = getCentralTime();
+  const today = dayNames[dayOfWeek];
   const todayHours = hours[today];
 
   if (!todayHours || todayHours === "Closed") {
