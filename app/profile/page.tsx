@@ -527,91 +527,71 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
               {blockedUsers.length===0?<div style={{fontSize:11,color:"rgba(255,255,255,0.15)",padding:"12px 0"}}>No blocked users</div>:blockedUsers.map(u=>(<div key={u.friendshipId} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:4,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.04)"}}><div style={{width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.25)"}}>{getInitials(u.name.split(" ")[0],u.name.split(" ")[1]||null)}</div><div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)"}}>{u.name}</div></div><button onClick={()=>handleUnblock(u.friendshipId)} style={{padding:"4px 10px",borderRadius:2,border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.2)",fontSize:8,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.08em"}}>Unblock</button></div>))}
             </div>
           </div>)}
-          {activeTab==="account"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-            {/* Unified Payout Methods Card */}
-            <div style={{borderRadius:12,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",overflow:"hidden"}}>
-              {/* Header */}
-              <div style={{padding:"14px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",letterSpacing:"0.02em"}}>Cash Out Methods</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>
-                  {(hasVenmoConnected&&bank.isComplete)?"2 connected":((hasVenmoConnected||bank.isComplete)?"1 connected":"None connected")}
-                </div>
+          {activeTab==="account"&&(<div style={{display:"flex",flexDirection:"column",gap:"1.25rem"}}>
+            {/* Security note */}
+            <div style={{display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.875rem 1rem",borderRadius:12,background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)"}}>
+              <span style={{color:"#10b981",fontSize:18,flexShrink:0}}>&#10004;</span>
+              <div style={{fontSize:"0.8rem",color:"rgba(255,255,255,0.7)"}}>Your payout information is secure. Choose how you want to receive your cash outs.</div>
+            </div>
+
+            {/* Payment Methods card */}
+            <div style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"1.5rem"}}>
+              <div style={{fontSize:"1.125rem",fontWeight:900,display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"1rem"}}>
+                <span style={{color:NEON.primary}}>$</span>
+                Cash Out Methods
               </div>
 
-              {/* Two method cards side by side */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
-                {/* Venmo Card */}
-                <div style={{padding:18,borderRight:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:12}}>
-                  {/* Icon + Title */}
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#FF8F2D,#FFB347)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,boxShadow:"0 2px 12px rgba(255,143,45,0.3)"}}>&#9889;</div>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Venmo</div>
-                      <div style={{fontSize:10,color:"#FFB347",fontWeight:600}}>Instant</div>
-                    </div>
-                  </div>
-
-                  {/* Fee badge */}
-                  <div style={{display:"inline-flex",alignSelf:"flex-start",padding:"3px 10px",borderRadius:20,background:"rgba(255,143,45,0.12)",border:"1px solid rgba(255,143,45,0.25)"}}>
-                    <span style={{fontSize:10,fontWeight:700,color:"#FFB347"}}>3% fee</span>
-                  </div>
-
-                  {/* Status / Action */}
-                  {hasVenmoConnected?(
-                    <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",gap:8}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <div style={{width:7,height:7,borderRadius:"50%",background:NEON.green,boxShadow:`0 0 6px ${NEON.green}`}}/>
-                        <span style={{fontSize:11,fontWeight:600,color:NEON.green}}>Connected</span>
-                      </div>
-                      <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{profile?.payout_identifier}</div>
-                      <button onClick={handleDisconnectPayout} style={{alignSelf:"flex-start",padding:"6px 14px",borderRadius:6,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:4}}>Disconnect</button>
-                    </div>
-                  ):(
-                    <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",gap:8}}>
-                      <input type="text" placeholder="@username" value={payoutIdentifier} onChange={e=>setPayoutIdentifier(e.target.value)} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid rgba(255,143,45,0.2)",background:"rgba(255,143,45,0.05)",color:"#fff",fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
-                      <button onClick={handleConnectPayout} disabled={saving||!payoutIdentifier.trim()} style={{width:"100%",padding:"9px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#FF8F2D,#FFB347)",color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving||!payoutIdentifier.trim()?0.4:1,boxShadow:"0 2px 12px rgba(255,143,45,0.3)"}}>Connect Venmo</button>
-                    </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"1rem"}}>
+                {/* Bank Account Card */}
+                <div style={{padding:"1.25rem",borderRadius:12,border:bank.isComplete?`2px solid ${NEON.primary}`:"1px solid rgba(255,255,255,0.1)",background:bank.isComplete?"rgba(0,229,255,0.08)":"rgba(255,255,255,0.02)",position:"relative"}}>
+                  {bank.isComplete&&(
+                    <span style={{position:"absolute",top:"0.75rem",right:"0.75rem",padding:"0.2rem 0.5rem",background:"rgba(0,255,135,0.15)",color:NEON.green,borderRadius:4,fontSize:"0.65rem",fontWeight:900,textTransform:"uppercase"}}>Connected</span>
                   )}
+                  <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.75rem"}}>
+                    <span style={{color:bank.isComplete?NEON.primary:"rgba(255,255,255,0.4)",fontSize:18}}>$</span>
+                    <span style={{fontWeight:900,fontSize:"0.95rem"}}>Bank Account</span>
+                  </div>
+                  <div style={{display:"inline-flex",padding:"0.2rem 0.6rem",borderRadius:4,background:"rgba(0,255,135,0.12)",marginBottom:"0.75rem"}}>
+                    <span style={{fontSize:"0.7rem",fontWeight:900,color:NEON.green}}>FREE &middot; 2-3 business days</span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
+                    <div><div style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.5)",marginBottom:"0.25rem"}}>Status</div><div style={{fontWeight:900}}>{bank.isComplete?"Connected via Stripe":bank.hasAccount?"Setup incomplete":"Not connected"}</div></div>
+                    <div><div style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.5)",marginBottom:"0.25rem"}}>Method</div><div style={{fontWeight:900}}>Direct Deposit</div></div>
+                  </div>
+                  {bank.isComplete?(
+                    <button onClick={bank.handleManageBank} disabled={bank.loading} style={{marginTop:"0.75rem",width:"100%",padding:"0.5rem",background:"rgba(0,229,255,0.1)",border:`1px solid rgba(0,229,255,0.4)`,borderRadius:8,color:NEON.primary,fontSize:"0.75rem",fontWeight:900,cursor:bank.loading?"wait":"pointer",opacity:bank.loading?0.6:1}}>{bank.loading?"Loading...":"Manage Account"}</button>
+                  ):bank.hasAccount?(
+                    <button onClick={bank.handleConnectBank} disabled={bank.loading} style={{marginTop:"0.75rem",width:"100%",padding:"0.5rem",background:"rgba(0,229,255,0.1)",border:`1px solid rgba(0,229,255,0.4)`,borderRadius:8,color:NEON.primary,fontSize:"0.75rem",fontWeight:900,cursor:bank.loading?"wait":"pointer",opacity:bank.loading?0.6:1}}>{bank.loading?"Loading...":"Complete Setup"}</button>
+                  ):(
+                    <button onClick={bank.handleConnectBank} disabled={bank.loading} style={{marginTop:"0.75rem",width:"100%",padding:"0.5rem",background:"rgba(0,229,255,0.1)",border:`1px solid rgba(0,229,255,0.4)`,borderRadius:8,color:NEON.primary,fontSize:"0.75rem",fontWeight:900,cursor:bank.loading?"wait":"pointer",opacity:bank.loading?0.6:1}}>{bank.loading?"Loading...":"Connect Bank Account"}</button>
+                  )}
+                  {bank.statusMsg&&<div style={{fontSize:"0.7rem",color:bank.statusMsg.includes("connected")?NEON.green:NEON.pink,marginTop:"0.5rem"}}>{bank.statusMsg}</div>}
                 </div>
 
-                {/* Bank Card */}
-                <div style={{padding:18,display:"flex",flexDirection:"column",gap:12}}>
-                  {/* Icon + Title */}
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#00CC6A,#00FF87)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,boxShadow:"0 2px 12px rgba(0,204,106,0.3)"}}>&#127974;</div>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Bank</div>
-                      <div style={{fontSize:10,color:NEON.green,fontWeight:600}}>2-3 days</div>
-                    </div>
+                {/* Venmo Card */}
+                <div style={{padding:"1.25rem",borderRadius:12,border:hasVenmoConnected?`2px solid ${NEON.primary}`:"1px solid rgba(255,255,255,0.1)",background:hasVenmoConnected?"rgba(0,229,255,0.08)":"rgba(255,255,255,0.02)",position:"relative"}}>
+                  {hasVenmoConnected&&(
+                    <span style={{position:"absolute",top:"0.75rem",right:"0.75rem",padding:"0.2rem 0.5rem",background:"rgba(0,255,135,0.15)",color:NEON.green,borderRadius:4,fontSize:"0.65rem",fontWeight:900,textTransform:"uppercase"}}>Connected</span>
+                  )}
+                  <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.75rem"}}>
+                    <span style={{color:hasVenmoConnected?NEON.primary:"rgba(255,255,255,0.4)",fontSize:18}}>&#9889;</span>
+                    <span style={{fontWeight:900,fontSize:"0.95rem"}}>Venmo</span>
                   </div>
-
-                  {/* Free badge */}
-                  <div style={{display:"inline-flex",alignSelf:"flex-start",padding:"3px 10px",borderRadius:20,background:"rgba(0,255,135,0.1)",border:"1px solid rgba(0,255,135,0.25)"}}>
-                    <span style={{fontSize:10,fontWeight:700,color:NEON.green}}>FREE</span>
+                  <div style={{display:"inline-flex",padding:"0.2rem 0.6rem",borderRadius:4,background:"rgba(255,214,0,0.12)",marginBottom:"0.75rem"}}>
+                    <span style={{fontSize:"0.7rem",fontWeight:900,color:NEON.yellow}}>3% FEE &middot; Arrives in minutes</span>
                   </div>
-
-                  {/* Status / Action */}
-                  {bank.isComplete?(
-                    <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",gap:8}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <div style={{width:7,height:7,borderRadius:"50%",background:NEON.green,boxShadow:`0 0 6px ${NEON.green}`}}/>
-                        <span style={{fontSize:11,fontWeight:600,color:NEON.green}}>Connected</span>
-                      </div>
-                      <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",fontWeight:500}}>Direct deposit via Stripe</div>
-                      <button onClick={bank.handleManageBank} disabled={bank.loading} style={{alignSelf:"flex-start",padding:"6px 14px",borderRadius:6,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:4,opacity:bank.loading?0.5:1}}>{bank.loading?"Loading...":"Manage"}</button>
-                    </div>
-                  ):bank.hasAccount?(
-                    <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",gap:8}}>
-                      <div style={{fontSize:11,color:NEON.yellow,fontWeight:500}}>Setup incomplete</div>
-                      <button onClick={bank.handleConnectBank} disabled={bank.loading} style={{width:"100%",padding:"9px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#00CC6A,#00FF87)",color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:bank.loading?0.4:1,boxShadow:"0 2px 12px rgba(0,204,106,0.3)"}}>{bank.loading?"Loading...":"Complete Setup"}</button>
-                    </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
+                    <div><div style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.5)",marginBottom:"0.25rem"}}>Account</div><div style={{fontWeight:900,fontFamily:"'Space Mono',monospace"}}>{hasVenmoConnected?profile?.payout_identifier:"Not set"}</div></div>
+                    <div><div style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.5)",marginBottom:"0.25rem"}}>Speed</div><div style={{fontWeight:900}}>Instant</div></div>
+                  </div>
+                  {hasVenmoConnected?(
+                    <button onClick={handleDisconnectPayout} style={{marginTop:"0.75rem",width:"100%",padding:"0.5rem",background:"rgba(0,229,255,0.1)",border:`1px solid rgba(0,229,255,0.4)`,borderRadius:8,color:NEON.primary,fontSize:"0.75rem",fontWeight:900,cursor:"pointer"}}>Disconnect</button>
                   ):(
-                    <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",gap:8}}>
-                      <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",lineHeight:1.5}}>Free direct deposit to your bank account</div>
-                      <button onClick={bank.handleConnectBank} disabled={bank.loading} style={{width:"100%",padding:"9px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#00CC6A,#00FF87)",color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:bank.loading?0.4:1,boxShadow:"0 2px 12px rgba(0,204,106,0.3)"}}>{bank.loading?"Loading...":"Connect Bank"}</button>
+                    <div style={{marginTop:"0.75rem",display:"flex",flexDirection:"column",gap:"0.5rem"}}>
+                      <input type="text" placeholder="@yourusername" value={payoutIdentifier} onChange={e=>setPayoutIdentifier(e.target.value)} style={{width:"100%",padding:"0.5rem 0.75rem",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:"0.8rem",fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                      <button onClick={handleConnectPayout} disabled={saving||!payoutIdentifier.trim()} style={{width:"100%",padding:"0.5rem",background:"rgba(0,229,255,0.1)",border:`1px solid rgba(0,229,255,0.4)`,borderRadius:8,color:NEON.primary,fontSize:"0.75rem",fontWeight:900,cursor:saving||!payoutIdentifier.trim()?"default":"pointer",opacity:saving||!payoutIdentifier.trim()?0.4:1}}>Connect Venmo</button>
                     </div>
                   )}
-                  {bank.statusMsg&&<div style={{fontSize:10,color:bank.statusMsg.includes("connected")?NEON.green:NEON.pink,marginTop:4}}>{bank.statusMsg}</div>}
                 </div>
               </div>
             </div>
