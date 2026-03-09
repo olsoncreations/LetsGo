@@ -99,18 +99,40 @@ function parseTimeString(timeStr: string): number | null {
 }
 
 function isOpenDuringSlot(row: BusinessRow, timeSlot: string): boolean {
-  // Prefer standalone hours JSONB, then config.hours
-  const hours = row.hours ?? (row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined);
-  if (!hours) return true; // No hours data = assume open
-
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const today = dayNames[new Date().getDay()];
-  const dayHours = hours[today];
 
-  if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
+  // Priority 1: Individual day columns (source of truth, updated by admin)
+  const rowAny = row as Record<string, unknown>;
+  const dayOpen = rowAny[`${today}_open`] as string | null | undefined;
+  const dayClose = rowAny[`${today}_close`] as string | null | undefined;
 
-  const openTime = parseTimeString(dayHours.open);
-  const closeTime = parseTimeString(dayHours.close);
+  let openStr: string | undefined;
+  let closeStr: string | undefined;
+
+  if (dayOpen && dayClose) {
+    // Individual columns have data — use them
+    openStr = dayOpen;
+    closeStr = dayClose;
+  } else if (dayOpen === null && dayClose === null) {
+    // Explicitly null = day is disabled (closed)
+    return false;
+  } else {
+    // Priority 2: config.hours (also updated by admin)
+    // Priority 3: standalone hours JSONB (may be stale from onboarding)
+    const hours = (row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined)
+      ?? row.hours;
+    if (!hours) return true; // No hours data at all = assume open
+
+    const dayHours = hours[today];
+    if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
+
+    openStr = dayHours.open;
+    closeStr = dayHours.close;
+  }
+
+  const openTime = parseTimeString(openStr);
+  const closeTime = parseTimeString(closeStr);
   if (openTime === null || closeTime === null) return true; // Can't parse = assume open
 
   const [slotStart, slotEnd] = TIME_SLOT_HOURS[timeSlot] || [17, 22];
@@ -274,7 +296,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       .select(
         "id, business_name, public_business_name, contact_phone, website, " +
         "street_address, city, state, zip, category_main, business_type, " +
-        "config, blurb, payout_tiers, payout_preset, is_active, hours, tags, description"
+        "config, blurb, payout_tiers, payout_preset, is_active, hours, tags, description, " +
+        "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, " +
+        "thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
       )
       .eq("is_active", true);
 
