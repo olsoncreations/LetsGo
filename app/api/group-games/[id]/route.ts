@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { DEFAULT_PRESET_BPS } from "@/lib/platformSettings";
 import { notify } from "@/lib/notify";
+import { resolveHoursFromColumns } from "@/lib/businessNormalize";
 import { NOTIFICATION_TYPES } from "@/lib/notificationTypes";
 
 // ─── Helper: authenticate request ───
@@ -253,7 +254,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const [{ data: winnerRows }, { data: tierRows }] = await Promise.all([
       supabaseServer
         .from("business")
-        .select("id, public_business_name, business_name, config, street_address, address_line1, city, state, zip, contact_phone, phone_number, website, website_url, blurb, category_main, payout_preset")
+        .select("id, public_business_name, business_name, config, street_address, address_line1, city, state, zip, contact_phone, phone_number, website, website_url, blurb, category_main, payout_preset, mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close")
         .in("id", winnerBizIds),
       supabaseServer
         .from("business_payout_tiers")
@@ -288,18 +289,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       const zip = (row.zip || "") as string;
       const addressParts = [street, city, [st, zip].filter(Boolean).join(" ")].filter(Boolean);
 
-      // Parse hours from config
-      const rawHours = (cfg.hours ?? {}) as Record<string, { enabled?: boolean; open?: string; close?: string } | string>;
-      const hoursMap: Record<string, string> = {};
-      const dayOrder = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-      const dayLabels: Record<string, string> = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
-      for (const d of dayOrder) {
-        const val = rawHours[d];
-        if (!val) { hoursMap[dayLabels[d]] = "Closed"; continue; }
-        if (typeof val === "string") { hoursMap[dayLabels[d]] = val; continue; }
-        if (val.enabled === false) { hoursMap[dayLabels[d]] = "Closed"; continue; }
-        hoursMap[dayLabels[d]] = `${val.open || "?"} – ${val.close || "?"}`;
-      }
+      // Parse hours from individual day columns (single source of truth)
+      const hoursMap = resolveHoursFromColumns(row as Record<string, unknown>);
 
       // Compute payout percentages from business_payout_tiers table (source of truth)
       let bpsValues = tierMap.get(bid) || [];

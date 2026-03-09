@@ -32,6 +32,21 @@ export type BusinessRow = {
   description?: string | null;
   hours?: Record<string, { enabled?: boolean; open?: string; close?: string }> | null;
   tags?: string[] | null;
+  // Individual day columns (source of truth for hours)
+  mon_open?: string | null;
+  mon_close?: string | null;
+  tue_open?: string | null;
+  tue_close?: string | null;
+  wed_open?: string | null;
+  wed_close?: string | null;
+  thu_open?: string | null;
+  thu_close?: string | null;
+  fri_open?: string | null;
+  fri_close?: string | null;
+  sat_open?: string | null;
+  sat_close?: string | null;
+  sun_open?: string | null;
+  sun_close?: string | null;
 };
 
 export type MediaRow = {
@@ -155,6 +170,64 @@ export function computeOpenStatus(hours: Record<string, string>): { isOpen: bool
   return { isOpen: true, closesAt: parts[1] || null };
 }
 
+// ─── Hours: Single Source of Truth (individual day columns) ───
+
+const DAY_COLUMN_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+/** Build display hours from individual day columns (the single source of truth). */
+export function resolveHoursFromColumns(row: Record<string, unknown>): Record<string, string> {
+  const hours: Record<string, string> = {};
+  for (const [abbr, fullName] of Object.entries(DAY_MAP)) {
+    const open = row[`${abbr}_open`] as string | null | undefined;
+    const close = row[`${abbr}_close`] as string | null | undefined;
+    if (open && close) {
+      hours[fullName] = `${to12Hour(open)} \u2013 ${to12Hour(close)}`;
+    } else {
+      hours[fullName] = "Closed";
+    }
+  }
+  return hours;
+}
+
+/** Build structured hours from individual day columns (for HoursGrid / admin). */
+export function resolveStructuredHoursFromColumns(
+  row: Record<string, unknown>
+): Record<string, { enabled: boolean; open: string; close: string }> {
+  const result: Record<string, { enabled: boolean; open: string; close: string }> = {};
+  for (const abbr of DAY_COLUMN_KEYS) {
+    const open = row[`${abbr}_open`] as string | null | undefined;
+    const close = row[`${abbr}_close`] as string | null | undefined;
+    if (open && close) {
+      // Strip seconds (e.g., "09:00:00" → "09:00")
+      result[abbr] = {
+        enabled: true,
+        open: open.replace(/^(\d{2}:\d{2}):\d{2}$/, "$1"),
+        close: close.replace(/^(\d{2}:\d{2}):\d{2}$/, "$1"),
+      };
+    } else {
+      result[abbr] = { enabled: false, open: "", close: "" };
+    }
+  }
+  return result;
+}
+
+/** Check if a business is open today using day columns. Before 4 AM = previous business day. */
+export function isBusinessOpenToday(row: Record<string, unknown>): boolean {
+  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const now = new Date();
+  const hour = now.getHours();
+  const idx = hour < 4 ? (now.getDay() + 6) % 7 : now.getDay();
+  const day = dayNames[idx];
+  const open = row[`${day}_open`] as string | null | undefined;
+  const close = row[`${day}_close`] as string | null | undefined;
+  return !!(open && close);
+}
+
+/** The 14 day column names to include in Supabase SELECT queries. */
+export const DAY_COLUMNS_SELECT =
+  "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, " +
+  "thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close";
+
 /**
  * Convert BPS array from business_payout_tiers table to percentages.
  * @param tableBps - BPS values from the table (e.g. [300, 400, 500, …])
@@ -209,7 +282,7 @@ export function normalizeToDiscoveryBusiness(
     ? String(cfg.priceLevel)
     : "$$");
 
-  const hours = normalizeHoursForDisplay(cfg);
+  const hours = resolveHoursFromColumns(row as unknown as Record<string, unknown>);
   const { isOpen, closesAt } = computeOpenStatus(hours);
   const payout = normalizePayoutFromBps(cfg, row as unknown as Record<string, unknown>, tableBps);
   const tags: string[] = Array.isArray(cfg.tags) ? (cfg.tags as string[]).map(String) : [];

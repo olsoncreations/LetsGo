@@ -366,29 +366,17 @@ function BusinessesPage() {
   }
 
   function getResolvedHours(): Record<string, { enabled?: boolean; open?: string; close?: string }> {
-    const cfg = (getValue("config") as Record<string, unknown> | null) ?? {};
-    const cfgHours = (cfg.hours ?? {}) as Record<string, { enabled?: boolean; open?: string; close?: string }>;
     const result: Record<string, { enabled?: boolean; open?: string; close?: string }> = {};
 
     for (const day of DAY_KEYS) {
       const openCol = getValue(`${day}_open` as keyof Business) as string | null;
       const closeCol = getValue(`${day}_close` as keyof Business) as string | null;
-      const cfgDay = cfgHours[day];
 
-      // Standalone columns take priority (they're the DB source of truth)
       if (openCol || closeCol) {
         result[day] = {
           enabled: !!openCol,
           open: trimTime(openCol),
           close: trimTime(closeCol),
-        };
-      } else if (cfgDay) {
-        // Config hours — strip seconds + fill defaults for enabled days missing times
-        const isEnabled = cfgDay.enabled !== false;
-        result[day] = {
-          ...cfgDay,
-          open: cfgDay.open ? trimTime(cfgDay.open) : (isEnabled ? "09:00" : ""),
-          close: cfgDay.close ? trimTime(cfgDay.close) : (isEnabled ? "17:00" : ""),
         };
       }
       // else: day has no hours data, leave it out (HoursGrid handles missing days)
@@ -396,13 +384,8 @@ function BusinessesPage() {
     return result;
   }
 
-  // Write hours to both config.hours AND standalone columns
+  // Write hours to standalone day columns (single source of truth)
   function handleHoursChange(newHours: Record<string, { enabled?: boolean; open?: string; close?: string }>) {
-    // Write to config.hours (for onboarding/swipe feed)
-    const currentConfig = (getValue("config") as Record<string, unknown>) || {};
-    updateField("config", { ...currentConfig, hours: newHours });
-
-    // Also write to standalone columns (DB source of truth for API/Profile)
     for (const day of DAY_KEYS) {
       const h = newHours[day];
       if (h && h.enabled) {

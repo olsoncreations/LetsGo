@@ -112,12 +112,12 @@ export async function POST(
     }
   }
 
-  // 3) Merge config: keep existing config, overlay rep/login fields + hours + tags
+  // 3) Merge config: keep existing config, overlay rep/login fields + tags
+  //    Hours are written to standalone day columns only (single source of truth)
   const existingConfig = (existing.config ?? {}) as Record<string, unknown>;
   const mergedConfig = {
     ...existingConfig,
     ...body.config,
-    hours: configHours,
     tags: body.tags ?? existingConfig.tags ?? [],
   };
 

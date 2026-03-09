@@ -1285,7 +1285,10 @@ function DiscoveryPage() {
             contact_phone, website, street_address, city, state, zip,
             name, phone_number, website_url, address_line1,
             category_main, config, blurb,
-            payout_tiers, payout_preset
+            payout_tiers, payout_preset,
+            mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
+            thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
+            sun_open, sun_close
           `)
           .eq("is_active", true)
           .order("created_at", { ascending: false });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { DEFAULT_PRESET_BPS } from "@/lib/platformSettings";
+import { resolveHoursFromColumns } from "@/lib/businessNormalize";
 
 /**
  * GET /api/events
@@ -23,7 +24,8 @@ export async function GET(): Promise<Response> {
       supabaseServer
         .from("business")
         .select(
-          "id, business_name, public_business_name, street_address, address_line1, city, state, zip, contact_phone, phone_number, website, website_url, blurb, category_main, price_level, config, payout_preset"
+          "id, business_name, public_business_name, street_address, address_line1, city, state, zip, contact_phone, phone_number, website, website_url, blurb, category_main, price_level, config, payout_preset, " +
+          "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
         )
         .eq("is_active", true),
 
@@ -94,45 +96,10 @@ export async function GET(): Promise<Response> {
       return `${yyyy}-${mm}-${dd}`;
     }
 
-    // Parse hours from business config
+    // Parse hours from individual day columns (single source of truth)
     function parseHours(biz: BizRow): Array<{ day: string; time: string }> {
-      const cfg = (biz.config || {}) as Record<string, unknown>;
-      const cfgHours = (cfg.hours || {}) as Record<string, unknown>;
-      const dayMap = [
-        { key: "mon", label: "Monday", alts: ["monday", "mondayOpen", "monday_open"] },
-        { key: "tue", label: "Tuesday", alts: ["tuesday", "tuesdayOpen", "tuesday_open"] },
-        { key: "wed", label: "Wednesday", alts: ["wednesday", "wednesdayOpen", "wednesday_open"] },
-        { key: "thu", label: "Thursday", alts: ["thursday", "thursdayOpen", "thursday_open"] },
-        { key: "fri", label: "Friday", alts: ["friday", "fridayOpen", "friday_open"] },
-        { key: "sat", label: "Saturday", alts: ["saturday", "saturdayOpen", "saturday_open"] },
-        { key: "sun", label: "Sunday", alts: ["sunday", "sundayOpen", "sunday_open"] },
-      ];
-
-      return dayMap.map(({ key, label, alts }) => {
-        // Try config.hours.mon.open / config.hours.mon.close format
-        const hourObj = cfgHours[key] as Record<string, string> | undefined;
-        let open = hourObj?.open || "";
-        let close = hourObj?.close || "";
-
-        // Try alternate formats: mondayOpen/mondayClose
-        if (!open) {
-          for (const alt of alts) {
-            const closeAlt = alt.replace("Open", "Close").replace("open", "close");
-            open = String(cfgHours[alt] || "") || open;
-            close = String(cfgHours[closeAlt] || "") || close;
-            if (open) break;
-          }
-        }
-
-        // Try DB columns: mon_open, mon_close
-        if (!open) {
-          open = String(biz[`${key}_open`] || "");
-          close = String(biz[`${key}_close`] || "");
-        }
-
-        if (!open || open === "undefined" || open === "null") return { day: label, time: "Closed" };
-        return { day: label, time: `${open} – ${close}` };
-      });
+      const hoursMap = resolveHoursFromColumns(biz as Record<string, unknown>);
+      return Object.entries(hoursMap).map(([day, time]) => ({ day, time }));
     }
 
     // Compute payout range string from BPS values

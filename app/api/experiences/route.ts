@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import {
   formatBusinessType,
-  normalizeHoursForDisplay,
+  resolveHoursFromColumns,
   computeOpenStatus,
 } from "@/lib/businessNormalize";
 
@@ -166,7 +166,8 @@ export async function GET(req: NextRequest): Promise<Response> {
         supabaseServer
           .from("business")
           .select(
-            "id, business_name, public_business_name, category_main, config, is_active"
+            "id, business_name, public_business_name, category_main, config, is_active, " +
+            "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
           )
           .in("id", bizIds),
 
@@ -281,7 +282,7 @@ export async function GET(req: NextRequest): Promise<Response> {
           .createSignedUrl(m.storage_path, 60 * 30);
 
         const hours = biz
-          ? normalizeHoursForDisplay(biz.config)
+          ? resolveHoursFromColumns(biz as Record<string, unknown>)
           : ({} as Record<string, string>);
         const { isOpen, closesAt } = computeOpenStatus(hours);
 

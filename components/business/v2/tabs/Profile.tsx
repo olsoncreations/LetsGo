@@ -356,51 +356,21 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
 
         const row = (biz ?? {}) as Record<string, any>;
         const cfg = (row.config ?? {}) as Record<string, any>;
-        const cfgHours = (cfg.hours ?? {}) as Record<string, any>;
-
-        console.log("[Profile] Loaded row:", row);
-        console.log("[Profile] Config hours:", cfgHours);
 
         // Parse tags
         const tagsRaw = row.tags ?? cfg.tags ?? [];
         const tagsFromDb = Array.isArray(tagsRaw) ? tagsRaw.map(String) : [];
 
-        // Parse hours - check BOTH formats:
-        // Format 1: row.mon_open, row.mon_close (DB columns)
-        // Format 2: cfgHours.mon.open, cfgHours.mon.close (config JSON)
-        // Format 3: cfgHours.mondayOpen, cfgHours.mondayClose (alternative config)
+        // Parse hours from individual day columns (single source of truth)
         const hoursFromDb: BusinessHours = {
-          monday: toTimeOrClosed(
-            row.mon_open ?? cfgHours?.mon?.open ?? cfgHours?.mondayOpen ?? cfgHours?.monday_open ?? "",
-            row.mon_close ?? cfgHours?.mon?.close ?? cfgHours?.mondayClose ?? cfgHours?.monday_close ?? ""
-          ),
-          tuesday: toTimeOrClosed(
-            row.tue_open ?? cfgHours?.tue?.open ?? cfgHours?.tuesdayOpen ?? cfgHours?.tuesday_open ?? "",
-            row.tue_close ?? cfgHours?.tue?.close ?? cfgHours?.tuesdayClose ?? cfgHours?.tuesday_close ?? ""
-          ),
-          wednesday: toTimeOrClosed(
-            row.wed_open ?? cfgHours?.wed?.open ?? cfgHours?.wednesdayOpen ?? cfgHours?.wednesday_open ?? "",
-            row.wed_close ?? cfgHours?.wed?.close ?? cfgHours?.wednesdayClose ?? cfgHours?.wednesday_close ?? ""
-          ),
-          thursday: toTimeOrClosed(
-            row.thu_open ?? cfgHours?.thu?.open ?? cfgHours?.thursdayOpen ?? cfgHours?.thursday_open ?? "",
-            row.thu_close ?? cfgHours?.thu?.close ?? cfgHours?.thursdayClose ?? cfgHours?.thursday_close ?? ""
-          ),
-          friday: toTimeOrClosed(
-            row.fri_open ?? cfgHours?.fri?.open ?? cfgHours?.fridayOpen ?? cfgHours?.friday_open ?? "",
-            row.fri_close ?? cfgHours?.fri?.close ?? cfgHours?.fridayClose ?? cfgHours?.friday_close ?? ""
-          ),
-          saturday: toTimeOrClosed(
-            row.sat_open ?? cfgHours?.sat?.open ?? cfgHours?.saturdayOpen ?? cfgHours?.saturday_open ?? "",
-            row.sat_close ?? cfgHours?.sat?.close ?? cfgHours?.saturdayClose ?? cfgHours?.saturday_close ?? ""
-          ),
-          sunday: toTimeOrClosed(
-            row.sun_open ?? cfgHours?.sun?.open ?? cfgHours?.sundayOpen ?? cfgHours?.sunday_open ?? "",
-            row.sun_close ?? cfgHours?.sun?.close ?? cfgHours?.sundayClose ?? cfgHours?.sunday_close ?? ""
-          ),
+          monday: toTimeOrClosed(row.mon_open ?? "", row.mon_close ?? ""),
+          tuesday: toTimeOrClosed(row.tue_open ?? "", row.tue_close ?? ""),
+          wednesday: toTimeOrClosed(row.wed_open ?? "", row.wed_close ?? ""),
+          thursday: toTimeOrClosed(row.thu_open ?? "", row.thu_close ?? ""),
+          friday: toTimeOrClosed(row.fri_open ?? "", row.fri_close ?? ""),
+          saturday: toTimeOrClosed(row.sat_open ?? "", row.sat_close ?? ""),
+          sunday: toTimeOrClosed(row.sun_open ?? "", row.sun_close ?? ""),
         };
-
-        console.log("[Profile] Parsed hours:", hoursFromDb);
 
         // Parse fields
         const baseFields: Record<string, string> = {

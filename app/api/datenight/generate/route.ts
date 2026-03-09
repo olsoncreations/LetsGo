@@ -6,7 +6,8 @@ import {
   getBusinessGradient,
   getBusinessEmoji,
   formatBusinessType,
-  normalizeHoursForDisplay,
+  resolveHoursFromColumns,
+  isBusinessOpenToday,
   buildMediaUrl,
 } from "@/lib/businessNormalize";
 import { getDistanceBetweenZips } from "@/lib/zipUtils";
@@ -75,42 +76,6 @@ function isRestaurantType(businessType: string, categoryMain: string, tags: stri
   return tags.some(t => restaurantTags.has(t.toLowerCase()));
 }
 
-
-// Before 4 AM = still the previous day (nightlife convention)
-function getBusinessDay(): string {
-  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const now = new Date();
-  const hour = now.getHours();
-  const idx = hour < 4 ? (now.getDay() + 6) % 7 : now.getDay();
-  return dayNames[idx];
-}
-
-function isOpenToday(row: BusinessRow): boolean {
-  const day = getBusinessDay();
-  const rowAny = row as Record<string, unknown>;
-  const dayOpen = rowAny[`${day}_open`] as string | null | undefined;
-  const dayClose = rowAny[`${day}_close`] as string | null | undefined;
-
-  // Priority 1: Individual day columns (source of truth — matches admin logic)
-  if (dayOpen !== undefined || dayClose !== undefined) {
-    return !!(dayOpen && dayClose);
-  }
-
-  // Priority 2: config.hours
-  const configHours = row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined;
-  if (configHours && configHours[day] !== undefined) {
-    const dh = configHours[day];
-    return !!(dh && dh.enabled !== false && dh.open && dh.close);
-  }
-
-  // Priority 3: standalone hours JSONB
-  if (row.hours && row.hours[day]) {
-    const dh = row.hours[day];
-    return !!(dh && dh.enabled !== false && dh.open && dh.close);
-  }
-
-  return false;
-}
 
 function matchesLocation(row: BusinessRow, location: string): boolean {
   if (!location) return true;
@@ -210,27 +175,8 @@ function buildPickResult(row: BusinessRow, score: number, reasons: string[], ima
   const rawPhone = row.contact_phone || String(cfg.phone ?? "");
   const phone = formatPhoneNumber(rawPhone);
   const website = row.website || String(cfg.website ?? "");
-  // Build hours from individual day columns (source of truth), fallback to config.hours
-  const dayAbbrs = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const rowAnyForHours = row as Record<string, unknown>;
-  const resolvedHours: Record<string, { enabled?: boolean; open?: string; close?: string }> = {};
-  let hasColumnData = false;
-  for (const abbr of dayAbbrs) {
-    const openVal = rowAnyForHours[`${abbr}_open`] as string | null | undefined;
-    const closeVal = rowAnyForHours[`${abbr}_close`] as string | null | undefined;
-    if (openVal !== undefined || closeVal !== undefined) {
-      hasColumnData = true;
-      if (openVal && closeVal) {
-        resolvedHours[abbr] = { enabled: true, open: openVal, close: closeVal };
-      } else {
-        resolvedHours[abbr] = { enabled: false };
-      }
-    }
-  }
-  const hoursSource = hasColumnData
-    ? { hours: resolvedHours }
-    : (cfg.hours ? { hours: cfg.hours } : { hours: row.hours });
-  const hours = normalizeHoursForDisplay(hoursSource as Record<string, unknown>);
+  // Build hours from individual day columns (single source of truth)
+  const hours = resolveHoursFromColumns(row as Record<string, unknown>);
   // Use business day (before 4 AM = still yesterday)
   const dayFullNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const nowForHours = new Date();
@@ -285,7 +231,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .select(
         "id, business_name, public_business_name, contact_phone, website, " +
         "street_address, city, state, zip, category_main, business_type, " +
-        "config, blurb, payout_tiers, payout_preset, is_active, hours, tags, description, " +
+        "config, blurb, payout_tiers, payout_preset, is_active, tags, description, " +
         "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, " +
         "thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
       )
@@ -327,7 +273,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // 4. Filter businesses by location and currently open
     const allBusinesses = (businessRows as unknown as BusinessRow[]).filter(row => {
       if (!matchesLocation(row, location)) return false;
-      if (!isOpenToday(row)) return false;
+      if (!isBusinessOpenToday(row as Record<string, unknown>)) return false;
       return true;
     });
 
