@@ -80,21 +80,24 @@ function isOpenToday(row: BusinessRow): boolean {
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const today = dayNames[new Date().getDay()];
 
-  // Priority 1: config.hours (has enabled flag, updated by admin)
+  // Priority 1: Individual day columns (source of truth — matches admin logic)
+  // Admin sets: non-null open/close = enabled, null = disabled
+  const rowAny = row as Record<string, unknown>;
+  const dayOpen = rowAny[`${today}_open`] as string | null | undefined;
+  const dayClose = rowAny[`${today}_close`] as string | null | undefined;
+
+  // If columns exist in the response (not undefined), they're authoritative
+  if (dayOpen !== undefined || dayClose !== undefined) {
+    return !!(dayOpen && dayClose);
+  }
+
+  // Priority 2: config.hours (also updated by admin, has enabled flag)
   const configHours = row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined;
   if (configHours && configHours[today] !== undefined) {
     const dayHours = configHours[today];
     if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
     return true;
   }
-
-  // Priority 2: Individual day columns (null = closed, truthy = open)
-  const rowAny = row as Record<string, unknown>;
-  const dayOpen = rowAny[`${today}_open`] as string | null | undefined;
-  const dayClose = rowAny[`${today}_close`] as string | null | undefined;
-
-  if (dayOpen && dayClose) return true;
-  if (dayOpen === null && dayClose === null) return false;
 
   // Priority 3: standalone hours JSONB (may be stale from onboarding)
   if (row.hours) {
