@@ -2169,9 +2169,16 @@ function Step5({
     setStripeLoading(true);
     setStripeError("");
     try {
+      // Always grab a fresh token to avoid stale/expired auth
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setStripeError("You must be logged in to set up payment. Please refresh and try again.");
+        return;
+      }
       const res = await fetch("/api/stripe/create-setup-intent", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           businessName: data.businessName,
           email: data.email,
@@ -2191,7 +2198,7 @@ function Step5({
     } finally {
       setStripeLoading(false);
     }
-  }, [data.email, data.businessName, bankActive, setData, authToken]);
+  }, [data.email, data.businessName, bankActive, setData]);
 
   useEffect(() => {
     fetchSetupIntent();
