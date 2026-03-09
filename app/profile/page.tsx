@@ -544,7 +544,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                 Cash Out Methods
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+              <div className="payout-grid">
                 {/* Bank Account */}
                 <div style={{padding:20,borderRadius:12,border:preferredMethod==="bank"?"2px solid #14b8a6":"1px solid rgba(255,255,255,0.12)",background:preferredMethod==="bank"?"rgba(20,184,166,0.08)":"rgba(255,255,255,0.03)",position:"relative"}}>
                   {preferredMethod==="bank"&&(
@@ -1358,7 +1358,9 @@ export default function LetsGoProfile() {
         input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.18); }
         select option { background: #0C0C14; color: rgba(255,255,255,0.6); }
 
+        .payout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         @media (max-width: 640px) {
+          .payout-grid { grid-template-columns: 1fr !important; }
           .profile-content { padding: 0 14px !important; }
           .profile-marquee { margin-left: -14px !important; margin-right: -14px !important; }
           .profile-hero { flex-direction: column !important; align-items: center !important; gap: 16px !important; padding: 20px 16px !important; }

@@ -103,7 +103,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   } catch (err) {
     console.error("[stripe-connect-onboard] Error:", err);
-    const message = err instanceof Error ? err.message : "Failed to create onboarding link";
+    const raw = err instanceof Error ? err.message : "Failed to create onboarding link";
+    // Translate Stripe-specific errors into user-friendly messages
+    const message = raw.includes("signed up for Connect")
+      ? "Bank account connections are being set up. Please try again later."
+      : raw;
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
