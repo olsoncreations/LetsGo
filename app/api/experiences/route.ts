@@ -208,7 +208,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     // Build lookup maps
     const bizMap = new Map<string, BizRow>();
-    for (const b of (bizRes.data ?? []) as BizRow[]) {
+    for (const b of (bizRes.data ?? []) as unknown as BizRow[]) {
       bizMap.set(String(b.id), b);
     }
 

@@ -47,7 +47,7 @@ export async function GET(): Promise<Response> {
     // Business lookup
     type BizRow = Record<string, unknown>;
     const bizMap = new Map<string, BizRow>();
-    for (const b of (bizRes.data ?? []) as BizRow[]) {
+    for (const b of (bizRes.data ?? []) as unknown as BizRow[]) {
       bizMap.set(String(b.id), b);
     }
 
