@@ -2410,6 +2410,17 @@ export default function OnboardingPage() {
                         { value: "$$$$", label: "$$$$ ($60+/person)" },
                       ]}
                     />
+                    {/* Selected Tags */}
+                    {Array.isArray(pVal("selectedTags")) && (pVal("selectedTags") as string[]).length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: "0.7rem", fontWeight: 600, color: "#a0a0b0", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Tags</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(pVal("selectedTags") as string[]).map(tag => (
+                            <span key={tag} style={{ padding: "4px 10px", borderRadius: 12, fontSize: "0.75rem", fontWeight: 500, background: "rgba(255,107,53,0.12)", color: "#ff6b35", border: "1px solid rgba(255,107,53,0.25)" }}>{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <EditField label="Referred By" value={pVal("referredBy") as string} editable={isEditing} onChange={(v) => setPayloadField("referredBy", v)} />
                   </Card>
                   <Card title="Primary Contact">
