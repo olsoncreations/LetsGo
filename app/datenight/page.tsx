@@ -380,7 +380,7 @@ async function callGenerate(exclude: string[] = []): Promise<GenerateResponse> {
   const res = await fetch("/api/datenight/generate", {
     method: "POST",
     headers,
-    body: JSON.stringify({ vibes: [], budget: "$$", cuisines: [], location: "", timeSlot: "evening", exclude }),
+    body: JSON.stringify({ vibes: [], budget: "$$", cuisines: [], location: "", exclude }),
   });
 
   if (!res.ok) {

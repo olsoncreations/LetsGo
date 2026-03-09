@@ -57,11 +57,6 @@ const RESTAURANT_TYPES = new Set([
   "bistro", "pub", "tavern",
 ]);
 
-const TIME_SLOT_HOURS: Record<string, [number, number]> = {
-  afternoon: [12, 17],
-  evening: [17, 22],
-  latenight: [21, 26], // 26 = 2am next day
-};
 
 const MAX_RECENT_RESULTS = 30;
 const LOCATION_RADIUS_MILES = 20;
@@ -80,25 +75,8 @@ function isRestaurantType(businessType: string, categoryMain: string, tags: stri
   return tags.some(t => restaurantTags.has(t.toLowerCase()));
 }
 
-function parseTimeString(timeStr: string): number | null {
-  // Handles "10:00 AM", "5:00 PM", "10am", "5pm", "17:00", etc.
-  const s = timeStr.trim().toLowerCase();
-  // Try HH:MM AM/PM
-  const ampm = s.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
-  if (ampm) {
-    let h = parseInt(ampm[1], 10);
-    const m = parseInt(ampm[2] || "0", 10);
-    if (ampm[3].toLowerCase() === "pm" && h !== 12) h += 12;
-    if (ampm[3].toLowerCase() === "am" && h === 12) h = 0;
-    return h + m / 60;
-  }
-  // Try 24h format
-  const h24 = s.match(/^(\d{1,2}):(\d{2})$/);
-  if (h24) return parseInt(h24[1], 10) + parseInt(h24[2], 10) / 60;
-  return null;
-}
 
-function isOpenDuringSlot(row: BusinessRow, timeSlot: string): boolean {
+function isOpenToday(row: BusinessRow): boolean {
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const today = dayNames[new Date().getDay()];
 
@@ -107,40 +85,24 @@ function isOpenDuringSlot(row: BusinessRow, timeSlot: string): boolean {
   const dayOpen = rowAny[`${today}_open`] as string | null | undefined;
   const dayClose = rowAny[`${today}_close`] as string | null | undefined;
 
-  let openStr: string | undefined;
-  let closeStr: string | undefined;
-
   if (dayOpen && dayClose) {
-    // Individual columns have data — use them
-    openStr = dayOpen;
-    closeStr = dayClose;
+    // Has hours for today — open
+    return true;
   } else if (dayOpen === null && dayClose === null) {
     // Explicitly null = day is disabled (closed)
     return false;
-  } else {
-    // Priority 2: config.hours (also updated by admin)
-    // Priority 3: standalone hours JSONB (may be stale from onboarding)
-    const hours = (row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined)
-      ?? row.hours;
-    if (!hours) return true; // No hours data at all = assume open
-
-    const dayHours = hours[today];
-    if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
-
-    openStr = dayHours.open;
-    closeStr = dayHours.close;
   }
 
-  const openTime = parseTimeString(openStr);
-  const closeTime = parseTimeString(closeStr);
-  if (openTime === null || closeTime === null) return true; // Can't parse = assume open
+  // Priority 2: config.hours (also updated by admin)
+  // Priority 3: standalone hours JSONB (may be stale from onboarding)
+  const hours = (row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined)
+    ?? row.hours;
+  if (!hours) return true; // No hours data at all = assume open
 
-  const [slotStart, slotEnd] = TIME_SLOT_HOURS[timeSlot] || [17, 22];
+  const dayHours = hours[today];
+  if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
 
-  // Handle late-night wrap (close after midnight)
-  const adjustedClose = closeTime < openTime ? closeTime + 24 : closeTime;
-  // Business is open during slot if there's any overlap
-  return adjustedClose > slotStart && openTime < slotEnd;
+  return true;
 }
 
 function matchesLocation(row: BusinessRow, location: string): boolean {
@@ -335,10 +297,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     // 3. Combine exclude list with recent results
     const excludeSet = new Set(exclude);
 
-    // 4. Filter businesses by location and time
+    // 4. Filter businesses by location and open today
     const allBusinesses = (businessRows as unknown as BusinessRow[]).filter(row => {
       if (!matchesLocation(row, location)) return false;
-      if (!isOpenDuringSlot(row, timeSlot)) return false;
+      if (!isOpenToday(row)) return false;
       return true;
     });
 
