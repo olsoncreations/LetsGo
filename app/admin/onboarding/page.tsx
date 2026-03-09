@@ -919,7 +919,7 @@ export default function OnboardingPage() {
         { value: "other", label: "Other" },
       ];
     }
-    return bt.tags.map(t => ({ value: t.name.toLowerCase().replace(/[/ ]/g, "_"), label: `${t.icon || ""} ${t.name}`.trim() }));
+    return bt.tags.map(t => ({ value: t.name, label: `${t.icon || ""} ${t.name}`.trim() }));
   }, [tagCats]);
 
   /* ==================== FILTERING & SORTING ==================== */
@@ -2382,9 +2382,9 @@ export default function OnboardingPage() {
                     <EditField label="Public Display Name" value={pVal("publicBusinessName") as string} editable={isEditing} onChange={(v) => setPayloadField("publicBusinessName", v)} />
                     <EditField
                       label="Business Type"
-                      value={pVal("businessType") as string}
+                      value={(pVal("businessTypeTag") as string) || (pVal("businessType") as string)}
                       editable={isEditing}
-                      onChange={(v) => setPayloadField("businessType", v)}
+                      onChange={(v) => { setPayloadField("businessTypeTag", v); setPayloadField("businessType", v); }}
                       options={businessTypeOptions}
                     />
                     <EditField
@@ -2396,6 +2396,18 @@ export default function OnboardingPage() {
                         { value: "all", label: "All Ages" },
                         { value: "21", label: "21+" },
                         { value: "18", label: "18+" },
+                      ]}
+                    />
+                    <EditField
+                      label="Price Range"
+                      value={pVal("priceLevel") as string}
+                      editable={isEditing}
+                      onChange={(v) => setPayloadField("priceLevel", v)}
+                      options={[
+                        { value: "$", label: "$ (Under $15/person)" },
+                        { value: "$$", label: "$$ ($15–$30/person)" },
+                        { value: "$$$", label: "$$$ ($30–$60/person)" },
+                        { value: "$$$$", label: "$$$$ ($60+/person)" },
                       ]}
                     />
                     <EditField label="Referred By" value={pVal("referredBy") as string} editable={isEditing} onChange={(v) => setPayloadField("referredBy", v)} />
