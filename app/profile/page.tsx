@@ -551,19 +551,19 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                     <span style={{position:"absolute",top:12,right:12,padding:"3px 8px",background:"rgba(16,185,129,0.2)",color:"#10b981",borderRadius:4,fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:"0.05em"}}>Preferred</span>
                   )}
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={preferredMethod==="bank"?"#14b8a6":"rgba(255,255,255,0.5)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                    <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>Bank Account</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={preferredMethod==="bank"?"#14b8a6":"rgba(255,255,255,0.5)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    <span style={{fontWeight:900,fontSize:15}}>Bank Account</span>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:3}}>Status</div><div style={{fontWeight:900,fontSize:14,color:"#fff"}}>{bank.isComplete?"Connected via Stripe":bank.hasAccount?"Setup incomplete":"Not connected"}</div></div>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:3}}>Fee</div><div style={{fontWeight:900,fontSize:14,color:"#10b981"}}>FREE</div></div>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:3}}>Speed</div><div style={{fontWeight:900,fontSize:14,color:"#fff"}}>2-3 business days</div></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Status</div><div style={{fontWeight:900,fontSize:13}}>{bank.isComplete?"Connected via Stripe":bank.hasAccount?"Setup incomplete":"Not connected"}</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Fee</div><div style={{fontWeight:900,fontSize:13,color:"#10b981"}}>FREE</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Speed</div><div style={{fontWeight:900,fontSize:13}}>2-3 business days</div></div>
                   </div>
                   {preferredMethod!=="bank"&&bank.isComplete&&(
-                    <button onClick={()=>handleSetPreferred("bank")} disabled={settingPreferred} style={{marginTop:14,width:"100%",padding:10,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:13,fontWeight:900,cursor:settingPreferred?"wait":"pointer",opacity:settingPreferred?0.6:1}}>{settingPreferred?"Saving...":"Set as Preferred"}</button>
+                    <button onClick={()=>handleSetPreferred("bank")} disabled={settingPreferred} style={{marginTop:12,width:"100%",padding:8,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:12,fontWeight:900,cursor:settingPreferred?"wait":"pointer",opacity:settingPreferred?0.6:1}}>{settingPreferred?"Saving...":"Set as Preferred"}</button>
                   )}
                   {!bank.isComplete&&(
-                    <button onClick={bank.handleConnectBank} disabled={bank.loading} style={{marginTop:14,width:"100%",padding:10,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:13,fontWeight:900,cursor:bank.loading?"wait":"pointer",opacity:bank.loading?0.6:1}}>{bank.loading?"Loading...":(bank.hasAccount?"Complete Setup":"Connect Bank Account")}</button>
+                    <button onClick={bank.handleConnectBank} disabled={bank.loading} style={{marginTop:12,width:"100%",padding:8,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:12,fontWeight:900,cursor:bank.loading?"wait":"pointer",opacity:bank.loading?0.6:1}}>{bank.loading?"Loading...":(bank.hasAccount?"Complete Setup":"Connect Bank Account")}</button>
                   )}
                   {bank.statusMsg&&<div style={{fontSize:12,color:bank.statusMsg.includes("connected")?"#10b981":NEON.pink,marginTop:8}}>{bank.statusMsg}</div>}
                 </div>
@@ -574,21 +574,21 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                     <span style={{position:"absolute",top:12,right:12,padding:"3px 8px",background:"rgba(16,185,129,0.2)",color:"#10b981",borderRadius:4,fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:"0.05em"}}>Preferred</span>
                   )}
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={preferredMethod==="venmo"?"#14b8a6":"rgba(255,255,255,0.5)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    <span style={{fontWeight:900,fontSize:16,color:"#fff"}}>Venmo</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={preferredMethod==="venmo"?"#14b8a6":"rgba(255,255,255,0.5)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    <span style={{fontWeight:900,fontSize:15}}>Venmo</span>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:3}}>Account</div><div style={{fontWeight:900,fontSize:14,color:"#fff",fontFamily:"'Space Mono',monospace"}}>{hasVenmoConnected?profile?.payout_identifier:"Not set"}</div></div>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:3}}>Fee</div><div style={{fontWeight:900,fontSize:14,color:"#f59e0b"}}>3% processing fee</div></div>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:3}}>Speed</div><div style={{fontWeight:900,fontSize:14,color:"#fff"}}>Arrives in minutes</div></div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Account</div><div style={{fontWeight:900,fontSize:13}}>{hasVenmoConnected?profile?.payout_identifier:"Not set"}</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Fee</div><div style={{fontWeight:900,fontSize:13,color:"#f59e0b"}}>3% processing fee</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Speed</div><div style={{fontWeight:900,fontSize:13}}>Arrives in minutes</div></div>
                   </div>
                   {hasVenmoConnected&&preferredMethod!=="venmo"&&(
-                    <button onClick={()=>handleSetPreferred("venmo")} disabled={settingPreferred} style={{marginTop:14,width:"100%",padding:10,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:13,fontWeight:900,cursor:settingPreferred?"wait":"pointer",opacity:settingPreferred?0.6:1}}>{settingPreferred?"Saving...":"Set as Preferred"}</button>
+                    <button onClick={()=>handleSetPreferred("venmo")} disabled={settingPreferred} style={{marginTop:12,width:"100%",padding:8,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:12,fontWeight:900,cursor:settingPreferred?"wait":"pointer",opacity:settingPreferred?0.6:1}}>{settingPreferred?"Saving...":"Set as Preferred"}</button>
                   )}
                   {!hasVenmoConnected&&(
-                    <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:8}}>
-                      <input type="text" placeholder="@yourusername" value={payoutIdentifier} onChange={e=>setPayoutIdentifier(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",color:"#fff",fontSize:14,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
-                      <button onClick={handleConnectPayout} disabled={saving||!payoutIdentifier.trim()} style={{width:"100%",padding:10,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:13,fontWeight:900,cursor:saving||!payoutIdentifier.trim()?"default":"pointer",opacity:saving||!payoutIdentifier.trim()?0.4:1}}>Connect Venmo</button>
+                    <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:8}}>
+                      <input type="text" placeholder="@yourusername" value={payoutIdentifier} onChange={e=>setPayoutIdentifier(e.target.value)} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.04)",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                      <button onClick={handleConnectPayout} disabled={saving||!payoutIdentifier.trim()} style={{width:"100%",padding:8,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:12,fontWeight:900,cursor:saving||!payoutIdentifier.trim()?"default":"pointer",opacity:saving||!payoutIdentifier.trim()?0.4:1}}>Connect Venmo</button>
                     </div>
                   )}
                 </div>
