@@ -319,8 +319,10 @@ const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCas
   const [processing,setProcessing]=useState(false);
   const [errMsg,setErrMsg]=useState("");
   const [selectedMethod,setSelectedMethod]=useState<"venmo"|"bank">("bank");
+  const [customAmount,setCustomAmount]=useState(amount.toFixed(2));
 
-  const amountCents = Math.round(amount*100);
+  const parsedAmount = Math.min(Math.max(0,parseFloat(customAmount)||0),amount);
+  const amountCents = Math.round(parsedAmount*100);
   const feeCents = selectedMethod==="venmo"?Math.round(amountCents*0.03):0;
   const netCents = amountCents-feeCents;
 
@@ -375,30 +377,35 @@ const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCas
       <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:460,borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${NEON.yellowRGB},0.2)`,boxShadow:`0 0 60px rgba(${NEON.yellowRGB},0.08)`,padding:28}}>
         <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{fontSize:40,marginBottom:8}}>{"\uD83D\uDCB0"}</div>
-          <h3 style={{fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:22,fontWeight:700,color:"#fff",margin:0}}>Cash Out ${amount.toFixed(2)}</h3>
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.25)",marginTop:4}}>Choose how you want to receive your money</p>
+          <h3 style={{fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:22,fontWeight:700,color:"#fff",margin:0}}>Cash Out</h3>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:4}}>Choose how you want to receive your money</p>
+          <div style={{marginTop:12,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+            <span style={{fontSize:22,fontWeight:700,color:"#fff"}}>$</span>
+            <input type="number" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} onBlur={()=>{const v=parseFloat(customAmount)||0;setCustomAmount(Math.min(Math.max(0,v),amount).toFixed(2));}} step="0.01" min="0" max={amount} style={{fontSize:22,fontWeight:700,color:"#fff",background:"transparent",border:"none",borderBottom:"2px solid rgba(255,255,255,0.3)",outline:"none",width:90,textAlign:"center",fontFamily:"'Clash Display','DM Sans',sans-serif"}} />
+          </div>
+          <p style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:4}}>Available: ${amount.toFixed(2)}</p>
         </div>
 
         <div style={{display:"flex",gap:10,marginBottom:20}}>
           {/* Venmo - Instant */}
           <div onClick={()=>setSelectedMethod("venmo")} style={cardStyle(selectedMethod==="venmo",NEON.yellowRGB)}>
             <div style={{fontSize:24,marginBottom:6}}>{"\u26A1"}</div>
-            <div style={{fontSize:12,fontWeight:700,color:selectedMethod==="venmo"?NEON.yellow:"rgba(255,255,255,0.5)",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>Instant</div>
-            <div style={{fontSize:10,color:selectedMethod==="venmo"?NEON.yellow:"rgba(255,255,255,0.3)",fontWeight:600,marginBottom:8}}>Venmo</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.2)",lineHeight:1.5}}>Arrives in minutes</div>
+            <div style={{fontSize:12,fontWeight:700,color:selectedMethod==="venmo"?NEON.yellow:"rgba(255,255,255,0.7)",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>Instant</div>
+            <div style={{fontSize:10,color:selectedMethod==="venmo"?NEON.yellow:"rgba(255,255,255,0.6)",fontWeight:600,marginBottom:8}}>Venmo</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>Arrives in minutes</div>
             <div style={{fontSize:10,color:NEON.orange,fontWeight:600,marginTop:4}}>3% fee ({`$${(feeCents/100).toFixed(2)}`})</div>
-            <div style={{fontSize:11,color:selectedMethod==="venmo"?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.15)",fontWeight:600,marginTop:6}}>You get ${selectedMethod==="venmo"?(netCents/100).toFixed(2):((amountCents-Math.round(amountCents*0.03))/100).toFixed(2)}</div>
+            <div style={{fontSize:11,color:"#fff",fontWeight:600,marginTop:6}}>You get ${selectedMethod==="venmo"?(netCents/100).toFixed(2):((amountCents-Math.round(amountCents*0.03))/100).toFixed(2)}</div>
             {!hasVenmo&&<div style={{fontSize:9,color:NEON.pink,marginTop:6}}>Not connected</div>}
           </div>
 
           {/* Bank - Free */}
           <div onClick={()=>setSelectedMethod("bank")} style={cardStyle(selectedMethod==="bank",NEON.greenRGB)}>
             <div style={{fontSize:24,marginBottom:6}}>{"\uD83C\uDFE6"}</div>
-            <div style={{fontSize:12,fontWeight:700,color:selectedMethod==="bank"?NEON.green:"rgba(255,255,255,0.5)",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>Standard</div>
-            <div style={{fontSize:10,color:selectedMethod==="bank"?NEON.green:"rgba(255,255,255,0.3)",fontWeight:600,marginBottom:8}}>Bank Account</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.2)",lineHeight:1.5}}>2-3 business days</div>
+            <div style={{fontSize:12,fontWeight:700,color:selectedMethod==="bank"?NEON.green:"rgba(255,255,255,0.7)",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>Standard</div>
+            <div style={{fontSize:10,color:selectedMethod==="bank"?NEON.green:"rgba(255,255,255,0.6)",fontWeight:600,marginBottom:8}}>Bank Account</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>2-3 business days</div>
             <div style={{fontSize:10,color:NEON.green,fontWeight:600,marginTop:4}}>FREE - no fees</div>
-            <div style={{fontSize:11,color:selectedMethod==="bank"?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.15)",fontWeight:600,marginTop:6}}>You get ${amount.toFixed(2)}</div>
+            <div style={{fontSize:11,color:"#fff",fontWeight:600,marginTop:6}}>You get ${parsedAmount.toFixed(2)}</div>
             {!hasBank&&<div style={{fontSize:9,color:NEON.pink,marginTop:6}}>Not connected</div>}
           </div>
         </div>
@@ -415,10 +422,10 @@ const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCas
         {errMsg&&<div style={{fontSize:11,color:NEON.pink,marginBottom:12,textAlign:"center"}}>{errMsg}</div>}
 
         <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-          <button onClick={onClose} style={{padding:"10px 22px",borderRadius:3,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.35)",fontSize:10,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
+          <button onClick={onClose} style={{padding:"10px 22px",borderRadius:3,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
           {canSubmit&&<button onClick={handleConfirm} disabled={processing} style={{padding:"10px 22px",borderRadius:3,border:`1px solid rgba(${selectedMethod==="venmo"?NEON.yellowRGB:NEON.greenRGB},0.5)`,background:`rgba(${selectedMethod==="venmo"?NEON.yellowRGB:NEON.greenRGB},0.12)`,color:selectedMethod==="venmo"?NEON.yellow:NEON.green,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:processing?0.5:1}}>{processing?"Processing...":`Confirm ${selectedMethod==="venmo"?"Venmo":"Bank"} Cash Out`}</button>}
         </div>
-        <div style={{marginTop:16,fontSize:9,color:"rgba(255,255,255,0.1)",letterSpacing:"0.05em",textAlign:"center"}}>*${(minCashoutCents/100).toFixed(2)} minimum to cash out</div>
+        <div style={{marginTop:16,fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:"0.05em",textAlign:"center"}}>*${(minCashoutCents/100).toFixed(2)} minimum to cash out</div>
       </div>
     </div>
   );
