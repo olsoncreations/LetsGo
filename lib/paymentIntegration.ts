@@ -1,12 +1,17 @@
 /**
  * paymentIntegration.ts
  *
- * Payment integration for user cashout payouts via PayPal Payouts API.
- * Supports PayPal and Venmo recipients through a single API.
+ * Payment integration for user cashout payouts.
+ * Supports two payout rails:
+ *   1. Venmo (instant, 3% fee) — via PayPal Payouts API
+ *   2. Bank Account (free, 2-3 days) — via Stripe Connect Transfers
  *
  * Required env vars:
  *   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYPAL_MODE (sandbox|live)
+ *   STRIPE_SECRET_KEY (shared with business billing)
  */
+
+import { stripe } from "@/lib/stripe";
 
 // ============================================================
 // TYPES
@@ -16,8 +21,11 @@ export interface PayoutRequest {
   user_id: string;
   payout_id: string;
   amount_cents: number;
+  fee_cents: number;
+  net_amount_cents: number;
   payment_method: PaymentMethod;
-  payment_details: string | null; // Venmo handle or PayPal email
+  payment_details: string | null; // Venmo handle (for venmo) or null (for bank)
+  stripe_connect_account_id?: string | null; // Required for bank payouts
   recipient_name: string;
   recipient_email: string | null;
   memo?: string;
@@ -31,7 +39,7 @@ export interface PayoutResult {
   timestamp: string;
 }
 
-export type PaymentMethod = "paypal" | "venmo";
+export type PaymentMethod = "venmo" | "bank";
 
 // ============================================================
 // MAIN DISPATCHER
@@ -39,28 +47,103 @@ export type PaymentMethod = "paypal" | "venmo";
 
 /**
  * sendPayout
- * Routes a payout to PayPal Payouts API (handles both PayPal and Venmo).
+ * Routes a payout to the appropriate provider:
+ *   - "venmo" → PayPal Payouts API (sends net_amount_cents after 3% fee)
+ *   - "bank"  → Stripe Connect Transfer (sends net_amount_cents, fee is $0)
  */
 export async function sendPayout(
   request: PayoutRequest
 ): Promise<PayoutResult> {
-  if (request.payment_method !== "paypal" && request.payment_method !== "venmo") {
-    return {
-      success: false,
-      provider: "unknown",
-      error: `Unsupported payment method: ${request.payment_method}. Only PayPal and Venmo are supported.`,
-      timestamp: new Date().toISOString(),
-    };
+  if (request.payment_method === "venmo") {
+    return sendViaPayPal(request);
   }
 
-  return sendViaPayPal(request);
+  if (request.payment_method === "bank") {
+    return sendViaStripeConnect(request);
+  }
+
+  return {
+    success: false,
+    provider: "unknown",
+    error: `Unsupported payment method: ${request.payment_method}. Only Venmo and Bank are supported.`,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 // Keep legacy name for influencer payouts that may reference it
 export const sendInfluencerPayout = sendPayout;
 
 // ============================================================
-// PAYPAL PAYOUTS API
+// STRIPE CONNECT TRANSFERS
+// ============================================================
+
+/**
+ * Send payout via Stripe Connect Transfer to user's Express account.
+ * Transfers net_amount_cents (after any fees) to the connected account.
+ */
+async function sendViaStripeConnect(request: PayoutRequest): Promise<PayoutResult> {
+  const timestamp = new Date().toISOString();
+
+  if (!request.stripe_connect_account_id) {
+    return {
+      success: false,
+      provider: "stripe_connect",
+      error: "No Stripe bank account connected. Please connect a bank account first.",
+      timestamp,
+    };
+  }
+
+  try {
+    const amountToTransfer = request.net_amount_cents;
+
+    if (amountToTransfer <= 0) {
+      return {
+        success: false,
+        provider: "stripe_connect",
+        error: "Transfer amount must be greater than $0",
+        timestamp,
+      };
+    }
+
+    console.log("[Stripe Connect] Sending transfer:", {
+      amount: amountToTransfer,
+      destination: request.stripe_connect_account_id,
+      payoutId: request.payout_id,
+    });
+
+    const transfer = await stripe.transfers.create({
+      amount: amountToTransfer,
+      currency: "usd",
+      destination: request.stripe_connect_account_id,
+      description: `LetsGo cashout - ${request.recipient_name}`,
+      metadata: {
+        payout_id: request.payout_id,
+        user_id: request.user_id,
+        platform: "letsgo",
+      },
+    });
+
+    console.log("[Stripe Connect] Transfer created:", transfer.id);
+
+    return {
+      success: true,
+      transaction_id: transfer.id,
+      provider: "stripe_connect",
+      timestamp,
+    };
+  } catch (err) {
+    console.error("[Stripe Connect] Transfer error:", err);
+    return {
+      success: false,
+      provider: "stripe_connect",
+      error: err instanceof Error ? err.message : "Stripe transfer failed",
+      timestamp,
+    };
+  }
+}
+
+// ============================================================
+// PAYPAL PAYOUTS API (Venmo)
 // ============================================================
 
 const PAYPAL_BASE_URL =
@@ -98,30 +181,24 @@ async function getPayPalAccessToken(): Promise<string> {
 }
 
 /**
- * Send payout via PayPal Payouts API.
- * Handles both PayPal (email) and Venmo (handle) recipients.
+ * Send payout via PayPal Payouts API with Venmo wallet.
+ * Sends net_amount_cents (after 3% fee has been deducted).
  */
 async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
   const timestamp = new Date().toISOString();
 
   try {
     const accessToken = await getPayPalAccessToken();
-    const isVenmo = request.payment_method === "venmo";
-    const amountStr = (request.amount_cents / 100).toFixed(2);
+    const amountStr = (request.net_amount_cents / 100).toFixed(2);
 
-    // Build the payout item
     const payoutItem: Record<string, unknown> = {
       recipient_type: "EMAIL",
       amount: { value: amountStr, currency: "USD" },
       receiver: request.payment_details,
       note: request.memo || `LetsGo cashout - ${request.recipient_name}`,
       sender_item_id: request.payout_id,
+      recipient_wallet: "VENMO",
     };
-
-    // For Venmo recipients, add the wallet designation
-    if (isVenmo) {
-      payoutItem.recipient_wallet = "VENMO";
-    }
 
     const body = {
       sender_batch_header: {
@@ -132,10 +209,8 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
       items: [payoutItem],
     };
 
-    console.log("[PayPal] Sending payout:", {
+    console.log("[PayPal] Sending Venmo payout:", {
       amount: amountStr,
-      method: request.payment_method,
-      isVenmo,
       payoutId: request.payout_id,
     });
 
@@ -156,25 +231,24 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
         responseData?.details?.[0]?.issue ||
         responseData?.message ||
         `PayPal API error (${res.status})`;
-      return { success: false, provider: "paypal", error: errorMsg, timestamp };
+      return { success: false, provider: "venmo_via_paypal", error: errorMsg, timestamp };
     }
 
-    // PayPal returns a batch with a payout_batch_id
     const batchId = responseData?.batch_header?.payout_batch_id || "";
-    console.log("[PayPal] Payout batch created:", batchId);
+    console.log("[PayPal] Venmo payout batch created:", batchId);
 
     return {
       success: true,
       transaction_id: batchId,
-      provider: isVenmo ? "venmo_via_paypal" : "paypal",
+      provider: "venmo_via_paypal",
       timestamp,
     };
   } catch (err) {
     console.error("[PayPal] Payout exception:", err);
     return {
       success: false,
-      provider: "paypal",
-      error: err instanceof Error ? err.message : "PayPal payout failed",
+      provider: "venmo_via_paypal",
+      error: err instanceof Error ? err.message : "Venmo payout failed",
       timestamp,
     };
   }
@@ -195,11 +269,11 @@ export function validatePayoutRequest(request: PayoutRequest): string | null {
   if (!request.payment_method) return "Missing payment method";
   if (!request.recipient_name) return "Missing recipient name";
 
-  if (request.payment_method === "paypal" && !request.payment_details?.includes("@")) {
-    return "PayPal requires a valid email address";
-  }
   if (request.payment_method === "venmo" && !request.payment_details?.trim()) {
     return "Venmo requires a username or phone number";
+  }
+  if (request.payment_method === "bank" && !request.stripe_connect_account_id) {
+    return "Bank payout requires a connected Stripe account";
   }
 
   return null;

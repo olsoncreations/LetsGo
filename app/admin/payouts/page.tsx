@@ -27,6 +27,8 @@ interface UserPayout {
   id: string;
   user_id: string;
   amount_cents: number;
+  fee_cents: number;
+  net_amount_cents: number | null;
   method: string;
   account: string;
   status: string;
@@ -35,6 +37,7 @@ interface UserPayout {
   processed_by: string | null;
   deny_reason: string | null;
   notes: string | null;
+  stripe_transfer_id: string | null;
   breakdown: PayoutBreakdown | null;
   // Joined from profiles
   user_name: string | null;
@@ -70,7 +73,7 @@ interface TierChange {
 }
 
 type StatusFilter = "all" | "pending" | "processing" | "completed" | "failed";
-type MethodFilter = "all" | "venmo" | "paypal";
+type MethodFilter = "all" | "venmo" | "paypal" | "bank";
 
 /* ==================== HELPERS ==================== */
 
@@ -356,7 +359,7 @@ export default function PayoutsPage() {
 
   async function handleSendPayment(payout: UserPayout) {
     if (sendingPayoutId) return;
-    const methodLabel = payout.method === "venmo" ? "Venmo" : "PayPal";
+    const methodLabel = payout.method === "venmo" ? "Venmo" : payout.method === "bank" ? "Bank" : "PayPal";
     if (!confirm(`Send ${formatMoney(payout.amount_cents)} to ${payout.user_name || payout.account} via ${methodLabel}?`)) return;
 
     setSendingPayoutId(payout.id);
@@ -430,7 +433,7 @@ export default function PayoutsPage() {
   }
 
   async function handleBulkSend() {
-    const processing = filteredPayouts.filter(p => p.status === "processing" && selectedIds.has(p.id) && (p.method === "venmo" || p.method === "paypal"));
+    const processing = filteredPayouts.filter(p => p.status === "processing" && selectedIds.has(p.id) && (p.method === "venmo" || p.method === "paypal" || p.method === "bank"));
     if (processing.length === 0) return;
     if (!confirm(`Send ${processing.length} payment${processing.length > 1 ? "s" : ""} totaling ${formatMoney(processing.reduce((s, p) => s + p.amount_cents, 0))} via PayPal?`)) return;
 
@@ -467,7 +470,7 @@ export default function PayoutsPage() {
   }
 
   const selectedPendingCount = filteredPayouts.filter(p => p.status === "pending" && selectedIds.has(p.id)).length;
-  const selectedProcessingCount = filteredPayouts.filter(p => p.status === "processing" && selectedIds.has(p.id) && (p.method === "venmo" || p.method === "paypal")).length;
+  const selectedProcessingCount = filteredPayouts.filter(p => p.status === "processing" && selectedIds.has(p.id) && (p.method === "venmo" || p.method === "paypal" || p.method === "bank")).length;
 
   /* ==================== TIER MANAGEMENT ==================== */
 
@@ -650,6 +653,7 @@ export default function PayoutsPage() {
               <option value="all">All Methods</option>
               <option value="venmo">Venmo</option>
               <option value="paypal">PayPal</option>
+              <option value="bank">Bank (Stripe)</option>
             </select>
             <input type="date" value={filters.dateFrom} onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
               style={{ padding: "12px 14px", border: "1px solid " + COLORS.cardBorder, borderRadius: 10, fontSize: 13, background: COLORS.cardBg, color: COLORS.textPrimary }} />
@@ -802,9 +806,16 @@ export default function PayoutsPage() {
                     render: (v, row) => {
                       const bd = row.breakdown as PayoutBreakdown | null;
                       const hasBreakdown = bd && ((bd.influencer_earnings_cents || 0) > 0 || (bd.receipt_earnings_cents || 0) > 0);
+                      const feeCents = (row.fee_cents as number) || 0;
+                      const netCents = (row.net_amount_cents as number) || (Number(v) - feeCents);
                       return (
                         <div>
                           <span style={{ fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(Number(v))}</span>
+                          {feeCents > 0 && (
+                            <div style={{ fontSize: 10, color: COLORS.neonYellow, marginTop: 2 }}>
+                              Fee: {formatMoney(feeCents)} · Net: {formatMoney(netCents)}
+                            </div>
+                          )}
                           {hasBreakdown && (
                             <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }}>
                               {(bd.receipt_earnings_cents || 0) > 0 && <span>Receipts: {formatMoney(bd.receipt_earnings_cents || 0)}</span>}
@@ -819,7 +830,7 @@ export default function PayoutsPage() {
                   {
                     key: "method",
                     label: "Method",
-                    render: (v) => <span>{v === "venmo" ? "📱 Venmo" : "💳 PayPal"}</span>,
+                    render: (v) => <span>{v === "venmo" ? "📱 Venmo" : v === "bank" ? "🏦 Bank" : "💳 PayPal"}</span>,
                   },
                   {
                     key: "account",
@@ -865,7 +876,7 @@ export default function PayoutsPage() {
                       }
                       if (payout.status === "processing") {
                         const isSending = sendingPayoutId === payout.id;
-                        const isPayPalOrVenmo = payout.method === "venmo" || payout.method === "paypal";
+                        const isPayPalOrVenmo = payout.method === "venmo" || payout.method === "paypal" || payout.method === "bank";
                         return (
                           <div style={{ display: "flex", gap: 6 }}>
                             {isPayPalOrVenmo && (

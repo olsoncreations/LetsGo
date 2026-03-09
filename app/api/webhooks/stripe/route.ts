@@ -47,6 +47,12 @@ export async function POST(req: Request): Promise<Response> {
         break;
       }
 
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        await handleAccountUpdated(account);
+        break;
+      }
+
       default:
         // Ignore other event types
         break;
@@ -134,4 +140,21 @@ async function handlePaymentFailure(pi: Stripe.PaymentIntent) {
     .update({ status: "overdue" })
     .eq("id", invoiceId)
     .in("status", ["pending", "sent"]);
+}
+
+/**
+ * Handle Stripe Connect account updates.
+ * When a user completes Express onboarding, update their profile.
+ */
+async function handleAccountUpdated(account: Stripe.Account) {
+  const userId = account.metadata?.user_id;
+  if (!userId) return;
+
+  if (account.payouts_enabled) {
+    await supabaseServer
+      .from("profiles")
+      .update({ stripe_connect_onboarding_complete: true })
+      .eq("id", userId)
+      .eq("stripe_connect_account_id", account.id);
+  }
 }

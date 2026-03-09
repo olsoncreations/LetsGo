@@ -21,8 +21,10 @@ async function authenticate(req: NextRequest) {
  * POST /api/users/cashout
  * Request a cashout of available balance.
  *
- * Body: { amountCents?: number }
+ * Body: { amountCents?: number, method?: "venmo" | "bank" }
  * - If amountCents is omitted, cashes out full available balance.
+ * - If method is omitted, uses profile's payout_method.
+ * - Venmo: 3% fee deducted from payout. Bank: free.
  */
 export async function POST(req: NextRequest) {
   const user = await authenticate(req);
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
   // Fetch current profile
   const { data: profile, error: profileErr } = await supabaseServer
     .from("profiles")
-    .select("available_balance, payout_method, payout_identifier, payout_verified, status")
+    .select("available_balance, payout_method, payout_identifier, payout_verified, status, stripe_connect_account_id, stripe_connect_onboarding_complete")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -54,10 +56,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Your account is suspended. Contact support for help." }, { status: 403 });
   }
 
-  // Verify payout method is configured
-  if (!profile.payout_method || !profile.payout_identifier) {
+  // Parse request body
+  const body = await req.json().catch(() => ({}));
+  const method = (body.method as string) || profile.payout_method || "";
+
+  // Validate payout method
+  if (method === "venmo") {
+    if (!profile.payout_identifier) {
+      return NextResponse.json(
+        { error: "Please connect your Venmo account before cashing out." },
+        { status: 400 },
+      );
+    }
+  } else if (method === "bank") {
+    if (!profile.stripe_connect_account_id || !profile.stripe_connect_onboarding_complete) {
+      return NextResponse.json(
+        { error: "Please connect your bank account before cashing out." },
+        { status: 400 },
+      );
+    }
+  } else {
     return NextResponse.json(
-      { error: "Please connect a payout method (Venmo or PayPal) before cashing out." },
+      { error: "Please select a payout method (Venmo or Bank Account)." },
       { status: 400 },
     );
   }
@@ -65,7 +85,6 @@ export async function POST(req: NextRequest) {
   const availableBalance = (profile.available_balance as number) || 0;
 
   // Parse requested amount (default to full balance)
-  const body = await req.json().catch(() => ({}));
   const requestedAmount = body.amountCents ? Math.floor(Number(body.amountCents)) : availableBalance;
 
   // Validate amount
@@ -85,6 +104,14 @@ export async function POST(req: NextRequest) {
       { error: `Insufficient balance. Available: $${(availableBalance / 100).toFixed(2)}` },
       { status: 400 },
     );
+  }
+
+  // Calculate fee (3% for Venmo, free for bank)
+  const feeCents = method === "venmo" ? Math.round(requestedAmount * 0.03) : 0;
+  const netAmountCents = requestedAmount - feeCents;
+
+  if (netAmountCents <= 0) {
+    return NextResponse.json({ error: "Payout amount too small after fees" }, { status: 400 });
   }
 
   // Compute itemized breakdown of balance sources
@@ -156,19 +183,26 @@ export async function POST(req: NextRequest) {
     influencer_details: influencerDetails.length > 0 ? influencerDetails : undefined,
   };
 
-  // Insert payout request with breakdown
+  // Determine account identifier for the payout record
+  const account = method === "venmo"
+    ? profile.payout_identifier
+    : `bank:${(profile.stripe_connect_account_id as string).slice(0, 12)}...`;
+
+  // Insert payout request with fee tracking
   const { data: payout, error: payoutErr } = await supabaseServer
     .from("user_payouts")
     .insert({
       user_id: user.id,
       amount_cents: requestedAmount,
-      method: profile.payout_method,
-      account: profile.payout_identifier,
+      fee_cents: feeCents,
+      net_amount_cents: netAmountCents,
+      method,
+      account,
       status: "pending",
       requested_at: new Date().toISOString(),
       breakdown,
     })
-    .select("id, amount_cents, method, status, requested_at")
+    .select("id, amount_cents, fee_cents, net_amount_cents, method, status, requested_at")
     .single();
 
   if (payoutErr) {
@@ -187,21 +221,30 @@ export async function POST(req: NextRequest) {
 
   if (balanceErr) {
     console.error("[cashout] Balance update error:", balanceErr);
-    // Payout record exists — admin will reconcile. Don't fail the user.
   }
 
-  // Notify user that their cashout request was submitted
-  const methodLabel = String(profile.payout_method || "your account");
+  // Build notification message
   const amountStr = `$${(requestedAmount / 100).toFixed(2)}`;
+  let notifBody: string;
+  if (method === "venmo") {
+    const feeStr = `$${(feeCents / 100).toFixed(2)}`;
+    const netStr = `$${(netAmountCents / 100).toFixed(2)}`;
+    notifBody = `Your ${amountStr} cashout to Venmo has been submitted (${feeStr} fee, you'll receive ${netStr}). Arrives in minutes after approval.`;
+  } else {
+    notifBody = `Your ${amountStr} cashout to your bank account has been submitted (no fee). Arrives in 2-3 business days.`;
+  }
+
   notify({
     userId: user.id,
     type: NOTIFICATION_TYPES.PAYOUT_PROCESSED,
     title: "Cashout Requested!",
-    body: `Your ${amountStr} cashout to ${methodLabel} has been submitted. It may take 1-3 business days to process.`,
+    body: notifBody,
     metadata: {
       payoutId: payout.id,
       amountCents: requestedAmount,
-      method: methodLabel,
+      feeCents,
+      netAmountCents,
+      method,
       href: "/profile",
     },
   });
@@ -210,6 +253,8 @@ export async function POST(req: NextRequest) {
     ok: true,
     payoutId: payout.id,
     amountCents: payout.amount_cents,
+    feeCents: payout.fee_cents,
+    netAmountCents: payout.net_amount_cents,
     method: payout.method,
     status: payout.status,
   }, { status: 201 });

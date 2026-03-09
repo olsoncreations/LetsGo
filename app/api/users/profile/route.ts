@@ -163,7 +163,7 @@ export async function PATCH(req: NextRequest) {
   // Validate payout method
   if (updates.payout_method) {
     const method = updates.payout_method as string;
-    if (!["venmo", "paypal"].includes(method)) {
+    if (!["venmo", "bank"].includes(method)) {
       return NextResponse.json({ error: "Invalid payout method" }, { status: 400 });
     }
   }

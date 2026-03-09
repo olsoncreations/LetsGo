@@ -45,6 +45,7 @@ interface ProfileData {
   payout_verified: boolean | null; preferences: Record<string, boolean> | null;
   referral_code: string | null; tax_id_on_file: boolean | null;
   w9_status: string | null; tax_1099_years: string[] | null;
+  stripe_connect_account_id: string | null; stripe_connect_onboarding_complete: boolean | null;
 }
 interface ReceiptDisplay {
   id: string; business: string; businessId: string; date: string;
@@ -312,19 +313,29 @@ const LevelUpCelebration = ({data,onClose}:{data:LevelUpData|null;onClose:()=>vo
 };
 
 // ═══════════════════════════════════════════════════
-// CASH OUT MODAL
+// CASH OUT MODAL (Dual Option: Venmo Instant + Bank Free)
 // ═══════════════════════════════════════════════════
-const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCashoutCents=2000}:{mode:string|null;onClose:()=>void;onGoToSettings:()=>void;amount:number;token:string|null;onSuccess:()=>void;minCashoutCents?:number}) => {
+const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCashoutCents=2000,profile}:{mode:string|null;onClose:()=>void;onGoToSettings:()=>void;amount:number;token:string|null;onSuccess:()=>void;minCashoutCents?:number;profile:ProfileData|null}) => {
   const [processing,setProcessing]=useState(false);
   const [errMsg,setErrMsg]=useState("");
+  const [selectedMethod,setSelectedMethod]=useState<"venmo"|"bank">("bank");
+
+  const amountCents = Math.round(amount*100);
+  const feeCents = selectedMethod==="venmo"?Math.round(amountCents*0.03):0;
+  const netCents = amountCents-feeCents;
+
+  const hasVenmo = !!(profile?.payout_method==="venmo"&&profile?.payout_identifier);
+  const hasBank = !!(profile?.stripe_connect_account_id&&profile?.stripe_connect_onboarding_complete);
+
+  const canSubmit = selectedMethod==="venmo"?hasVenmo:(selectedMethod==="bank"?hasBank:false);
 
   const handleConfirm = async () => {
-    if(!token)return;
+    if(!token||!canSubmit)return;
     setProcessing(true);setErrMsg("");
     try{
       const res=await fetch("/api/users/cashout",{
         method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-        body:JSON.stringify({amountCents:Math.round(amount*100)}),
+        body:JSON.stringify({amountCents,method:selectedMethod}),
       });
       const data=await res.json();
       if(!res.ok)throw new Error(data.error||"Cash out failed");
@@ -333,30 +344,151 @@ const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCas
   };
 
   if(!mode)return null;
-  return(
-    <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:420,borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${mode==="confirm"?NEON.yellowRGB:NEON.pinkRGB},0.2)`,boxShadow:`0 0 60px rgba(${mode==="confirm"?NEON.yellowRGB:NEON.pinkRGB},0.08)`,padding:28,textAlign:"center"}}>
-        {mode==="confirm"?(<>
-          <div style={{fontSize:40,marginBottom:16}}>{"\uD83D\uDCB0"}</div>
-          <h3 style={{fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:22,fontWeight:700,color:"#fff",marginBottom:8}}>Cash Out ${amount.toFixed(2)}?</h3>
-          <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:6,lineHeight:1.5}}>This will be sent to your connected payment account.</p>
-          <p style={{fontSize:11,color:"rgba(255,255,255,0.2)",marginBottom:24}}>Transfers typically arrive within 1{"\u2013"}3 business days.</p>
-          {errMsg&&<div style={{fontSize:11,color:NEON.pink,marginBottom:12}}>{errMsg}</div>}
-          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-            <button onClick={onClose} style={{padding:"10px 22px",borderRadius:3,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.35)",fontSize:10,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
-            <button onClick={handleConfirm} disabled={processing} style={{padding:"10px 22px",borderRadius:3,border:`1px solid rgba(${NEON.yellowRGB},0.5)`,background:`rgba(${NEON.yellowRGB},0.12)`,color:NEON.yellow,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textShadow:`0 0 8px ${NEON.yellow}50`,opacity:processing?0.5:1}}>{processing?"Processing...":"Confirm Cash Out"}</button>
-          </div>
-          <div style={{marginTop:16,fontSize:9,color:"rgba(255,255,255,0.1)",letterSpacing:"0.05em"}}>*${(minCashoutCents/100).toFixed(2)} minimum to cash out</div>
-        </>):(<>
+
+  // No payout method connected at all
+  if(mode==="noPayment"){
+    return(
+      <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease"}} onClick={onClose}>
+        <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:420,borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${NEON.pinkRGB},0.2)`,boxShadow:`0 0 60px rgba(${NEON.pinkRGB},0.08)`,padding:28,textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:16}}>{"\uD83D\uDD17"}</div>
           <h3 style={{fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:20,fontWeight:700,color:"#fff",marginBottom:8}}>No Payment Account Connected</h3>
-          <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:24,lineHeight:1.6,maxWidth:320,margin:"0 auto 24px"}}>Connect your Venmo or PayPal in Settings to receive earnings.</p>
+          <p style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:24,lineHeight:1.6,maxWidth:320,margin:"0 auto 24px"}}>Connect your Venmo or bank account in Settings to receive earnings.</p>
           <div style={{display:"flex",gap:10,justifyContent:"center"}}>
             <button onClick={onClose} style={{padding:"10px 22px",borderRadius:3,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.35)",fontSize:10,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Later</button>
             <button onClick={onGoToSettings} style={{padding:"10px 22px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.5)`,background:`rgba(${NEON.primaryRGB},0.12)`,color:NEON.primary,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textShadow:`0 0 8px ${NEON.primary}50`}}>Go to Settings</button>
           </div>
-        </>)}
+        </div>
       </div>
+    );
+  }
+
+  // Dual option selector
+  const cardStyle=(selected:boolean,rgb:string)=>({
+    flex:1,padding:16,borderRadius:6,cursor:"pointer",textAlign:"center" as const,
+    border:selected?`2px solid rgba(${rgb},0.6)`:"2px solid rgba(255,255,255,0.08)",
+    background:selected?`rgba(${rgb},0.08)`:"rgba(255,255,255,0.02)",
+    transition:"all 0.2s ease",
+  });
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease",padding:"0 12px"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:460,borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${NEON.yellowRGB},0.2)`,boxShadow:`0 0 60px rgba(${NEON.yellowRGB},0.08)`,padding:28}}>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:40,marginBottom:8}}>{"\uD83D\uDCB0"}</div>
+          <h3 style={{fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:22,fontWeight:700,color:"#fff",margin:0}}>Cash Out ${amount.toFixed(2)}</h3>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.25)",marginTop:4}}>Choose how you want to receive your money</p>
+        </div>
+
+        <div style={{display:"flex",gap:10,marginBottom:20}}>
+          {/* Venmo - Instant */}
+          <div onClick={()=>setSelectedMethod("venmo")} style={cardStyle(selectedMethod==="venmo",NEON.yellowRGB)}>
+            <div style={{fontSize:24,marginBottom:6}}>{"\u26A1"}</div>
+            <div style={{fontSize:12,fontWeight:700,color:selectedMethod==="venmo"?NEON.yellow:"rgba(255,255,255,0.5)",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>Instant</div>
+            <div style={{fontSize:10,color:selectedMethod==="venmo"?NEON.yellow:"rgba(255,255,255,0.3)",fontWeight:600,marginBottom:8}}>Venmo</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.2)",lineHeight:1.5}}>Arrives in minutes</div>
+            <div style={{fontSize:10,color:NEON.orange,fontWeight:600,marginTop:4}}>3% fee ({`$${(feeCents/100).toFixed(2)}`})</div>
+            <div style={{fontSize:11,color:selectedMethod==="venmo"?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.15)",fontWeight:600,marginTop:6}}>You get ${selectedMethod==="venmo"?(netCents/100).toFixed(2):((amountCents-Math.round(amountCents*0.03))/100).toFixed(2)}</div>
+            {!hasVenmo&&<div style={{fontSize:9,color:NEON.pink,marginTop:6}}>Not connected</div>}
+          </div>
+
+          {/* Bank - Free */}
+          <div onClick={()=>setSelectedMethod("bank")} style={cardStyle(selectedMethod==="bank",NEON.greenRGB)}>
+            <div style={{fontSize:24,marginBottom:6}}>{"\uD83C\uDFE6"}</div>
+            <div style={{fontSize:12,fontWeight:700,color:selectedMethod==="bank"?NEON.green:"rgba(255,255,255,0.5)",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>Standard</div>
+            <div style={{fontSize:10,color:selectedMethod==="bank"?NEON.green:"rgba(255,255,255,0.3)",fontWeight:600,marginBottom:8}}>Bank Account</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.2)",lineHeight:1.5}}>2-3 business days</div>
+            <div style={{fontSize:10,color:NEON.green,fontWeight:600,marginTop:4}}>FREE - no fees</div>
+            <div style={{fontSize:11,color:selectedMethod==="bank"?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.15)",fontWeight:600,marginTop:6}}>You get ${amount.toFixed(2)}</div>
+            {!hasBank&&<div style={{fontSize:9,color:NEON.pink,marginTop:6}}>Not connected</div>}
+          </div>
+        </div>
+
+        {!canSubmit&&(
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:11,color:NEON.yellow,marginBottom:8}}>
+              {selectedMethod==="venmo"?"Connect your Venmo in Settings to use instant payouts.":"Connect your bank account in Settings to use free transfers."}
+            </p>
+            <button onClick={onGoToSettings} style={{padding:"8px 18px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.4)`,background:`rgba(${NEON.primaryRGB},0.1)`,color:NEON.primary,fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Go to Settings</button>
+          </div>
+        )}
+
+        {errMsg&&<div style={{fontSize:11,color:NEON.pink,marginBottom:12,textAlign:"center"}}>{errMsg}</div>}
+
+        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+          <button onClick={onClose} style={{padding:"10px 22px",borderRadius:3,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.35)",fontSize:10,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
+          {canSubmit&&<button onClick={handleConfirm} disabled={processing} style={{padding:"10px 22px",borderRadius:3,border:`1px solid rgba(${selectedMethod==="venmo"?NEON.yellowRGB:NEON.greenRGB},0.5)`,background:`rgba(${selectedMethod==="venmo"?NEON.yellowRGB:NEON.greenRGB},0.12)`,color:selectedMethod==="venmo"?NEON.yellow:NEON.green,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:processing?0.5:1}}>{processing?"Processing...":`Confirm ${selectedMethod==="venmo"?"Venmo":"Bank"} Cash Out`}</button>}
+        </div>
+        <div style={{marginTop:16,fontSize:9,color:"rgba(255,255,255,0.1)",letterSpacing:"0.05em",textAlign:"center"}}>*${(minCashoutCents/100).toFixed(2)} minimum to cash out</div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// BANK ACCOUNT SECTION (Stripe Connect)
+// ═══════════════════════════════════════════════════
+const BankAccountSection = ({token,profile,onProfileSaved}:{token:string|null;profile:ProfileData|null;onProfileSaved:(p:ProfileData)=>void}) => {
+  const [loading,setLoading]=useState(false);
+  const [statusMsg,setStatusMsg]=useState("");
+
+  const hasAccount = !!profile?.stripe_connect_account_id;
+  const isComplete = !!profile?.stripe_connect_onboarding_complete;
+
+  const handleConnectBank = async () => {
+    if(!token)return;
+    setLoading(true);setStatusMsg("");
+    try{
+      const res=await fetch("/api/stripe/connect/onboard",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||"Failed to start bank connection");
+      if(data.status==="complete"){
+        setStatusMsg("Bank account already connected!");
+        // Refresh profile
+        const pRes=await fetch("/api/users/profile",{headers:{Authorization:`Bearer ${token}`}});
+        if(pRes.ok){const d=await pRes.json();onProfileSaved(d.profile);}
+      } else if(data.url){
+        window.location.href=data.url;
+      }
+    }catch(e){setStatusMsg(e instanceof Error?e.message:"Connection failed");}finally{setLoading(false);}
+  };
+
+  const handleManageBank = async () => {
+    if(!token)return;
+    setLoading(true);
+    try{
+      const res=await fetch("/api/stripe/connect/dashboard",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
+      const data=await res.json();
+      if(!res.ok)throw new Error(data.error||"Failed to open dashboard");
+      if(data.url)window.open(data.url,"_blank");
+    }catch(e){setStatusMsg(e instanceof Error?e.message:"Failed to open dashboard");}finally{setLoading(false);}
+  };
+
+  return(
+    <div style={{padding:16,borderRadius:4,background:isComplete?"rgba(255,255,255,0.02)":`rgba(${NEON.greenRGB},0.03)`,border:`1px solid ${isComplete?"rgba(255,255,255,0.06)":`rgba(${NEON.greenRGB},0.15)`}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+        <div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase"}}>Standard Payout (Bank Account)</div>
+          <div style={{fontSize:9,color:NEON.green,marginTop:2}}>FREE {"\u00b7"} 2-3 business days</div>
+        </div>
+        {isComplete&&<span style={{fontSize:9,fontWeight:700,color:NEON.green,letterSpacing:"0.08em",display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:"50%",background:NEON.green,boxShadow:`0 0 4px ${NEON.green}`}}/>CONNECTED</span>}
+      </div>
+      {isComplete?(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div><div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:2}}>Bank Account {"\u00b7"} Connected via Stripe</div></div>
+          <button onClick={handleManageBank} disabled={loading} style={{padding:"5px 12px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.25)",fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.08em",opacity:loading?0.5:1}}>{loading?"Loading...":"Manage"}</button>
+        </div>
+      ):hasAccount?(
+        <div>
+          <p style={{fontSize:11,color:NEON.yellow,lineHeight:1.6,marginBottom:12}}>Bank setup started but not complete.</p>
+          <button onClick={handleConnectBank} disabled={loading} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.greenRGB},0.4)`,background:`rgba(${NEON.greenRGB},0.1)`,color:NEON.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em",opacity:loading?0.5:1}}>{loading?"Loading...":"Complete Setup"}</button>
+        </div>
+      ):(
+        <div>
+          <p style={{fontSize:11,color:"rgba(255,255,255,0.3)",lineHeight:1.6,marginBottom:12}}>Connect your bank account to receive free cash outs via direct deposit.</p>
+          <button onClick={handleConnectBank} disabled={loading} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.greenRGB},0.4)`,background:`rgba(${NEON.greenRGB},0.1)`,color:NEON.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em",opacity:loading?0.5:1}}>{loading?"Loading...":"Connect Bank Account"}</button>
+        </div>
+      )}
+      {statusMsg&&<div style={{fontSize:11,color:statusMsg.includes("connected")?NEON.green:NEON.pink,marginTop:8}}>{statusMsg}</div>}
     </div>
   );
 };
@@ -371,7 +503,6 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   const [activeTab,setActiveTab]=useState("profile");
   const settingsAvatarRef=useRef<HTMLInputElement>(null);
   const [payoutIdentifier,setPayoutIdentifier]=useState(profile?.payout_identifier||"");
-  const [payoutTab,setPayoutTab]=useState<"venmo"|"paypal">(profile?.payout_method==="paypal"?"paypal":"venmo");
   const [saving,setSaving]=useState(false);
   const [saveMsg,setSaveMsg]=useState("");
   const [formData,setFormData]=useState({first_name:"",last_name:"",username:"",email:"",zip_code:"",bio:""});
@@ -381,7 +512,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [notifPrefs,setNotifPrefs]=useState<Record<string,boolean>>({push_notifications:true,email_notifications:true,sms_notifications:false,marketing_emails:false});
 
-  useEffect(()=>{if(profile){setFormData({first_name:profile.first_name||"",last_name:profile.last_name||"",username:profile.username||"",email:profile.email||"",zip_code:profile.zip_code||"",bio:profile.bio||""});setPayoutIdentifier(profile.payout_identifier||"");if(profile.payout_method==="paypal")setPayoutTab("paypal");if(profile.preferences)setNotifPrefs(prev=>({...prev,...profile.preferences}));}},[profile]);
+  useEffect(()=>{if(profile){setFormData({first_name:profile.first_name||"",last_name:profile.last_name||"",username:profile.username||"",email:profile.email||"",zip_code:profile.zip_code||"",bio:profile.bio||""});setPayoutIdentifier(profile.payout_identifier||"");if(profile.preferences)setNotifPrefs(prev=>({...prev,...profile.preferences}));}},[profile]);
 
   useEffect(()=>{
     if(!open||!token||activeTab!=="notifications"||!profile?.id)return;
@@ -390,13 +521,13 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
 
   const handleSaveProfile=async()=>{if(!token)return;if(!formData.first_name.trim()){setSaveMsg("First name is required");return;}if(!formData.last_name.trim()){setSaveMsg("Last name is required");return;}if(!formData.username.trim()){setSaveMsg("Username is required");return;}if(!formData.email.trim()){setSaveMsg("Email is required");return;}if(!formData.zip_code.trim()||!/^\d{5}$/.test(formData.zip_code.trim())){setSaveMsg("Zip code is required (5 digits)");return;}setSaving(true);setSaveMsg("");try{const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({first_name:formData.first_name,last_name:formData.last_name,username:formData.username,zip_code:formData.zip_code.trim(),bio:formData.bio})});const data=await res.json();if(!res.ok){setSaveMsg(data.error||"Save failed");return;}onProfileSaved(data.profile);setSaveMsg("Saved!");setTimeout(()=>setSaveMsg(""),2000);}catch{setSaveMsg("Network error");}finally{setSaving(false);}};
   const handleAvatarUpload=async(file:File)=>{if(!token||!profile)return;const ext=file.name.split(".").pop()||"jpg";const path=`${profile.id}/avatar-${Date.now()}.${ext}`;const{error:upErr}=await supabaseBrowser.storage.from("avatars").upload(path,file,{upsert:true});if(upErr){setSaveMsg("Upload failed");return;}const{data:{publicUrl}}=supabaseBrowser.storage.from("avatars").getPublicUrl(path);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({avatar_url:publicUrl})});if(res.ok){const d=await res.json();onAvatarChange(publicUrl);onProfileSaved(d.profile);}};
-  const handleConnectPayout=async()=>{if(!token||!payoutIdentifier.trim())return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:payoutTab,payout_identifier:payoutIdentifier.trim()})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);}setSaving(false);};
+  const handleConnectPayout=async()=>{if(!token||!payoutIdentifier.trim())return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:"venmo",payout_identifier:payoutIdentifier.trim()})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);}setSaving(false);};
   const handleDisconnectPayout=async()=>{if(!token)return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:"",payout_identifier:""})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);setPayoutIdentifier("");}setSaving(false);};
   const handleSaveNotifs=async()=>{if(!token)return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({preferences:notifPrefs})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);setSaveMsg("Saved!");setTimeout(()=>setSaveMsg(""),2000);}setSaving(false);};
   const handleUnblock=async(fid:string)=>{if(!token)return;await fetch(`/api/friends/${fid}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`}});setBlockedUsers(prev=>prev.filter(u=>u.friendshipId!==fid));};
   const handleSendSupport=async()=>{if(!token||!supportMsg.trim())return;setSaving(true);const res=await fetch("/api/conversations",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({message:supportMsg.trim(),subject:"Support Request"})});if(res.ok){setSupportSent(true);setSupportMsg("");}setSaving(false);};
 
-  const paymentConnected=!!(profile?.payout_method&&profile?.payout_identifier);
+  const hasVenmoConnected=!!(profile?.payout_method==="venmo"&&profile?.payout_identifier);
   if(!open)return null;
   return(
     <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease",padding:"0 12px"}} onClick={onClose}>
@@ -424,22 +555,32 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
             </div>
           </div>)}
           {activeTab==="account"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{padding:16,borderRadius:4,background:paymentConnected?"rgba(255,255,255,0.02)":`rgba(${NEON.yellowRGB},0.03)`,border:`1px solid ${paymentConnected?"rgba(255,255,255,0.06)":`rgba(${NEON.yellowRGB},0.15)`}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}><div style={{fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase"}}>Payment Account</div>{paymentConnected&&<span style={{fontSize:9,fontWeight:700,color:NEON.green,letterSpacing:"0.08em",display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:"50%",background:NEON.green,boxShadow:`0 0 4px ${NEON.green}`}}/>CONNECTED</span>}</div>
-              {paymentConnected?(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:2}}>{profile?.payout_method==="paypal"?"PayPal":"Venmo"} {"\u00b7"} {profile?.payout_identifier}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.2)"}}>Cash outs sent here</div></div><button onClick={handleDisconnectPayout} style={{padding:"5px 12px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.25)",fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.08em"}}>Disconnect</button></div>):(<div><div style={{fontSize:12,color:NEON.yellow,fontWeight:600,marginBottom:10}}>No payment account connected</div><p style={{fontSize:11,color:"rgba(255,255,255,0.3)",lineHeight:1.6,marginBottom:12}}>Connect your Venmo or PayPal to receive cash outs.</p><div style={{display:"flex",gap:4,marginBottom:12}}>{(["venmo","paypal"] as const).map(m=>(<button key={m} onClick={()=>{setPayoutTab(m);setPayoutIdentifier("");}} style={{flex:1,padding:"8px 12px",borderRadius:3,border:payoutTab===m?`1px solid ${NEON.primary}`:"1px solid rgba(255,255,255,0.08)",background:payoutTab===m?`rgba(${NEON.primaryRGB},0.1)`:"transparent",color:payoutTab===m?NEON.primary:"rgba(255,255,255,0.3)",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em"}}>{m==="venmo"?"Venmo":"PayPal"}</button>))}</div><div style={{display:"flex",gap:8}}><input type={payoutTab==="paypal"?"email":"text"} placeholder={payoutTab==="paypal"?"your@email.com":"@yourusername"} value={payoutIdentifier} onChange={e=>setPayoutIdentifier(e.target.value)} style={{flex:1,padding:"9px 14px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.15)`,background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/><button onClick={handleConnectPayout} disabled={saving||!payoutIdentifier.trim()} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.greenRGB},0.4)`,background:`rgba(${NEON.greenRGB},0.1)`,color:NEON.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em",whiteSpace:"nowrap",opacity:saving||!payoutIdentifier.trim()?0.5:1}}>Connect</button></div></div>)}
+            {/* Venmo - Instant Payout */}
+            <div style={{padding:16,borderRadius:4,background:hasVenmoConnected?"rgba(255,255,255,0.02)":`rgba(${NEON.yellowRGB},0.03)`,border:`1px solid ${hasVenmoConnected?"rgba(255,255,255,0.06)":`rgba(${NEON.yellowRGB},0.15)`}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase"}}>Instant Payout (Venmo)</div>
+                  <div style={{fontSize:9,color:NEON.orange,marginTop:2}}>3% fee {"\u00b7"} Arrives in minutes</div>
+                </div>
+                {hasVenmoConnected&&<span style={{fontSize:9,fontWeight:700,color:NEON.green,letterSpacing:"0.08em",display:"flex",alignItems:"center",gap:4}}><span style={{width:5,height:5,borderRadius:"50%",background:NEON.green,boxShadow:`0 0 4px ${NEON.green}`}}/>CONNECTED</span>}
+              </div>
+              {hasVenmoConnected?(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:2}}>Venmo {"\u00b7"} {profile?.payout_identifier}</div></div><button onClick={handleDisconnectPayout} style={{padding:"5px 12px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.25)",fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.08em"}}>Disconnect</button></div>):(<div><div style={{display:"flex",gap:8}}><input type="text" placeholder="@yourusername" value={payoutIdentifier} onChange={e=>setPayoutIdentifier(e.target.value)} style={{flex:1,padding:"9px 14px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.15)`,background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/><button onClick={handleConnectPayout} disabled={saving||!payoutIdentifier.trim()} style={{padding:"9px 18px",borderRadius:3,border:`1px solid rgba(${NEON.greenRGB},0.4)`,background:`rgba(${NEON.greenRGB},0.1)`,color:NEON.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:"0.1em",whiteSpace:"nowrap",opacity:saving||!payoutIdentifier.trim()?0.5:1}}>Connect</button></div></div>)}
             </div>
+
+            {/* Bank Account - Free Payout */}
+            <BankAccountSection token={token} profile={profile} onProfileSaved={onProfileSaved} />
           </div>)}
           {activeTab==="help"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
             {/* FAQ Section */}
             <div>
               <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:12}}>Frequently Asked Questions</div>
               {([
-                {q:"How do I connect my payment account to receive cash outs?",a:"Go to Settings → Account tab → Payment Account section. Choose Venmo or PayPal, enter your username or email, and tap Connect. All future cash outs will be sent to that account."},
+                {q:"How do I connect my payment account to receive cash outs?",a:"Go to Settings → Account tab. You can connect your Venmo for instant payouts (3% fee) or link a bank account for free transfers (2-3 business days). You can connect both and choose at cash out time."},
                 {q:"How do Progressive Payouts work?",a:"Every business has 7 payout tiers. The more you visit the same business, the higher your cash-back percentage goes — starting at 5% and increasing up to 20%. Each business tracks your visits independently over a 365-day rolling window. Only approved receipts count toward your visit total."},
                 {q:"How do I upload a receipt?",a:"From your Profile, tap the \"Add Receipt\" button. Search for the business you visited, upload a photo of your receipt, enter the subtotal amount and visit date, then submit. The receipt must be submitted within 7 days of your visit."},
                 {q:"How long does receipt approval take?",a:"Most businesses review receipts within 24–48 hours. Some businesses have auto-approval enabled for smaller amounts. You'll receive a notification when your receipt is approved or rejected."},
                 {q:"What is the minimum cash out amount?",a:"The minimum cash out is $20.00. Once your available balance reaches $20 or more, you can request a cash out from your Profile page."},
-                {q:"How long does it take to receive my cash out?",a:"Cash outs are processed within 3 business days after you submit the request. The funds will be sent to your connected Venmo or PayPal account."},
+                {q:"How long does it take to receive my cash out?",a:"It depends on the method you choose. Venmo (Instant) arrives within minutes after admin approval, with a 3% processing fee. Bank Account (Standard) is free but takes 2-3 business days."},
                 {q:"What are the payout tier levels?",a:"Most businesses use the Standard plan: Starter (visits 1–10, 5%), Regular (11–20, 7.5%), Favorite (21–30, 10%), VIP (31–40, 12.5%), Elite (41–50, 15%), Legend (51–60, 17.5%), and Ultimate (61+, 20%). Some businesses may use different percentages."},
                 {q:"Why was my receipt rejected?",a:"Receipts can be rejected if the photo is blurry or unreadable, the receipt is from a different business, the date or amount doesn't match, or the receipt is older than 7 days. You can resubmit with a clearer photo if needed."},
                 {q:"How does the 365-day rolling window work?",a:"Your visit count for each business is based on the last 365 days from today, not a calendar year. If you visited a business 25 times in the past year, you're at tier 3. Visits older than 365 days no longer count toward your tier."},
@@ -475,7 +616,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
 // ═══════════════════════════════════════════════════
 
 interface CalcBiz { id: string; name: string; type: string; visits: number; level: number; rates: number[]; earned: number; balance: number; }
-interface CashoutDisplay { id: string; date: string; amount: number; method: string; status: string; breakdown?: { influencer_earnings_cents?: number; receipt_earnings_cents?: number; influencer_details?: { period: string; signups: number; amountCents: number }[] } | null; }
+interface CashoutDisplay { id: string; date: string; amount: number; method: string; status: string; fee_cents?: number; net_amount_cents?: number; breakdown?: { influencer_earnings_cents?: number; receipt_earnings_cents?: number; influencer_details?: { period: string; signups: number; amountCents: number }[] } | null; }
 interface ExperienceDisplay { id: string; businessId: string; businessName: string; mediaUrl: string; mediaType: string; caption: string; status: string; createdAt: string; }
 
 export default function LetsGoProfile() {
@@ -516,7 +657,7 @@ export default function LetsGoProfile() {
   const [experiencesOpen, setExperiencesOpen] = useState(false);
   const [savedPlacesOpen, setSavedPlacesOpen] = useState(false);
   const [progressiveOpen, setProgressiveOpen] = useState(false);
-  const [cashOutModal, setCashOutModal] = useState<"confirm" | "noVenmo" | null>(null);
+  const [cashOutModal, setCashOutModal] = useState<"confirm" | "noPayment" | null>(null);
   const [levelUpCelebration, setLevelUpCelebration] = useState<{business: string; newLevel: number; rate: number} | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
@@ -667,7 +808,7 @@ export default function LetsGoProfile() {
       // Fetch cashouts
       const { data: cashoutRows } = await supabaseBrowser
         .from("user_payouts")
-        .select("id, amount_cents, method, status, requested_at, breakdown")
+        .select("id, amount_cents, fee_cents, net_amount_cents, method, status, requested_at, breakdown")
         .eq("user_id", uid)
         .order("requested_at", { ascending: false })
         .limit(50);
@@ -677,8 +818,10 @@ export default function LetsGoProfile() {
           id: c.id as string,
           date: new Date(c.requested_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
           amount: (c.amount_cents as number) / 100,
-          method: ((c.method as string) === "paypal" ? "PayPal" : (c.method as string) === "venmo" ? "Venmo" : (c.method as string)) || "Venmo",
+          method: ((c.method as string) === "bank" ? "Bank" : (c.method as string) === "venmo" ? "Venmo" : (c.method as string) === "paypal" ? "PayPal" : (c.method as string)) || "Venmo",
           status: (c.status as string) || "pending",
+          fee_cents: (c.fee_cents as number) || 0,
+          net_amount_cents: (c.net_amount_cents as number) || undefined,
           breakdown: c.breakdown as CashoutDisplay["breakdown"],
         })));
       }
@@ -850,6 +993,21 @@ export default function LetsGoProfile() {
     })();
   }, [token, profile]);
 
+  // ─── Handle Stripe Connect return ───
+  useEffect(() => {
+    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("stripe_connected") || params.get("stripe_refresh")) {
+      window.history.replaceState({}, "", window.location.pathname);
+      // Check Stripe Connect status and refresh profile
+      (async () => {
+        await fetch("/api/stripe/connect/status", { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch("/api/users/profile", { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) { const d = await res.json(); setProfile(d.profile); }
+      })();
+    }
+  }, [token]);
+
   // ─── Add Friend Search (debounced) ───
   useEffect(() => {
     if (addFriendTimerRef.current) clearTimeout(addFriendTimerRef.current);
@@ -943,7 +1101,9 @@ export default function LetsGoProfile() {
     return { thisYear, lastYear, thisYearTotal, lastYearTotal };
   }, [receipts]);
 
-  const paymentConnected = !!(profile?.payout_method && profile?.payout_identifier);
+  const hasVenmoConnected = !!(profile?.payout_identifier && profile?.payout_method === "venmo");
+  const hasBankConnected = !!(profile?.stripe_connect_account_id && profile?.stripe_connect_onboarding_complete);
+  const paymentConnected = hasVenmoConnected || hasBankConnected;
   const referralCode = profile?.referral_code || "LETSGO";
   const totalEarned = (profile?.lifetime_payout || 0) / 100;
   const availableBalance = (profile?.available_balance || 0) / 100;
@@ -1188,7 +1348,7 @@ export default function LetsGoProfile() {
       <ReceiptUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} token={token} userId={profile?.id||""} onSuccess={(r: ReceiptDisplay) => { setReceipts(prev => [r, ...prev]); setUploadOpen(false); }} />
       <ReceiptDetailModal receipt={viewingReceipt} open={!!viewingReceipt} onClose={() => setViewingReceipt(null)} />
       <LevelUpCelebration data={levelUpCelebration} onClose={() => setLevelUpCelebration(null)} />
-      <CashOutModal mode={cashOutModal} amount={availableBalance} onClose={() => setCashOutModal(null)} onGoToSettings={() => { setCashOutModal(null); setSettingsOpen(true); }} token={token} onSuccess={handleCashOutDone} minCashoutCents={minCashoutCents} />
+      <CashOutModal mode={cashOutModal} amount={availableBalance} onClose={() => setCashOutModal(null)} onGoToSettings={() => { setCashOutModal(null); setSettingsOpen(true); }} token={token} onSuccess={handleCashOutDone} minCashoutCents={minCashoutCents} profile={profile} />
 
       {/* Experience Viewer Modal */}
       {viewingExp && (
@@ -1573,7 +1733,7 @@ export default function LetsGoProfile() {
                     <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 28, fontWeight: 700, color: availableBalance >= 20 ? NEON.yellow : "rgba(255,255,255,0.3)", textShadow: availableBalance >= 20 ? `0 0 20px rgba(${NEON.yellowRGB},0.4)` : "none" }}>${availableBalance.toFixed(2)}</div>
                   </div>
                   <div className="earnings-divider" style={{ width: 1, height: 40, background: "rgba(255,255,255,0.06)" }} />
-                  <button data-tour="cashout-btn" onClick={() => setCashOutModal(paymentConnected ? "confirm" : "noVenmo")} style={{ padding: "10px 22px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.5)`, background: `rgba(${NEON.yellowRGB},0.1)`, color: NEON.yellow, fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", textShadow: `0 0 8px ${NEON.yellow}50` }}>Cash Out</button>
+                  <button data-tour="cashout-btn" onClick={() => setCashOutModal(paymentConnected ? "confirm" : "noPayment")} style={{ padding: "10px 22px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.5)`, background: `rgba(${NEON.yellowRGB},0.1)`, color: NEON.yellow, fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", textShadow: `0 0 8px ${NEON.yellow}50` }}>Cash Out</button>
                 </div>
                 <div data-tour="upload-receipt-btn" className="earnings-actions" onClick={() => setUploadOpen(true)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 3, border: `1px solid rgba(${NEON.greenRGB},0.4)`, background: `rgba(${NEON.greenRGB},0.08)`, cursor: "pointer", transition: "all 0.3s ease" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke={NEON.green} strokeWidth="2" strokeLinecap="round" /></svg>
@@ -1983,7 +2143,7 @@ export default function LetsGoProfile() {
                           {biz.balance >= minCashoutCents / 100 && (
                             <div style={{ marginTop: 14, padding: "10px 16px", borderRadius: 4, background: `rgba(${NEON.yellowRGB},0.06)`, border: `1px solid rgba(${NEON.yellowRGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                               <span style={{ fontSize: 11, color: NEON.yellow, fontWeight: 600, textShadow: `0 0 6px ${NEON.yellow}40` }}>{"\uD83D\uDCB0"} Balance of ${biz.balance.toFixed(2)} is ready to cash out!</span>
-                              <button onClick={(e) => { e.stopPropagation(); setCashOutModal(paymentConnected ? "confirm" : "noVenmo"); }} style={{ padding: "5px 14px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.4)`, background: `rgba(${NEON.yellowRGB},0.1)`, color: NEON.yellow, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cash Out</button>
+                              <button onClick={(e) => { e.stopPropagation(); setCashOutModal(paymentConnected ? "confirm" : "noPayment"); }} style={{ padding: "5px 14px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.4)`, background: `rgba(${NEON.yellowRGB},0.1)`, color: NEON.yellow, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cash Out</button>
                             </div>
                           )}
                           {biz.balance < minCashoutCents / 100 && biz.balance > 0 && (
