@@ -7,7 +7,7 @@ import {
   getBusinessEmoji,
   formatBusinessType,
   resolveHoursFromColumns,
-  isBusinessOpenToday,
+  isBusinessOpenNow,
   buildMediaUrl,
 } from "@/lib/businessNormalize";
 import { getDistanceBetweenZips } from "@/lib/zipUtils";
@@ -273,7 +273,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // 4. Filter businesses by location and currently open
     const allBusinesses = (businessRows as unknown as BusinessRow[]).filter(row => {
       if (!matchesLocation(row, location)) return false;
-      if (!isBusinessOpenToday(row as Record<string, unknown>)) return false;
+      if (!isBusinessOpenNow(row as Record<string, unknown>)) return false;
       return true;
     });
 

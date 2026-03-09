@@ -212,15 +212,40 @@ export function resolveStructuredHoursFromColumns(
 }
 
 /** Check if a business is open today using day columns. Before 4 AM = previous business day. */
-export function isBusinessOpenToday(row: Record<string, unknown>): boolean {
+/**
+ * Check if a business is open RIGHT NOW based on day columns.
+ * Uses 4 AM business day cutoff and compares current time to open/close.
+ * Handles overnight hours (e.g., 21:00 – 05:00).
+ */
+export function isBusinessOpenNow(row: Record<string, unknown>): boolean {
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const now = new Date();
-  const hour = now.getHours();
-  const idx = hour < 4 ? (now.getDay() + 6) % 7 : now.getDay();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentTime = currentHour * 60 + currentMinute;
+
+  // Business day: before 4 AM = still previous day
+  const idx = currentHour < 4 ? (now.getDay() + 6) % 7 : now.getDay();
   const day = dayNames[idx];
-  const open = row[`${day}_open`] as string | null | undefined;
-  const close = row[`${day}_close`] as string | null | undefined;
-  return !!(open && close);
+
+  const openStr = row[`${day}_open`] as string | null | undefined;
+  const closeStr = row[`${day}_close`] as string | null | undefined;
+  if (!openStr || !closeStr) return false;
+
+  const openMatch = openStr.match(/^(\d{1,2}):(\d{2})/);
+  const closeMatch = closeStr.match(/^(\d{1,2}):(\d{2})/);
+  if (!openMatch || !closeMatch) return false;
+
+  const openTime = parseInt(openMatch[1]) * 60 + parseInt(openMatch[2]);
+  const closeTime = parseInt(closeMatch[1]) * 60 + parseInt(closeMatch[2]);
+
+  // Overnight hours (e.g., 21:00 – 05:00)
+  if (openTime > closeTime) {
+    return currentTime >= openTime || currentTime < closeTime;
+  }
+
+  // Normal hours (e.g., 09:00 – 17:00)
+  return currentTime >= openTime && currentTime < closeTime;
 }
 
 /** The 14 day column names to include in Supabase SELECT queries. */
