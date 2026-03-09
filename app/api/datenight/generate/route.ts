@@ -76,8 +76,8 @@ function isRestaurantType(businessType: string, categoryMain: string, tags: stri
 }
 
 
-function getCloseHour(timeStr: string): number {
-  // Parse "02:00", "02:00:00", "2:00 AM" etc. into decimal hours
+function parseTime(timeStr: string): number {
+  // Parse "02:00", "02:00:00", "2:00 AM", "17:00" etc. into decimal hours
   const s = timeStr.trim().replace(/:\d{2}$/, "").toLowerCase(); // strip seconds
   const ampm = s.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
   if (ampm) {
@@ -92,57 +92,69 @@ function getCloseHour(timeStr: string): number {
   return -1;
 }
 
-function isDayOpen(row: BusinessRow, day: string): { open: boolean; closeTime?: string } {
+function getDayHours(row: BusinessRow, day: string): { enabled: boolean; openTime?: string; closeTime?: string } {
   const rowAny = row as Record<string, unknown>;
   const dayOpen = rowAny[`${day}_open`] as string | null | undefined;
   const dayClose = rowAny[`${day}_close`] as string | null | undefined;
 
   // Priority 1: Individual day columns (source of truth — matches admin logic)
   if (dayOpen !== undefined || dayClose !== undefined) {
-    if (dayOpen && dayClose) return { open: true, closeTime: dayClose };
-    return { open: false };
+    if (dayOpen && dayClose) return { enabled: true, openTime: dayOpen, closeTime: dayClose };
+    return { enabled: false };
   }
 
   // Priority 2: config.hours
   const configHours = row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined;
   if (configHours && configHours[day] !== undefined) {
     const dh = configHours[day];
-    if (dh && dh.enabled !== false && dh.open && dh.close) return { open: true, closeTime: dh.close };
-    return { open: false };
+    if (dh && dh.enabled !== false && dh.open && dh.close) return { enabled: true, openTime: dh.open, closeTime: dh.close };
+    return { enabled: false };
   }
 
   // Priority 3: standalone hours JSONB
   if (row.hours && row.hours[day]) {
     const dh = row.hours[day];
-    if (dh && dh.enabled !== false && dh.open && dh.close) return { open: true, closeTime: dh.close };
-    return { open: false };
+    if (dh && dh.enabled !== false && dh.open && dh.close) return { enabled: true, openTime: dh.open, closeTime: dh.close };
+    return { enabled: false };
   }
 
-  return { open: false };
+  return { enabled: false };
 }
 
-function isOpenToday(row: BusinessRow): boolean {
+function isOpenNow(row: BusinessRow): boolean {
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const now = new Date();
+  const currentHour = now.getHours() + now.getMinutes() / 60;
   const todayIdx = now.getDay();
   const today = dayNames[todayIdx];
 
-  // Check if open today
-  const todayStatus = isDayOpen(row, today);
-  if (todayStatus.open) return true;
-
-  // Late-night check: if it's before 6 AM, check if yesterday's hours extend past midnight
-  const currentHour = now.getHours() + now.getMinutes() / 60;
-  if (currentHour < 6) {
-    const yesterdayIdx = (todayIdx + 6) % 7; // previous day
-    const yesterday = dayNames[yesterdayIdx];
-    const yesterdayStatus = isDayOpen(row, yesterday);
-    if (yesterdayStatus.open && yesterdayStatus.closeTime) {
-      const closeHour = getCloseHour(yesterdayStatus.closeTime);
-      // If close time is between 0-6, it wraps past midnight (e.g., 2am close)
-      if (closeHour >= 0 && closeHour <= 6 && currentHour < closeHour) {
-        return true;
+  // Check today's hours
+  const todayHours = getDayHours(row, today);
+  if (todayHours.enabled && todayHours.openTime && todayHours.closeTime) {
+    const open = parseTime(todayHours.openTime);
+    const close = parseTime(todayHours.closeTime);
+    if (open >= 0 && close >= 0) {
+      if (close > open) {
+        // Normal hours (e.g., 9am-5pm): currently between open and close
+        if (currentHour >= open && currentHour < close) return true;
+      } else {
+        // Late-night wrap (e.g., 9pm-2am): open >= current OR current < close handled below
+        // Currently after open time (still tonight)
+        if (currentHour >= open) return true;
       }
+    }
+  }
+
+  // Check if yesterday's late-night hours carry over past midnight
+  const yesterdayIdx = (todayIdx + 6) % 7;
+  const yesterday = dayNames[yesterdayIdx];
+  const yesterdayHours = getDayHours(row, yesterday);
+  if (yesterdayHours.enabled && yesterdayHours.openTime && yesterdayHours.closeTime) {
+    const open = parseTime(yesterdayHours.openTime);
+    const close = parseTime(yesterdayHours.closeTime);
+    // Late-night wrap: close < open means it wraps past midnight (e.g., open 9pm close 2am)
+    if (open >= 0 && close >= 0 && close < open && currentHour < close) {
+      return true;
     }
   }
 
@@ -359,10 +371,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     // 3. Combine exclude list with recent results
     const excludeSet = new Set(exclude);
 
-    // 4. Filter businesses by location and open today
+    // 4. Filter businesses by location and currently open
     const allBusinesses = (businessRows as unknown as BusinessRow[]).filter(row => {
       if (!matchesLocation(row, location)) return false;
-      if (!isOpenToday(row)) return false;
+      if (!isOpenNow(row)) return false;
       return true;
     });
 
