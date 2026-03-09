@@ -367,6 +367,7 @@ const DEFAULT_FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entert
 const DEFAULT_CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "BBQ", "Seafood", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Farm-to-Table", "Fusion"];
 const DEFAULT_VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
 const PRICE_FILTERS = ["Any", "$", "$$", "$$$", "$$$$"];
+const PRICE_TOOLTIPS: Record<string, string> = { "$": "Under $15/person", "$$": "$15–$30/person", "$$$": "$30–$60/person", "$$$$": "$60+/person" };
 const SORT_OPTIONS = ["Nearest", "Most Popular", "Highest Payout", "Highest Rated", "Trending"];
 
 // (Mock data removed — real data fetched from API)
@@ -1710,8 +1711,8 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
 
       {/* ── Collapsible Filter Panel — matching 5v3v1 ── */}
       {(() => {
-        const glassPill = (label: string, active: boolean, onClick: () => void, sx: React.CSSProperties = {}) => (
-          <button key={label} onClick={onClick} style={{
+        const glassPill = (label: string, active: boolean, onClick: () => void, sx: React.CSSProperties = {}, title?: string) => (
+          <button key={label} onClick={onClick} title={title} style={{
             padding: "8px 18px", borderRadius: 50, border: `1px solid ${active ? NEON : CARD_BORDER}`,
             background: active ? `rgba(${NEON_RGB}, 0.13)` : "rgba(18,18,31,0.85)",
             backdropFilter: "blur(16px)", color: active ? NEON : TEXT_DIM,
@@ -1761,7 +1762,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                 <div style={{ marginBottom: 16 }}>
                   {sectionLabel("Price")}
                   <div style={{ display: "flex", gap: 8 }}>
-                    {PRICE_FILTERS.map(p => glassPill(p, filters.price === p, () => setFilters(prev => ({ ...prev, price: p }))))}
+                    {PRICE_FILTERS.map(p => glassPill(p, filters.price === p, () => setFilters(prev => ({ ...prev, price: p })), {}, PRICE_TOOLTIPS[p]))}
                   </div>
                 </div>
 

@@ -6,6 +6,7 @@ import "./onboarding.css";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, DEFAULT_PRESET_BPS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, getVisibleCategories, type TagCategory, type TagItem } from "@/lib/availableTags";
+import { PRICE_LEVELS, priceLevelOption } from "@/lib/priceLevels";
 import type { User } from "@supabase/supabase-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -79,6 +80,7 @@ type OnboardingData = {
   businessType: BusinessType | "";
   businessTypeTag: string; // DB-driven business type (e.g. "Bowling", "Restaurant")
   selectedTags: string[]; // Tags selected from DB categories (Cuisine, Vibe, etc.)
+  priceLevel: string; // "$", "$$", "$$$", "$$$$"
   fullName: string;
   email: string;
   phone: string;
@@ -167,7 +169,12 @@ const LOGO_SRC = "/lg-logo.png";
 
 // Formatting helpers (module-level so Step functions can use them)
 function centsToStr(c: number) {
-  return `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const dollars = c / 100;
+  // Show cents only when there's a fractional part (e.g. $399.99), otherwise clean (e.g. $500)
+  if (c % 100 === 0) {
+    return `$${dollars.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  }
+  return `$${dollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function bpsToStr(b: number) {
   return `${(b / 100).toFixed(1)}%`;
@@ -191,6 +198,7 @@ function initialData(): OnboardingData {
     businessType: "",
     businessTypeTag: "",
     selectedTags: [],
+    priceLevel: "",
     fullName: "",
     email: "",
     phone: "",
@@ -439,7 +447,9 @@ export default function PartnerOnboardingPage() {
     return bt?.tags ?? [];
   }, [tagCats]);
   const visibleTagCategories = useMemo(() => {
-    return getVisibleCategories(tagCats, data.businessTypeTag ? [data.businessTypeTag] : []);
+    // Filter out "Price Range" — we have a dedicated selector for that
+    return getVisibleCategories(tagCats, data.businessTypeTag ? [data.businessTypeTag] : [])
+      .filter(cat => cat.name.toLowerCase() !== "price range");
   }, [tagCats, data.businessTypeTag]);
 
   // Pricing from platform_settings (fetched on mount, falls back to defaults)
@@ -486,9 +496,9 @@ export default function PartnerOnboardingPage() {
         if (ps) {
           if (ps.package_pricing) setPkgPricing(ps.package_pricing);
           if (ps.ad_pricing) setAdPricing(ps.ad_pricing);
-          if (ps.platform_fee_bps) setFeeBps(ps.platform_fee_bps);
-          if (ps.platform_fee_cap_cents) setFeeCapCents(ps.platform_fee_cap_cents);
-          if (ps.cc_processing_fee_bps) setCcFeeBps(ps.cc_processing_fee_bps);
+          if (ps.platform_fee_bps != null) setFeeBps(ps.platform_fee_bps);
+          if (ps.platform_fee_cap_cents != null) setFeeCapCents(ps.platform_fee_cap_cents);
+          if (ps.cc_processing_fee_bps != null) setCcFeeBps(ps.cc_processing_fee_bps);
         }
         setVisitThresholds(tierConfig.visitThresholds);
         setPresetBps(tierConfig.presetBps);
@@ -806,7 +816,7 @@ async function completeSignup() {
           </div>
         ) : null}
 
-        {step === 1 && <Step1 data={data} setData={setData} onSaveExit={saveAndExit} authUserEmail={authUser?.email} businessTypeTags={businessTypeTags} visibleTagCategories={visibleTagCategories} />}
+        {step === 1 && <Step1 data={data} setData={setData} authUserEmail={authUser?.email} businessTypeTags={businessTypeTags} visibleTagCategories={visibleTagCategories} />}
         {step === 2 && <Step2 data={data} setData={setData} mapsLoaded={mapsLoaded} />}
         {step === 3 && <Step3 data={data} setData={setData} pkgPricing={pkgPricing} dynamicAds={dynamicAds} ccFeeBps={ccFeeBps} />}
         {step === 4 && <Step4 data={data} setData={setData} tiers={dynamicTiers} presetBps={presetBps} />}
@@ -817,6 +827,10 @@ async function completeSignup() {
         <div className="button-group">
           <button type="button" className="btn btn-secondary" onClick={goBack} disabled={step === 1}>
             ← Back
+          </button>
+
+          <button type="button" className="btn btn-secondary small" onClick={saveAndExit} style={{ fontSize: "0.85rem" }}>
+            Save & Exit
           </button>
 
           {step < 7 ? (
@@ -932,14 +946,12 @@ function stepSubtitle(step: number) {
 function Step1({
   data,
   setData,
-  onSaveExit,
   authUserEmail,
   businessTypeTags,
   visibleTagCategories,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
-  onSaveExit: () => void;
   authUserEmail?: string;
   businessTypeTags: TagItem[];
   visibleTagCategories: TagCategory[];
@@ -1003,15 +1015,10 @@ function Step1({
                 />
               ))
             ) : (
-              // Fallback: original 6 categories if DB not loaded yet
-              <>
-                <CategoryCard title="Restaurant/Bar" icon="🍽️" selected={data.businessType === "restaurant_bar"} onClick={() => setData((p) => ({ ...p, businessType: "restaurant_bar", businessTypeTag: "Restaurant" }))} />
-                <CategoryCard title="Activity" icon="🎯" selected={data.businessType === "activity"} onClick={() => setData((p) => ({ ...p, businessType: "activity", businessTypeTag: "Activity" }))} />
-                <CategoryCard title="Salon/Beauty" icon="💇" selected={data.businessType === "salon_beauty"} onClick={() => setData((p) => ({ ...p, businessType: "salon_beauty", businessTypeTag: "Salon/Beauty" }))} />
-                <CategoryCard title="Retail" icon="🛍️" selected={data.businessType === "retail"} onClick={() => setData((p) => ({ ...p, businessType: "retail", businessTypeTag: "" }))} />
-                <CategoryCard title="Event Venue" icon="🎉" selected={data.businessType === "event_venue"} onClick={() => setData((p) => ({ ...p, businessType: "event_venue", businessTypeTag: "" }))} />
-                <CategoryCard title="Other" icon="✨" selected={data.businessType === "other"} onClick={() => setData((p) => ({ ...p, businessType: "other", businessTypeTag: "" }))} />
-              </>
+              <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-medium)" }}>
+                <div className="spinner" style={{ margin: "0 auto 0.5rem" }} />
+                Loading business types...
+              </div>
             )}
           </div>
         </div>
@@ -1058,6 +1065,34 @@ function Step1({
             ))}
           </div>
         )}
+
+        <div className="form-group">
+          <label>
+            Price Range <span className="required">*</span>
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {PRICE_LEVELS.map(pl => (
+              <button
+                key={pl.value}
+                type="button"
+                onClick={() => setData(p => ({ ...p, priceLevel: pl.value }))}
+                style={{
+                  padding: "10px 12px", borderRadius: 10, textAlign: "left", cursor: "pointer",
+                  border: data.priceLevel === pl.value ? "2px solid var(--primary)" : "2px solid var(--border-light)",
+                  background: data.priceLevel === pl.value ? "rgba(255,107,53,0.08)" : "var(--bg-white)",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: "0.95rem", color: data.priceLevel === pl.value ? "var(--primary)" : "var(--text-dark)" }}>
+                  {pl.value}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-medium)", marginTop: 2 }}>
+                  {pl.label}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="form-section">
@@ -1148,14 +1183,6 @@ function Step1({
         </div>
       </div>
 
-      <div className="button-row-split">
-        <button type="button" className="btn btn-secondary small" onClick={onSaveExit}>
-          ← Save & Exit
-        </button>
-        <div className="footer-note">
-          Join <strong>2,500+</strong> local businesses already growing with Let’sGo
-        </div>
-      </div>
     </form>
   );
 }
@@ -1421,7 +1448,7 @@ useEffect(() => {
 
         <div className="form-group">
           <label>
-            Website <span className="optional">(optional)</span>
+            Website <span className="optional">(highly recommended)</span>
           </label>
           <input
             value={data.website}

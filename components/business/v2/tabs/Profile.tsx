@@ -880,10 +880,10 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 <div>
                   <label style={labelStyle}>Price Level</label>
                   <select ref={priceRef} defaultValue="$$" style={selectStyle}>
-                    <option style={optionStyle} value="$">$ (Budget)</option>
-                    <option style={optionStyle} value="$$">$$ (Moderate)</option>
-                    <option style={optionStyle} value="$$$">$$$ (Upscale)</option>
-                    <option style={optionStyle} value="$$$$">$$$$ (Fine Dining)</option>
+                    <option style={optionStyle} value="$">$ (Under $15/person)</option>
+                    <option style={optionStyle} value="$$">$$ ($15–$30/person)</option>
+                    <option style={optionStyle} value="$$$">$$$ ($30–$60/person)</option>
+                    <option style={optionStyle} value="$$$$">$$$$ ($60+/person)</option>
                   </select>
                 </div>
                 <div>

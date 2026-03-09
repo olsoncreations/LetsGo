@@ -295,10 +295,12 @@ const BackBtn = ({ onClick, label = "Back" }: { onClick: () => void; label?: str
 );
 
 // ── Filter Pill ─────────────────────────────────────────────
-const FilterPill = ({ label, active, onClick, icon }: { label: string; active: boolean; onClick: () => void; icon?: string }) => {
+const PRICE_TOOLTIPS: Record<string, string> = { "$": "Under $15/person", "$$": "$15–$30/person", "$$$": "$30–$60/person", "$$$$": "$60+/person" };
+
+const FilterPill = ({ label, active, onClick, icon, title }: { label: string; active: boolean; onClick: () => void; icon?: string; title?: string }) => {
   const [h, setH] = useState(false);
   return (
-    <button onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
+    <button onClick={onClick} title={title} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
       style={{
         fontFamily: FONT_BODY, fontSize: 11, fontWeight: active ? 600 : 400,
         padding: icon ? "7px 14px 7px 10px" : "7px 14px", borderRadius: 20, cursor: "pointer",
@@ -1217,7 +1219,7 @@ const FiltersPanel = ({
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {PRICE_FILTERS.map((f) => (
                 <FilterPill key={f.id} label={f.label} active={filters.price === f.id}
-                  onClick={() => setFilters(prev => ({ ...prev, price: f.id }))} />
+                  onClick={() => setFilters(prev => ({ ...prev, price: f.id }))} title={PRICE_TOOLTIPS[f.id]} />
               ))}
             </div>
           </FilterSection>

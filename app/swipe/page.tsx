@@ -143,14 +143,15 @@ function FloatingOrbs() {
 
 // ─── Glassmorphism Pill ───
 
-function GlassPill({ children, style, onClick, active }: {
+function GlassPill({ children, style, onClick, active, title }: {
   children: React.ReactNode;
   style?: React.CSSProperties;
   onClick?: () => void;
   active?: boolean;
+  title?: string;
 }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} title={title} style={{
       padding: "8px 18px", borderRadius: 50, border: `1px solid ${active ? COLORS.neonPink : COLORS.cardBorder}`,
       background: active ? `${COLORS.neonPink}22` : COLORS.glass, backdropFilter: "blur(16px)",
       color: active ? COLORS.neonPink : COLORS.textSecondary, fontSize: 13, fontWeight: 600,
@@ -161,6 +162,13 @@ function GlassPill({ children, style, onClick, active }: {
     </button>
   );
 }
+
+const PRICE_TOOLTIPS: Record<string, string> = {
+  "$": "Under $15/person",
+  "$$": "$15–$30/person",
+  "$$$": "$30–$60/person",
+  "$$$$": "$60+/person",
+};
 
 // ─── Filter Bar ───
 
@@ -623,7 +631,7 @@ function FilterSection({ label, items, filters, setFilters, type }: {
       <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>{label}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {items.map(item => (
-          <GlassPill key={item} active={filters[type] === item} onClick={() => setFilters(p => ({ ...p, [type]: item }))}>{item}</GlassPill>
+          <GlassPill key={item} active={filters[type] === item} onClick={() => setFilters(p => ({ ...p, [type]: item }))} title={type === "price" ? PRICE_TOOLTIPS[item] : undefined}>{item}</GlassPill>
         ))}
       </div>
     </div>

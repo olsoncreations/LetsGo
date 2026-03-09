@@ -4925,10 +4925,10 @@ style={{
                         fontFamily: 'inherit'
                       }}
                     >
-                      <option value="$">$ - Inexpensive</option>
-                      <option value="$$">$$ - Moderate</option>
-                      <option value="$$$">$$$ - Expensive</option>
-                      <option value="$$$$">$$$$ - Very Expensive</option>
+                      <option value="$">$ - Under $15/person</option>
+                      <option value="$$">$$ - $15–$30/person</option>
+                      <option value="$$$">$$$ - $30–$60/person</option>
+                      <option value="$$$$">$$$$ - $60+/person</option>
                     </select>
                   </div>
                   <div>

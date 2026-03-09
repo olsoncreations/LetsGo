@@ -1124,10 +1124,10 @@ function BusinessesPage() {
                       onChange={(v) => updateField("price_level", v)}
                       options={[
                         { value: "", label: "Select..." },
-                        { value: "$", label: "$ (Budget)" },
-                        { value: "$$", label: "$$ (Moderate)" },
-                        { value: "$$$", label: "$$$ (Upscale)" },
-                        { value: "$$$$", label: "$$$$ (Fine Dining)" },
+                        { value: "$", label: "$ (Under $15/person)" },
+                        { value: "$$", label: "$$ ($15–$30/person)" },
+                        { value: "$$$", label: "$$$ ($30–$60/person)" },
+                        { value: "$$$$", label: "$$$$ ($60+/person)" },
                       ]}
                     />
                     <EditField 

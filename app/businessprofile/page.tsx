@@ -518,7 +518,7 @@ export default function BusinessProfilePage() {
                 <Field label="Vibe" value={vibe} onChange={setVibe} placeholder="Sushi / Japanese" />
 
                 <Field label="Tags (comma separated)" value={tagsText} onChange={setTagsText} placeholder="kid-friendly, happy hour, patio" />
-                <Field label="Price level" value={priceLevel} onChange={setPriceLevel} placeholder="$, $$, $$$" />
+                <Field label="Price level" value={priceLevel} onChange={setPriceLevel} placeholder="$ (<$15), $$ ($15-$30), $$$ ($30-$60), $$$$ ($60+)" />
 
                 <Field label="Business type" value={businessType} onChange={setBusinessType} placeholder="restaurant_bar / activity / ..." />
                 <Field label="Age restriction" value={ageRestriction} onChange={setAgeRestriction} placeholder="all / 18 / 21" />

@@ -73,6 +73,7 @@ type ViewMode = "list" | "calendar";
 const BUCKET_MEDIA = "business-media";
 
 const PRICE_LEVELS = ["$", "$$", "$$$", "$$$$"] as const;
+const PRICE_LEVEL_LABELS: Record<string, string> = { "$": "$ (Under $15/person)", "$$": "$$ ($15–$30/person)", "$$$": "$$$ ($30–$60/person)", "$$$$": "$$$$ ($60+/person)" };
 
 const EVENT_SIZES = [
   { value: "intimate", label: "Intimate (< 25)" },
@@ -1345,7 +1346,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
                   <label style={label()}>Price Level</label>
                   <select value={formPriceLevel} onChange={(e) => setFormPriceLevel(e.target.value)} style={input()}>
                     {PRICE_LEVELS.map((p) => (
-                      <option key={p} value={p} style={{ color: "#1a2332", background: "#fff" }}>{p}</option>
+                      <option key={p} value={p} style={{ color: "#1a2332", background: "#fff" }}>{PRICE_LEVEL_LABELS[p] || p}</option>
                     ))}
                   </select>
                 </div>

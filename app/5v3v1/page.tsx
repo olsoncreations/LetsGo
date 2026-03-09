@@ -139,9 +139,11 @@ function FloatingOrbs() {
   );
 }
 
-function GlassPill({ children, style: extraStyle, onClick, active }: { children: ReactNode; style?: CSSProperties; onClick?: () => void; active?: boolean }) {
+const PRICE_TOOLTIPS: Record<string, string> = { "$": "Under $15/person", "$$": "$15–$30/person", "$$$": "$30–$60/person", "$$$$": "$60+/person" };
+
+function GlassPill({ children, style: extraStyle, onClick, active, title }: { children: ReactNode; style?: CSSProperties; onClick?: () => void; active?: boolean; title?: string }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} title={title} style={{
       padding: "8px 18px", borderRadius: 50, border: `1px solid ${active ? NEON : COLORS.cardBorder}`,
       background: active ? `${NEON}22` : COLORS.glass, backdropFilter: "blur(16px)",
       color: active ? NEON : COLORS.textSecondary, fontSize: 13, fontWeight: 600,
@@ -1033,7 +1035,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Price</div>
             <div style={{ display: "flex", gap: 8 }}>
               {PRICE_FILTERS.map(p => (
-                <GlassPill key={p} active={filters.price === p} onClick={() => setFilters(prev => ({ ...prev, price: p }))}>{p}</GlassPill>
+                <GlassPill key={p} active={filters.price === p} onClick={() => setFilters(prev => ({ ...prev, price: p }))} title={PRICE_TOOLTIPS[p]}>{p}</GlassPill>
               ))}
             </div>
           </div>
