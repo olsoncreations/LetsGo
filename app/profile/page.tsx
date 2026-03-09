@@ -552,12 +552,12 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                   )}
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={preferredMethod==="bank"?"#14b8a6":"rgba(255,255,255,0.5)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                    <span style={{fontWeight:900,fontSize:15}}>Bank Account</span>
+                    <span style={{fontWeight:900,fontSize:15,color:"#fff"}}>Bank Account</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Status</div><div style={{fontWeight:900,fontSize:13}}>{bank.isComplete?"Connected via Stripe":bank.hasAccount?"Setup incomplete":"Not connected"}</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Status</div><div style={{fontWeight:900,fontSize:13,color:"#fff"}}>{bank.isComplete?"Connected via Stripe":bank.hasAccount?"Setup incomplete":"Not connected"}</div></div>
                     <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Fee</div><div style={{fontWeight:900,fontSize:13,color:"#10b981"}}>FREE</div></div>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Speed</div><div style={{fontWeight:900,fontSize:13}}>2-3 business days</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Speed</div><div style={{fontWeight:900,fontSize:13,color:"#fff"}}>2-3 business days</div></div>
                   </div>
                   {preferredMethod!=="bank"&&bank.isComplete&&(
                     <button onClick={()=>handleSetPreferred("bank")} disabled={settingPreferred} style={{marginTop:12,width:"100%",padding:8,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:12,fontWeight:900,cursor:settingPreferred?"wait":"pointer",opacity:settingPreferred?0.6:1}}>{settingPreferred?"Saving...":"Set as Preferred"}</button>
@@ -575,12 +575,12 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                   )}
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={preferredMethod==="venmo"?"#14b8a6":"rgba(255,255,255,0.5)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    <span style={{fontWeight:900,fontSize:15}}>Venmo</span>
+                    <span style={{fontWeight:900,fontSize:15,color:"#fff"}}>Venmo</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Account</div><div style={{fontWeight:900,fontSize:13}}>{hasVenmoConnected?profile?.payout_identifier:"Not set"}</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Account</div><div style={{fontWeight:900,fontSize:13,color:"#fff"}}>{hasVenmoConnected?profile?.payout_identifier:"Not set"}</div></div>
                     <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Fee</div><div style={{fontWeight:900,fontSize:13,color:"#f59e0b"}}>3% processing fee</div></div>
-                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Speed</div><div style={{fontWeight:900,fontSize:13}}>Arrives in minutes</div></div>
+                    <div><div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:4}}>Speed</div><div style={{fontWeight:900,fontSize:13,color:"#fff"}}>Arrives in minutes</div></div>
                   </div>
                   {hasVenmoConnected&&preferredMethod!=="venmo"&&(
                     <button onClick={()=>handleSetPreferred("venmo")} disabled={settingPreferred} style={{marginTop:12,width:"100%",padding:8,background:"rgba(20,184,166,0.1)",border:"1px solid rgba(20,184,166,0.4)",borderRadius:8,color:"#14b8a6",fontSize:12,fontWeight:900,cursor:settingPreferred?"wait":"pointer",opacity:settingPreferred?0.6:1}}>{settingPreferred?"Saving...":"Set as Preferred"}</button>
