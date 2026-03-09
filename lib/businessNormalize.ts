@@ -113,6 +113,20 @@ export function formatBusinessType(raw: string): string {
   return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function to12Hour(time: string): string {
+  // Convert "09:00" or "17:30" or "09:00:00" to "9:00 AM" or "5:30 PM"
+  const stripped = time.replace(/:\d{2}$/, ""); // strip seconds if present
+  const parts = stripped.split(":");
+  if (parts.length < 2) return time;
+  let h = parseInt(parts[0], 10);
+  const m = parts[1];
+  if (isNaN(h)) return time;
+  const ampm = h >= 12 ? "PM" : "AM";
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${ampm}`;
+}
+
 export function normalizeHoursForDisplay(config: Record<string, unknown> | null): Record<string, string> {
   const hours: Record<string, string> = {};
   const h = (config?.hours ?? {}) as Record<string, { enabled?: boolean; open?: string; close?: string }>;
@@ -122,7 +136,7 @@ export function normalizeHoursForDisplay(config: Record<string, unknown> | null)
     if (!day || day.enabled === false || !day.open || !day.close) {
       hours[fullName] = "Closed";
     } else {
-      hours[fullName] = `${day.open} \u2013 ${day.close}`;
+      hours[fullName] = `${to12Hour(day.open)} \u2013 ${to12Hour(day.close)}`;
     }
   }
   return hours;

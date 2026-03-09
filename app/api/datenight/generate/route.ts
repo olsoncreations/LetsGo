@@ -208,11 +208,29 @@ function buildPickResult(row: BusinessRow, score: number, reasons: string[], ima
   const rawPhone = row.contact_phone || String(cfg.phone ?? "");
   const phone = formatPhoneNumber(rawPhone);
   const website = row.website || String(cfg.website ?? "");
-  // Use standalone hours JSONB first, then config.hours
-  const hoursSource = row.hours ? { hours: row.hours } : cfg;
+  // Build hours from individual day columns (source of truth), fallback to config.hours
+  const dayAbbrs = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const rowAnyForHours = row as Record<string, unknown>;
+  const resolvedHours: Record<string, { enabled?: boolean; open?: string; close?: string }> = {};
+  let hasColumnData = false;
+  for (const abbr of dayAbbrs) {
+    const openVal = rowAnyForHours[`${abbr}_open`] as string | null | undefined;
+    const closeVal = rowAnyForHours[`${abbr}_close`] as string | null | undefined;
+    if (openVal !== undefined || closeVal !== undefined) {
+      hasColumnData = true;
+      if (openVal && closeVal) {
+        resolvedHours[abbr] = { enabled: true, open: openVal, close: closeVal };
+      } else {
+        resolvedHours[abbr] = { enabled: false };
+      }
+    }
+  }
+  const hoursSource = hasColumnData
+    ? { hours: resolvedHours }
+    : (cfg.hours ? { hours: cfg.hours } : { hours: row.hours });
   const hours = normalizeHoursForDisplay(hoursSource as Record<string, unknown>);
-  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const today = dayNames[new Date().getDay()];
+  const dayFullNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const today = dayFullNames[new Date().getDay()];
   const todayHours = hours[today] || "Hours vary";
   const tags = getRowTags(row);
   const emoji = getBusinessEmoji(rawType);
