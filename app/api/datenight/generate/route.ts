@@ -76,37 +76,76 @@ function isRestaurantType(businessType: string, categoryMain: string, tags: stri
 }
 
 
-function isOpenToday(row: BusinessRow): boolean {
-  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-  const today = dayNames[new Date().getDay()];
+function getCloseHour(timeStr: string): number {
+  // Parse "02:00", "02:00:00", "2:00 AM" etc. into decimal hours
+  const s = timeStr.trim().replace(/:\d{2}$/, "").toLowerCase(); // strip seconds
+  const ampm = s.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)/i);
+  if (ampm) {
+    let h = parseInt(ampm[1], 10);
+    const m = parseInt(ampm[2] || "0", 10);
+    if (ampm[3] === "pm" && h !== 12) h += 12;
+    if (ampm[3] === "am" && h === 12) h = 0;
+    return h + m / 60;
+  }
+  const parts = s.split(":");
+  if (parts.length >= 2) return parseInt(parts[0], 10) + parseInt(parts[1], 10) / 60;
+  return -1;
+}
+
+function isDayOpen(row: BusinessRow, day: string): { open: boolean; closeTime?: string } {
+  const rowAny = row as Record<string, unknown>;
+  const dayOpen = rowAny[`${day}_open`] as string | null | undefined;
+  const dayClose = rowAny[`${day}_close`] as string | null | undefined;
 
   // Priority 1: Individual day columns (source of truth — matches admin logic)
-  // Admin sets: non-null open/close = enabled, null = disabled
-  const rowAny = row as Record<string, unknown>;
-  const dayOpen = rowAny[`${today}_open`] as string | null | undefined;
-  const dayClose = rowAny[`${today}_close`] as string | null | undefined;
-
-  // If columns exist in the response (not undefined), they're authoritative
   if (dayOpen !== undefined || dayClose !== undefined) {
-    return !!(dayOpen && dayClose);
+    if (dayOpen && dayClose) return { open: true, closeTime: dayClose };
+    return { open: false };
   }
 
-  // Priority 2: config.hours (also updated by admin, has enabled flag)
+  // Priority 2: config.hours
   const configHours = row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined;
-  if (configHours && configHours[today] !== undefined) {
-    const dayHours = configHours[today];
-    if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
-    return true;
+  if (configHours && configHours[day] !== undefined) {
+    const dh = configHours[day];
+    if (dh && dh.enabled !== false && dh.open && dh.close) return { open: true, closeTime: dh.close };
+    return { open: false };
   }
 
-  // Priority 3: standalone hours JSONB (may be stale from onboarding)
-  if (row.hours) {
-    const dayHours = row.hours[today];
-    if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
-    return true;
+  // Priority 3: standalone hours JSONB
+  if (row.hours && row.hours[day]) {
+    const dh = row.hours[day];
+    if (dh && dh.enabled !== false && dh.open && dh.close) return { open: true, closeTime: dh.close };
+    return { open: false };
   }
 
-  // No hours data at all = assume closed (safer for date night)
+  return { open: false };
+}
+
+function isOpenToday(row: BusinessRow): boolean {
+  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const now = new Date();
+  const todayIdx = now.getDay();
+  const today = dayNames[todayIdx];
+
+  // Check if open today
+  const todayStatus = isDayOpen(row, today);
+  if (todayStatus.open) return true;
+
+  // Late-night check: if it's before 6 AM, check if yesterday's hours extend past midnight
+  const currentHour = now.getHours() + now.getMinutes() / 60;
+  if (currentHour < 6) {
+    const yesterdayIdx = (todayIdx + 6) % 7; // previous day
+    const yesterday = dayNames[yesterdayIdx];
+    const yesterdayStatus = isDayOpen(row, yesterday);
+    if (yesterdayStatus.open && yesterdayStatus.closeTime) {
+      const closeHour = getCloseHour(yesterdayStatus.closeTime);
+      // If close time is between 0-6, it wraps past midnight (e.g., 2am close)
+      if (closeHour >= 0 && closeHour <= 6 && currentHour < closeHour) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 

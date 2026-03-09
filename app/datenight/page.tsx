@@ -1063,7 +1063,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                   textDecoration: "none", cursor: "pointer",
                 }}>📍 {restaurant.address}</a>
               )}
-              {restaurant.hours && (
+              {restaurant.hours && restaurant.hours !== "Closed" && (
                 <div style={{ fontFamily: FONT_BODY, fontSize: 10, color: TEXT_DIM, marginBottom: 2 }}>
                   🕐 {restaurant.hours}
                 </div>
@@ -1212,7 +1212,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                   textDecoration: "none", cursor: "pointer",
                 }}>📍 {activity.address}</a>
               )}
-              {activity.hours && (
+              {activity.hours && activity.hours !== "Closed" && (
                 <div style={{ fontFamily: FONT_BODY, fontSize: 10, color: TEXT_DIM, marginBottom: 2 }}>
                   🕐 {activity.hours}
                 </div>
