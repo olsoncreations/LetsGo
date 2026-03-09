@@ -80,29 +80,31 @@ function isOpenToday(row: BusinessRow): boolean {
   const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const today = dayNames[new Date().getDay()];
 
-  // Priority 1: Individual day columns (source of truth, updated by admin)
+  // Priority 1: config.hours (has enabled flag, updated by admin)
+  const configHours = row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined;
+  if (configHours && configHours[today] !== undefined) {
+    const dayHours = configHours[today];
+    if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
+    return true;
+  }
+
+  // Priority 2: Individual day columns (null = closed, truthy = open)
   const rowAny = row as Record<string, unknown>;
   const dayOpen = rowAny[`${today}_open`] as string | null | undefined;
   const dayClose = rowAny[`${today}_close`] as string | null | undefined;
 
-  if (dayOpen && dayClose) {
-    // Has hours for today — open
+  if (dayOpen && dayClose) return true;
+  if (dayOpen === null && dayClose === null) return false;
+
+  // Priority 3: standalone hours JSONB (may be stale from onboarding)
+  if (row.hours) {
+    const dayHours = row.hours[today];
+    if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
     return true;
-  } else if (dayOpen === null && dayClose === null) {
-    // Explicitly null = day is disabled (closed)
-    return false;
   }
 
-  // Priority 2: config.hours (also updated by admin)
-  // Priority 3: standalone hours JSONB (may be stale from onboarding)
-  const hours = (row.config?.hours as Record<string, { enabled?: boolean; open?: string; close?: string }> | undefined)
-    ?? row.hours;
-  if (!hours) return true; // No hours data at all = assume open
-
-  const dayHours = hours[today];
-  if (!dayHours || dayHours.enabled === false || !dayHours.open || !dayHours.close) return false;
-
-  return true;
+  // No hours data at all = assume closed (safer for date night)
+  return false;
 }
 
 function matchesLocation(row: BusinessRow, location: string): boolean {
