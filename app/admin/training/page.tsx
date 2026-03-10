@@ -691,7 +691,7 @@ export default function TrainingPage() {
               </div>
             </div>
             <a
-              href="/partner-signup-form.html"
+              href="https://www.useletsgo.com/partner-signup-form.html"
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
@@ -708,6 +708,50 @@ export default function TrainingPage() {
               }}
             >
               Open Form
+            </a>
+          </div>
+        </Card>
+        <Card>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 10,
+              background: `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonGreen})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 22,
+              flexShrink: 0,
+            }}>
+              📖
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#fff", marginBottom: 4 }}>
+                LetsGo Owner&apos;s Manual
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.4 }}>
+                Comprehensive guide for sales reps and customers. Covers all app features, screenshots, payout tiers, revenue structure, and FAQ.
+              </div>
+            </div>
+            <a
+              href="https://www.useletsgo.com/owners-manual.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                background: `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonGreen})`,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              Open Manual
             </a>
           </div>
         </Card>
