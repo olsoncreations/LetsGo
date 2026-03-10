@@ -33,6 +33,7 @@ import {
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
+import { filterImagesByMinWidth } from "@/lib/imageValidation";
 
 interface Business {
   id: string;
@@ -1966,9 +1967,17 @@ function BusinessesPage() {
                             onChange={async (e) => {
                               const files = e.target.files;
                               if (!files || files.length === 0 || !selected) return;
+                              const { passed, failed } = await filterImagesByMinWidth(Array.from(files), 1080);
+                              if (failed.length > 0) {
+                                alert(
+                                  `${failed.length} photo${failed.length > 1 ? "s" : ""} rejected (minimum 1080px wide):\n` +
+                                  failed.map((r) => `  ${r.file.name} (${r.width}x${r.height})`).join("\n")
+                                );
+                              }
+                              if (passed.length === 0) { e.target.value = ""; return; }
                               const existingCount = selected.photos?.length || 0;
-                              for (let i = 0; i < files.length; i++) {
-                                const file = files[i];
+                              for (let i = 0; i < passed.length; i++) {
+                                const file = passed[i].file;
                                 const ext = file.name.split(".").pop() || "jpg";
                                 const storagePath = `${selected.id}/photos/${Date.now()}-${i}.${ext}`;
                                 const { error: upErr } = await supabaseBrowser.storage

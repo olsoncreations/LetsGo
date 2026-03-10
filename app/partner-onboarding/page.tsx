@@ -7,6 +7,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, DEFAULT_PRESET_BPS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, getVisibleCategories, type TagCategory, type TagItem } from "@/lib/availableTags";
 import { PRICE_LEVELS, priceLevelOption } from "@/lib/priceLevels";
+import { validateImageDimensions } from "@/lib/imageValidation";
 import type { User } from "@supabase/supabase-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -2554,6 +2555,11 @@ function Step6({
     setLogoUploading(true);
     setUploadError("");
     try {
+      const result = await validateImageDimensions(file, 500, 500);
+      if (!result.valid) {
+        setUploadError(`Logo must be at least 500x500px. Your image is ${result.width}x${result.height}px.`);
+        return;
+      }
       const url = await uploadToStorage(file, "logo");
       setData((p) => ({
         ...p,

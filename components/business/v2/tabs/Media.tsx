@@ -22,6 +22,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { filterImagesByMinWidth, type ImageDimensionResult } from "@/lib/imageValidation";
 
 type MediaType = "photo" | "video";
 
@@ -280,6 +281,7 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
   const [showVideoUploadModal, setShowVideoUploadModal] = useState(false);
   const [viewingMedia, setViewingMedia] = useState<UiMediaItem | null>(null);
   const [stagedPhotos, setStagedPhotos] = useState<File[]>([]);
+  const [dimensionWarnings, setDimensionWarnings] = useState<ImageDimensionResult[]>([]);
   const [stagedVideo, setStagedVideo] = useState<File | null>(null);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -1653,14 +1655,16 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
       {showPhotoUploadModal && (
         <ModalOverlay>
           <div style={modalCard()} onClick={(e) => e.stopPropagation()}>
-            <ModalHeader title="Upload Photos" icon={<Camera size={24} style={{ color: colors.primary }} />} onClose={() => { setShowPhotoUploadModal(false); setStagedPhotos([]); }} />
+            <ModalHeader title="Upload Photos" icon={<Camera size={24} style={{ color: colors.primary }} />} onClose={() => { setShowPhotoUploadModal(false); setStagedPhotos([]); setDimensionWarnings([]); }} />
 
             <div style={{ display: "grid", gap: "1rem" }}>
               <Field label="Select Photos">
-                <input ref={photoInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    setStagedPhotos(Array.from(e.target.files));
-                  }
+                <input ref={photoInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={async (e) => {
+                  if (!e.target.files || e.target.files.length === 0) return;
+                  const allFiles = Array.from(e.target.files);
+                  const { passed, failed } = await filterImagesByMinWidth(allFiles, 1080);
+                  setDimensionWarnings(failed);
+                  setStagedPhotos(passed.map((r) => r.file));
                 }} />
                 <div style={dropzone(uploading)} onClick={() => !uploading && photoInputRef.current?.click()}>
                   <Upload size={32} style={{ color: colors.primary, margin: "0 auto 0.5rem" }} />
@@ -1672,7 +1676,7 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.625rem 0.75rem", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.2)", borderRadius: "8px" }}>
                 <Camera size={14} style={{ color: "#06b6d4", marginTop: "2px", flexShrink: 0 }} />
                 <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.4 }}>
-                  <strong style={{ color: "rgba(255,255,255,0.8)" }}>Best results:</strong> Portrait photos (1080&times;1920 or 9:16+ ratio) fill the Discovery screen perfectly. Landscape photos will be cropped &mdash; use the Focal Point tool after upload to control what users see.
+                  <strong style={{ color: "rgba(255,255,255,0.8)" }}>Best results:</strong> Minimum width: 1080px. Portrait photos (1080&times;1920 or 9:16+ ratio) fill the Discovery screen perfectly. Landscape photos will be cropped &mdash; use the Focal Point tool after upload to control what users see.
                 </div>
               </div>
 
@@ -1696,6 +1700,23 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
                 </div>
               )}
 
+              {dimensionWarnings.length > 0 && (
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.625rem 0.75rem", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "8px" }}>
+                  <AlertCircle size={14} style={{ color: "#ef4444", marginTop: "2px", flexShrink: 0 }} />
+                  <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.4 }}>
+                    <strong style={{ color: "rgba(255,255,255,0.9)" }}>
+                      {dimensionWarnings.length} photo{dimensionWarnings.length > 1 ? "s" : ""} rejected
+                    </strong>
+                    {" "}&mdash; minimum width is 1080px for Discovery display.
+                    <div style={{ marginTop: "0.25rem" }}>
+                      {dimensionWarnings.map((r, i) => (
+                        <div key={i}>{r.file.name} ({r.width}&times;{r.height}px)</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <Field label="Photo Title">
                 <input ref={photoTitleRef} type="text" placeholder="Enter a descriptive title..." style={input()} />
               </Field>
@@ -1706,7 +1727,7 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
             </div>
 
             <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
-              <button type="button" onClick={() => { setShowPhotoUploadModal(false); setStagedPhotos([]); }} style={btnGhost(uploading)} disabled={uploading}>Cancel</button>
+              <button type="button" onClick={() => { setShowPhotoUploadModal(false); setStagedPhotos([]); setDimensionWarnings([]); }} style={btnGhost(uploading)} disabled={uploading}>Cancel</button>
               {stagedPhotos.length === 0 ? (
                 <button type="button" onClick={() => photoInputRef.current?.click()} style={btnPrimary(colors.primary, colors.accent, uploading)} disabled={uploading}>
                   Choose Files
