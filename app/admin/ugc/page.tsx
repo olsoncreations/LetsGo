@@ -10,6 +10,7 @@ import {
   formatDateTime,
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 // ─── Types ───
 
@@ -158,6 +159,12 @@ export default function AdminUgcPage() {
   const perPostSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [commentActionLoading, setCommentActionLoading] = useState<string | null>(null);
 
+  // Helper to get auth headers
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    return { Authorization: `Bearer ${session?.access_token || ""}` };
+  };
+
   // ── Media data fetch ──
   const fetchMedia = useCallback(async (page = 1) => {
     setLoading(true);
@@ -169,7 +176,8 @@ export default function AdminUgcPage() {
       });
       if (search) params.set("search", search);
 
-      const res = await fetch(`/api/admin/ugc?${params}`);
+      const auth = await getAuthHeaders();
+      const res = await fetch(`/api/admin/ugc?${params}`, { headers: auth });
       const json = await res.json();
 
       if (json.error) {
@@ -194,7 +202,8 @@ export default function AdminUgcPage() {
       const params = new URLSearchParams({ mode: "posts" });
       if (commentPostSearch) params.set("search", commentPostSearch);
 
-      const res = await fetch(`/api/admin/ugc/comments?${params}`);
+      const auth = await getAuthHeaders();
+      const res = await fetch(`/api/admin/ugc/comments?${params}`, { headers: auth });
       const json = await res.json();
 
       if (json.error) {
@@ -222,7 +231,8 @@ export default function AdminUgcPage() {
       });
       if (search) params.set("search", search);
 
-      const res = await fetch(`/api/admin/ugc/comments?${params}`);
+      const auth = await getAuthHeaders();
+      const res = await fetch(`/api/admin/ugc/comments?${params}`, { headers: auth });
       const json = await res.json();
 
       if (json.error) {
@@ -275,9 +285,10 @@ export default function AdminUgcPage() {
   async function handleMediaAction(submissionId: string, action: "approve" | "reject" | "delete") {
     setActionLoading(submissionId);
     try {
+      const auth = await getAuthHeaders();
       const res = await fetch("/api/admin/ugc", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify({ submissionId, action }),
       });
       const json = await res.json();
@@ -307,9 +318,10 @@ export default function AdminUgcPage() {
   async function handleDeleteComment(commentId: string, experienceId: string) {
     setCommentActionLoading(commentId);
     try {
+      const auth = await getAuthHeaders();
       const res = await fetch("/api/admin/ugc/comments", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify({ commentId }),
       });
       const json = await res.json();

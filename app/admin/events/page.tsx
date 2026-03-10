@@ -13,6 +13,7 @@ import {
   formatDate,
   formatDateTime,
 } from "@/components/admin/components";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 
 // ==================== TYPES ====================
@@ -107,7 +108,10 @@ export default function AdminEventsPage() {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/events");
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/events", {
+        headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+      });
       if (!res.ok) throw new Error("Failed to fetch events");
       const data = await res.json();
       setEvents(data.events || []);
@@ -175,9 +179,10 @@ export default function AdminEventsPage() {
   const handleAction = async (id: string, action: "cancel" | "publish" | "unpublish") => {
     setActionLoading(true);
     try {
+      const { data: { session: sess } } = await supabaseBrowser.auth.getSession();
       const res = await fetch("/api/admin/events", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
         body: JSON.stringify({ id, action }),
       });
       if (!res.ok) {
