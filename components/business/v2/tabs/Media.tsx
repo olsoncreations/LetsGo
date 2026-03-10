@@ -682,6 +682,21 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
       return;
     }
 
+    // Enforce minimum 1080px width for photos
+    if (kind === "photo") {
+      const { passed, failed } = await filterImagesByMinWidth(Array.from(files), 1080);
+      if (failed.length > 0) {
+        alert(
+          `${failed.length} photo${failed.length > 1 ? "s" : ""} rejected (minimum 1080px wide):\n` +
+          failed.map((r) => `  ${r.file.name} (${r.width}x${r.height})`).join("\n")
+        );
+      }
+      if (passed.length === 0) return;
+      const dt = new DataTransfer();
+      passed.forEach((r) => dt.items.add(r.file));
+      files = dt.files;
+    }
+
     const title =
       kind === "photo"
         ? (photoTitleRef.current?.value?.trim() ?? "")
