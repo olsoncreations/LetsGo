@@ -772,7 +772,7 @@ function ShareButton({ name }: { name: string }) {
     e.stopPropagation();
     const url = window.location.href;
     if (navigator.share) {
-      try { await navigator.share({ title: name, text: `Check out ${name} on Let's Go!`, url }); } catch { /* user cancelled */ }
+      try { await navigator.share({ title: name, text: `Check out ${name} on LetsGo!`, url }); } catch { /* user cancelled */ }
     } else {
       await navigator.clipboard.writeText(url);
       alert("Link copied to clipboard!");
@@ -991,7 +991,28 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
             </span>
           )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20, animation: "pulseGlow 2s ease-in-out infinite" }}>
+        {biz.payout.length > 0 && (() => {
+          const minP = Math.min(...biz.payout);
+          const maxP = Math.max(...biz.payout);
+          const rangeStr = minP === maxP ? `${minP}%` : `${minP}% – ${maxP}%`;
+          return (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10, marginTop: 16,
+              padding: "8px 14px", borderRadius: 50,
+              background: "rgba(57,255,20,0.08)", border: "1px solid rgba(57,255,20,0.18)",
+              backdropFilter: "blur(8px)", width: "fit-content",
+            }}>
+              <span style={{ fontSize: 14 }}>💰</span>
+              <span style={{
+                fontSize: 12, fontWeight: 700, color: COLORS.neonGreen,
+                fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.02em",
+              }}>
+                Earn {rangeStr} back
+              </span>
+            </div>
+          );
+        })()}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, animation: "pulseGlow 2s ease-in-out infinite" }}>
           <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Sans', sans-serif" }}>Swipe for details</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
         </div>
