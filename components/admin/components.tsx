@@ -2201,17 +2201,21 @@ interface ConfirmModalProps {
   message: string;
   type?: "info" | "warning" | "danger";
   confirmText?: string;
+  /** When set, user must type this exact text to enable the Confirm button */
+  requireText?: string;
   onClose: () => void;
   onConfirm: () => void;
 }
 
-export function ConfirmModal({ title, message, type = "info", confirmText = "Confirm", onClose, onConfirm }: ConfirmModalProps) {
+export function ConfirmModal({ title, message, type = "info", confirmText = "Confirm", requireText, onClose, onConfirm }: ConfirmModalProps) {
+  const [typedText, setTypedText] = useState("");
   const colors = {
     info: { bg: COLORS.gradient1, color: "#fff" },
     warning: { bg: "linear-gradient(135deg, #ffff00, #ff6b35)", color: "#000" },
     danger: { bg: "linear-gradient(135deg, #ff3131, #990000)", color: "#fff" },
   };
   const c = colors[type];
+  const confirmEnabled = !requireText || typedText === requireText;
 
   return (
     <div
@@ -2239,6 +2243,30 @@ export function ConfirmModal({ title, message, type = "info", confirmText = "Con
       >
         <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>{title}</h2>
         <p style={{ color: COLORS.textSecondary, marginBottom: 24, lineHeight: 1.6 }}>{message}</p>
+        {requireText && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 12, color: COLORS.textSecondary, marginBottom: 8 }}>
+              Type <strong style={{ color: COLORS.neonRed }}>{requireText}</strong> to confirm:
+            </label>
+            <input
+              type="text"
+              value={typedText}
+              onChange={(e) => setTypedText(e.target.value)}
+              placeholder={requireText}
+              autoFocus
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                background: COLORS.darkBg,
+                border: typedText === requireText ? "2px solid " + COLORS.neonGreen : "1px solid " + COLORS.cardBorder,
+                borderRadius: 8,
+                color: COLORS.textPrimary,
+                fontSize: 14,
+                outline: "none",
+              }}
+            />
+          </div>
+        )}
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
           <button
             onClick={onClose}
@@ -2255,18 +2283,21 @@ export function ConfirmModal({ title, message, type = "info", confirmText = "Con
             Cancel
           </button>
           <button
+            disabled={!confirmEnabled}
             onClick={() => {
+              if (!confirmEnabled) return;
               onConfirm();
               onClose();
             }}
             style={{
               padding: "12px 24px",
-              background: c.bg,
-              border: "none",
+              background: confirmEnabled ? c.bg : COLORS.darkBg,
+              border: confirmEnabled ? "none" : "1px solid " + COLORS.cardBorder,
               borderRadius: 10,
-              color: c.color,
-              cursor: "pointer",
+              color: confirmEnabled ? c.color : COLORS.textSecondary,
+              cursor: confirmEnabled ? "pointer" : "not-allowed",
               fontWeight: 700,
+              opacity: confirmEnabled ? 1 : 0.5,
             }}
           >
             {confirmText}

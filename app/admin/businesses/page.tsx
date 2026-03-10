@@ -141,6 +141,7 @@ function BusinessesPage() {
     message: string;
     type: "info" | "warning" | "danger";
     confirmText: string;
+    requireText?: string;
     onConfirm: () => void;
   } | null>(null);
   const [advancedFilters, setAdvancedFilters] = useState({
@@ -674,6 +675,7 @@ function BusinessesPage() {
           message={confirmModal.message}
           type={confirmModal.type}
           confirmText={confirmModal.confirmText}
+          requireText={confirmModal.requireText}
           onClose={() => setConfirmModal(null)}
           onConfirm={confirmModal.onConfirm}
         />
@@ -1079,6 +1081,61 @@ function BusinessesPage() {
                     🚫 Suspend
                   </button>
                 )}
+                <button
+                  onClick={() => {
+                    const name = selected.public_business_name || selected.business_name || "";
+                    setConfirmModal({
+                      title: "Delete Business Permanently?",
+                      message: `This will permanently delete "${name}" and ALL related data (receipts, media, payout tiers, events, billing, etc). This action cannot be undone.`,
+                      type: "danger",
+                      confirmText: "Delete Forever",
+                      requireText: name,
+                      onConfirm: async () => {
+                        try {
+                          const { data: { session: sess } } = await supabaseBrowser.auth.getSession();
+                          const res = await fetch("/api/admin/businesses", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
+                            body: JSON.stringify({ businessId: selected.id }),
+                          });
+                          if (!res.ok) {
+                            const errText = await res.text().catch(() => "");
+                            alert("Delete failed: " + errText);
+                            return;
+                          }
+                          logAudit({
+                            action: "delete_business",
+                            tab: AUDIT_TABS.BUSINESSES,
+                            subTab: "Business Deletion",
+                            targetType: "business",
+                            targetId: selected.id,
+                            entityName: name,
+                            fieldName: "deletion",
+                            oldValue: status,
+                            newValue: "deleted",
+                            details: `Permanently deleted business "${name}" (ID: ${selected.id})`,
+                          });
+                          setSelectedId(null);
+                          await fetchBusinesses();
+                        } catch (err) {
+                          console.error("[admin] Delete business error:", err);
+                          alert("Delete failed. Check console for details.");
+                        }
+                      },
+                    });
+                  }}
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: 10,
+                    background: "#8b0000",
+                    border: "none",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  🗑️ Delete
+                </button>
               </div>
             </header>
 
