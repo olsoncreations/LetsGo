@@ -100,6 +100,12 @@ export function Badge({ status }: BadgeProps) {
     basic: { bg: "#3d3d5c", color: "#fff" },
     receipt: { bg: "linear-gradient(135deg, #00d4ff, #0099ff)", color: "#fff" },
     payout: { bg: "linear-gradient(135deg, #39ff14, #00d4ff)", color: "#000" },
+    not_contacted: { bg: "#3d3d5c", color: "#fff" },
+    contacted: { bg: "linear-gradient(135deg, #00d4ff, #0099ff)", color: "#fff" },
+    pitched: { bg: "linear-gradient(135deg, #bf5fff, #ff2d92)", color: "#fff" },
+    follow_up: { bg: "linear-gradient(135deg, #ffff00, #ff6b35)", color: "#000" },
+    signed_up: { bg: "linear-gradient(135deg, #39ff14, #00d4ff)", color: "#000" },
+    not_interested: { bg: "linear-gradient(135deg, #ff3131, #990000)", color: "#fff" },
   };
   const s = styles[status] || styles.submitted;
   return (

@@ -11,6 +11,7 @@ import {
   formatDate,
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
+import SalesProspecting from "@/components/admin/SalesProspecting";
 
 /* ==================== TYPES ==================== */
 
@@ -513,6 +514,7 @@ export default function SalesPage() {
     { key: "quotas", label: "🎯 Quotas" },
     { key: "history", label: "📜 History" },
     { key: "payouts", label: "💵 Payouts" },
+    { key: "prospecting", label: "🔍 Prospecting" },
   ];
 
   // Get supervisors (anyone above sales_rep)
@@ -3370,6 +3372,17 @@ export default function SalesPage() {
                 ]} data={[{ quarter: bonusPool?.quarter || "Q1 2026", totalPool: bonusPool?.total_pool_cents || 0, eligibleReps: eligibleReps.length, perRepPayout: bonusPool?.projected_per_rep_cents || 0 }, ...previousPools.map(p => ({ quarter: p.quarter, totalPool: p.total_pool_cents, eligibleReps: p.eligible_rep_ids?.length || 0, perRepPayout: p.projected_per_rep_cents }))]} />
               </Card>
             </>
+          )}
+
+          {salesTab === "prospecting" && (
+            <SalesProspecting
+              salesReps={salesReps.filter(r => r.status === "active").map(r => ({
+                id: r.id,
+                name: r.name,
+                zone_id: r.zone_id,
+                status: r.status,
+              }))}
+            />
           )}
         </>
       )}
