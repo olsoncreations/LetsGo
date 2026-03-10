@@ -945,20 +945,15 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "20%", background: "linear-gradient(rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "55%", background: "linear-gradient(transparent, rgba(0,0,0,0.85))", pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "0 24px 36px" }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-          {biz.isSponsored && (
+        {biz.isSponsored && (
+          <div style={{ marginBottom: 10 }}>
             <span style={{
               padding: "4px 10px", borderRadius: 50, fontSize: 9, fontWeight: 700,
               background: `${COLORS.neonYellow}20`, color: COLORS.neonYellow, border: `1px solid ${COLORS.neonYellow}40`,
               fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1.5, backdropFilter: "blur(8px)",
             }}>Sponsored</span>
-          )}
-          <span style={{
-            padding: "4px 12px", borderRadius: 50, fontSize: 10, fontWeight: 700,
-            background: `${COLORS.neonPink}25`, color: COLORS.neonPink, border: `1px solid ${COLORS.neonPink}40`,
-            fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1, backdropFilter: "blur(8px)",
-          }}>{biz.type}</span>
-        </div>
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <h2 style={{ fontSize: "clamp(24px, 7vw, 36px)", fontWeight: 900, color: "#fff", margin: 0, lineHeight: 1.05, fontFamily: "'Dela Gothic One', sans-serif", textShadow: "0 2px 20px rgba(0,0,0,0.6)", letterSpacing: -0.5 }}>{biz.name}</h2>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
@@ -990,6 +985,11 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
               {distance < 0.1 ? "<0.1" : distance.toFixed(1)} mi
             </span>
           )}
+          <span style={{
+            padding: "4px 12px", borderRadius: 50, fontSize: 10, fontWeight: 700,
+            background: `${COLORS.neonPink}25`, color: COLORS.neonPink, border: `1px solid ${COLORS.neonPink}40`,
+            fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1, backdropFilter: "blur(8px)",
+          }}>{biz.type}</span>
         </div>
         {biz.payout.length > 0 && (() => {
           const minP = Math.min(...biz.payout);
