@@ -158,3 +158,75 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     );
   }
 }
+
+/**
+ * DELETE /api/admin/businesses/media
+ * Permanently deletes media from storage + database.
+ * Supports bulk delete via array of IDs.
+ *
+ * Body: { ids: string[] }
+ */
+export async function DELETE(req: NextRequest): Promise<Response> {
+  // Require staff authentication
+  const delToken = req.headers.get("authorization")?.replace("Bearer ", "");
+  if (!delToken) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const { data: { user: delUser }, error: delAuthErr } = await supabaseServer.auth.getUser(delToken);
+  if (delAuthErr || !delUser) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const { data: delStaff } = await supabaseServer.from("staff_users").select("user_id").eq("user_id", delUser.id).maybeSingle();
+  if (!delStaff) return NextResponse.json({ error: "Staff access required" }, { status: 403 });
+
+  try {
+    const body = await req.json();
+    const ids = body.ids as string[];
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ error: "ids array required" }, { status: 400 });
+    }
+
+    // Look up rows to get storage paths
+    const { data: rows, error: fetchErr } = await supabaseServer
+      .from("business_media")
+      .select("id, bucket, path")
+      .in("id", ids);
+
+    if (fetchErr) {
+      console.error("[admin-business-media] DELETE fetch error:", fetchErr);
+      return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    }
+
+    // Delete from storage
+    const storageErrors: string[] = [];
+    for (const row of rows ?? []) {
+      const r = row as Record<string, unknown>;
+      const bucket = String(r.bucket || "business-media");
+      const path = String(r.path || "");
+      if (path) {
+        const { error: stErr } = await supabaseServer.storage.from(bucket).remove([path]);
+        if (stErr) storageErrors.push(`${path}: ${stErr.message}`);
+      }
+    }
+
+    // Delete from database
+    const { error: dbErr } = await supabaseServer
+      .from("business_media")
+      .delete()
+      .in("id", ids);
+
+    if (dbErr) {
+      console.error("[admin-business-media] DELETE db error:", dbErr);
+      return NextResponse.json({ error: dbErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      deleted: ids.length,
+      storageErrors: storageErrors.length > 0 ? storageErrors : undefined,
+    });
+  } catch (err) {
+    console.error("[admin-business-media] DELETE unexpected error:", err);
+    return NextResponse.json(
+      { error: String(err instanceof Error ? err.message : err) },
+      { status: 500 }
+    );
+  }
+}

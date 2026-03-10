@@ -2025,6 +2025,29 @@ function BusinessesPage() {
                         }
                         updateField("photos", newPhotos);
                       }}
+                      onDelete={(indices) => {
+                        const photos = selected.photos || [];
+                        const ids = indices.map(i => photos[i]?.id).filter(Boolean) as string[];
+                        if (ids.length === 0) return;
+                        supabaseBrowser.auth.getSession().then(({ data: { session: sess } }) => {
+                          fetch("/api/admin/businesses/media", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
+                            body: JSON.stringify({ ids }),
+                          })
+                            .then(async (res) => {
+                              if (!res.ok) {
+                                const errText = await res.text().catch(() => "");
+                                console.error("[admin] Photo delete failed:", res.status, errText);
+                                return;
+                              }
+                              // Remove from local state
+                              const remaining = photos.filter((_, idx) => !indices.includes(idx));
+                              setBusinesses(prev => prev.map(b => b.id === selected.id ? { ...b, photos: remaining } : b));
+                            })
+                            .catch((err) => console.error("[admin] Photo delete error:", err));
+                        });
+                      }}
                     />
                   </Card>
                 </CollapsibleSection>
@@ -2155,6 +2178,28 @@ function BusinessesPage() {
                           }
                         }
                         updateField("videos", newVideos);
+                      }}
+                      onDelete={(indices) => {
+                        const videos = selected.videos || [];
+                        const ids = indices.map(i => videos[i]?.id).filter(Boolean) as string[];
+                        if (ids.length === 0) return;
+                        supabaseBrowser.auth.getSession().then(({ data: { session: sess } }) => {
+                          fetch("/api/admin/businesses/media", {
+                            method: "DELETE",
+                            headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
+                            body: JSON.stringify({ ids }),
+                          })
+                            .then(async (res) => {
+                              if (!res.ok) {
+                                const errText = await res.text().catch(() => "");
+                                console.error("[admin] Video delete failed:", res.status, errText);
+                                return;
+                              }
+                              const remaining = videos.filter((_, idx) => !indices.includes(idx));
+                              setBusinesses(prev => prev.map(b => b.id === selected.id ? { ...b, videos: remaining } : b));
+                            })
+                            .catch((err) => console.error("[admin] Video delete error:", err));
+                        });
                       }}
                     />
                   </Card>

@@ -1061,9 +1061,15 @@ interface MediaGridManagedProps {
   editable?: boolean;
   onPreview?: (preview: { url: string; type: string }) => void;
   onStatusChange?: (index: number, status: "active" | "paused" | "removed") => void;
+  onDelete?: (indices: number[]) => void;
 }
 
-export function MediaGridManaged({ items, type, editable = true, onPreview, onStatusChange }: MediaGridManagedProps) {
+export function MediaGridManaged({ items, type, editable = true, onPreview, onStatusChange, onDelete }: MediaGridManagedProps) {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  // Clear selection when items change
+  useEffect(() => { setSelected(new Set()); }, [items?.length]);
+
   if (!items || items.length === 0) {
     return (
       <div style={{ color: COLORS.textSecondary, padding: 40, textAlign: "center", background: COLORS.darkBg, borderRadius: 12 }}>
@@ -1073,109 +1079,267 @@ export function MediaGridManaged({ items, type, editable = true, onPreview, onSt
     );
   }
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
-      {items.map((item, i) => {
-        if (!item) return null;
-        const isVideo = type === "video" || item.url?.includes(".mp4") || item.name?.includes(".mp4");
-        const isInvestigating = item.status === "paused";
-        const isBanned = item.status === "removed";
-        const isActive = !item.status || item.status === "active";
+  const validItems = items.map((item, i) => item ? { item, index: i } : null).filter(Boolean) as { item: MediaItemWithStatus; index: number }[];
+  const allSelected = validItems.length > 0 && validItems.every(v => selected.has(v.index));
+  const hasSelection = selected.size > 0;
 
-        return (
-          <div
-            key={item.id || i}
-            style={{
-              borderRadius: 12,
-              overflow: "hidden",
-              border: isInvestigating 
-                ? "3px solid " + COLORS.neonOrange 
-                : isBanned 
-                ? "3px solid " + COLORS.neonRed 
-                : "2px solid " + COLORS.cardBorder,
-              background: COLORS.cardBg,
-              opacity: isBanned ? 0.6 : 1,
-            }}
-          >
-            {/* Media Preview */}
+  const toggleSelect = (i: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(validItems.map(v => v.index)));
+    }
+  };
+
+  return (
+    <div>
+      {/* Bulk Action Bar */}
+      {editable && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12, marginBottom: 12,
+          padding: "8px 12px", background: COLORS.darkBg, borderRadius: 10,
+          minHeight: 40,
+        }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: COLORS.textSecondary }}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              style={{ accentColor: COLORS.neonBlue, width: 16, height: 16, cursor: "pointer" }}
+            />
+            {allSelected ? "Deselect All" : "Select All"}
+          </label>
+
+          {hasSelection && (
+            <>
+              <span style={{ fontSize: 12, color: COLORS.neonBlue, fontWeight: 600 }}>
+                {selected.size} selected
+              </span>
+              <div style={{ flex: 1 }} />
+              {onStatusChange && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Ban ${selected.size} ${type}(s)? They will be hidden from the business profile.`)) {
+                      Array.from(selected).forEach(i => onStatusChange(i, "removed"));
+                      setSelected(new Set());
+                    }
+                  }}
+                  style={{
+                    padding: "6px 14px", borderRadius: 6, border: "none",
+                    background: COLORS.neonRed, color: "#fff", cursor: "pointer",
+                    fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 4,
+                  }}
+                >
+                  Ban Selected
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => {
+                    if (confirm(`Permanently delete ${selected.size} ${type}(s)? This cannot be undone.`)) {
+                      onDelete(Array.from(selected));
+                      setSelected(new Set());
+                    }
+                  }}
+                  style={{
+                    padding: "6px 14px", borderRadius: 6, border: "none",
+                    background: "#8b0000", color: "#fff", cursor: "pointer",
+                    fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 4,
+                  }}
+                >
+                  Delete Selected
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
+        {items.map((item, i) => {
+          if (!item) return null;
+          const isVideo = type === "video" || item.url?.includes(".mp4") || item.name?.includes(".mp4");
+          const isInvestigating = item.status === "paused";
+          const isBanned = item.status === "removed";
+          const isActive = !item.status || item.status === "active";
+          const isSelected = selected.has(i);
+
+          return (
             <div
-              onClick={() => !isBanned && onPreview?.({ url: item.url || "", type: isVideo ? "video" : "image" })}
-              style={{ 
-                width: "100%", 
-                aspectRatio: "1", 
-                cursor: isBanned ? "default" : "pointer",
-                position: "relative",
+              key={item.id || i}
+              style={{
+                borderRadius: 12,
+                overflow: "hidden",
+                border: isSelected
+                  ? "3px solid " + COLORS.neonBlue
+                  : isInvestigating
+                  ? "3px solid " + COLORS.neonOrange
+                  : isBanned
+                  ? "3px solid " + COLORS.neonRed
+                  : "2px solid " + COLORS.cardBorder,
+                background: COLORS.cardBg,
+                opacity: isBanned ? 0.6 : 1,
               }}
             >
-              {isVideo ? (
-                <>
-                  <video src={item.url} muted preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)", pointerEvents: "none" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <div style={{ width: 0, height: 0, borderTop: "10px solid transparent", borderBottom: "10px solid transparent", borderLeft: "16px solid white", marginLeft: 3 }} />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <img src={item.url} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              )}
-
-              {/* Status Badge - Always visible */}
+              {/* Media Preview */}
               <div
+                onClick={() => !isBanned && onPreview?.({ url: item.url || "", type: isVideo ? "video" : "image" })}
                 style={{
-                  position: "absolute",
-                  top: 8,
-                  left: 8,
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  background: isInvestigating 
-                    ? COLORS.neonOrange 
-                    : isBanned 
-                    ? COLORS.neonRed 
-                    : "rgba(57,255,20,0.9)",
-                  color: isActive ? "#000" : "#fff",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
+                  width: "100%",
+                  aspectRatio: "1",
+                  cursor: isBanned ? "default" : "pointer",
+                  position: "relative",
                 }}
               >
-                {isInvestigating && <span>🔍</span>}
-                {isBanned && <span>🚫</span>}
-                {isActive && <span>✓</span>}
-                {isInvestigating ? "INVESTIGATING" : isBanned ? "BANNED" : "ACTIVE"}
-              </div>
-            </div>
+                {isVideo ? (
+                  <>
+                    <video src={item.url} muted preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.25)", pointerEvents: "none" }}>
+                      <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ width: 0, height: 0, borderTop: "10px solid transparent", borderBottom: "10px solid transparent", borderLeft: "16px solid white", marginLeft: 3 }} />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <img src={item.url} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                )}
 
-            {/* Info Section */}
-            <div style={{ padding: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {item.name || "Untitled"}
-              </div>
-              {item.uploaded_at && (
-                <div style={{ fontSize: 10, color: COLORS.textSecondary }}>
-                  Uploaded: {new Date(item.uploaded_at).toLocaleDateString()}
+                {/* Status Badge - Always visible */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    left: 8,
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    background: isInvestigating
+                      ? COLORS.neonOrange
+                      : isBanned
+                      ? COLORS.neonRed
+                      : "rgba(57,255,20,0.9)",
+                    color: isActive ? "#000" : "#fff",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  {isInvestigating && <span>🔍</span>}
+                  {isBanned && <span>🚫</span>}
+                  {isActive && <span>✓</span>}
+                  {isInvestigating ? "INVESTIGATING" : isBanned ? "BANNED" : "ACTIVE"}
                 </div>
-              )}
-              
-              {/* Staff Action Buttons */}
-              {editable && (
-                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                  {!isBanned && (
-                    <>
+
+                {/* Selection Checkbox */}
+                {editable && (
+                  <div
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(i); }}
+                    style={{
+                      position: "absolute", top: 8, right: 8,
+                      width: 24, height: 24, borderRadius: 6,
+                      background: isSelected ? COLORS.neonBlue : "rgba(0,0,0,0.5)",
+                      border: isSelected ? "none" : "2px solid rgba(255,255,255,0.5)",
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#fff", fontSize: 14, fontWeight: 700,
+                    }}
+                  >
+                    {isSelected && "✓"}
+                  </div>
+                )}
+              </div>
+
+              {/* Info Section */}
+              <div style={{ padding: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {item.name || "Untitled"}
+                </div>
+                {item.uploaded_at && (
+                  <div style={{ fontSize: 10, color: COLORS.textSecondary }}>
+                    Uploaded: {new Date(item.uploaded_at).toLocaleDateString()}
+                  </div>
+                )}
+
+                {/* Staff Action Buttons */}
+                {editable && (
+                  <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                    {!isBanned && (
+                      <>
+                        <button
+                          onClick={() => onStatusChange?.(i, isInvestigating ? "active" : "paused")}
+                          title={isInvestigating ? "Clear Investigation" : "Flag for Investigation"}
+                          style={{
+                            flex: 1,
+                            padding: "6px 8px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: isInvestigating ? COLORS.neonGreen : COLORS.neonOrange,
+                            color: "#000",
+                            cursor: "pointer",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 4,
+                          }}
+                        >
+                          {isInvestigating ? "✓ Clear" : "🔍 Investigate"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to ban this ${type}? It will be hidden from the business profile.`)) {
+                              onStatusChange?.(i, "removed");
+                            }
+                          }}
+                          title="Ban Media"
+                          style={{
+                            flex: 1,
+                            padding: "6px 8px",
+                            borderRadius: 6,
+                            border: "none",
+                            background: COLORS.neonRed,
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 4,
+                          }}
+                        >
+                          🚫 Ban
+                        </button>
+                      </>
+                    )}
+                    {isBanned && (
                       <button
-                        onClick={() => onStatusChange?.(i, isInvestigating ? "active" : "paused")}
-                        title={isInvestigating ? "Clear Investigation" : "Flag for Investigation"}
+                        onClick={() => {
+                          if (confirm(`Restore this ${type}? It will become visible again on the business profile.`)) {
+                            onStatusChange?.(i, "active");
+                          }
+                        }}
+                        title="Restore Media"
                         style={{
                           flex: 1,
-                          padding: "6px 8px",
+                          padding: "8px",
                           borderRadius: 6,
                           border: "none",
-                          background: isInvestigating ? COLORS.neonGreen : COLORS.neonOrange,
+                          background: COLORS.neonGreen,
                           color: "#000",
                           cursor: "pointer",
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: 700,
                           display: "flex",
                           alignItems: "center",
@@ -1183,21 +1347,23 @@ export function MediaGridManaged({ items, type, editable = true, onPreview, onSt
                           gap: 4,
                         }}
                       >
-                        {isInvestigating ? "✓ Clear" : "🔍 Investigate"}
+                        ↩️ Restore
                       </button>
+                    )}
+                    {/* Delete button - always available */}
+                    {onDelete && (
                       <button
                         onClick={() => {
-                          if (confirm(`Are you sure you want to ban this ${type}? It will be hidden from the business profile.`)) {
-                            onStatusChange?.(i, "removed");
+                          if (confirm(`Permanently delete this ${type}? This cannot be undone.`)) {
+                            onDelete([i]);
                           }
                         }}
-                        title="Ban Media"
+                        title="Delete permanently"
                         style={{
-                          flex: 1,
                           padding: "6px 8px",
                           borderRadius: 6,
                           border: "none",
-                          background: COLORS.neonRed,
+                          background: "#8b0000",
                           color: "#fff",
                           cursor: "pointer",
                           fontSize: 10,
@@ -1208,43 +1374,16 @@ export function MediaGridManaged({ items, type, editable = true, onPreview, onSt
                           gap: 4,
                         }}
                       >
-                        🚫 Ban
+                        🗑️
                       </button>
-                    </>
-                  )}
-                  {isBanned && (
-                    <button
-                      onClick={() => {
-                        if (confirm(`Restore this ${type}? It will become visible again on the business profile.`)) {
-                          onStatusChange?.(i, "active");
-                        }
-                      }}
-                      title="Restore Media"
-                      style={{
-                        flex: 1,
-                        padding: "8px",
-                        borderRadius: 6,
-                        border: "none",
-                        background: COLORS.neonGreen,
-                        color: "#000",
-                        cursor: "pointer",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 4,
-                      }}
-                    >
-                      ↩️ Restore
-                    </button>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
