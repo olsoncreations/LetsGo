@@ -127,6 +127,7 @@ const ReceiptUploadModal = ({open,onClose,token,userId,onSuccess}:{open:boolean;
   const [submitting,setSubmitting]=useState(false);
   const [errMsg,setErrMsg]=useState("");
   const [confirmStep,setConfirmStep]=useState(false);
+  const [showSubtotalHelp,setShowSubtotalHelp]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const debounceRef=useRef<ReturnType<typeof setTimeout>|null>(null);
 
@@ -233,8 +234,44 @@ const ReceiptUploadModal = ({open,onClose,token,userId,onSuccess}:{open:boolean;
               {bizResults.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,marginTop:4,zIndex:20,borderRadius:4,background:"#111120",border:`1px solid rgba(${NEON.greenRGB},0.2)`,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",overflow:"hidden"}}>{bizResults.map(b=>(<div key={b.id} onClick={()=>{setSelectedBiz(b);setBizSearch(b.name);setBizResults([])}} style={{padding:"10px 14px",cursor:"pointer",fontSize:12,color:"rgba(255,255,255,0.7)",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>{b.name}</div>))}</div>}</>
               )}
             </div>
-            <div style={{marginBottom:20}}>
-              <label style={{display:"block",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>Receipt Subtotal</label>
+            <div style={{marginBottom:20,position:"relative"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <label style={{fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif"}}>Receipt Subtotal</label>
+                <div onClick={e=>{e.stopPropagation();setShowSubtotalHelp(!showSubtotalHelp)}} style={{cursor:"pointer",width:16,height:16,borderRadius:"50%",border:"1px solid rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.3)",transition:"all 0.2s",background:showSubtotalHelp?"rgba(255,255,255,0.08)":"transparent"}} title="What is a subtotal?">?</div>
+              </div>
+              {showSubtotalHelp&&(
+                <div style={{position:"absolute",top:-2,left:0,right:0,zIndex:30,borderRadius:6,background:"#111120",border:`1px solid rgba(${NEON.greenRGB},0.25)`,boxShadow:"0 12px 40px rgba(0,0,0,0.7)",padding:20,animation:"fadeIn 0.2s ease"}} onClick={e=>e.stopPropagation()}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                    <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:NEON.green}}>What is a subtotal?</div>
+                    <div onClick={()=>setShowSubtotalHelp(false)} style={{cursor:"pointer",color:"rgba(255,255,255,0.3)",fontSize:12,marginTop:-2}}>{"\u2715"}</div>
+                  </div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.6,marginBottom:16}}>
+                    The <span style={{color:"#fff",fontWeight:600}}>subtotal</span> is the amount <span style={{color:"#fff",fontWeight:600}}>before tax</span> is added. Your cashback is calculated on the subtotal, not the total. Look for it on your receipt — it&apos;s usually listed right above the tax line.
+                  </div>
+                  {/* Mock receipt example */}
+                  <div style={{borderRadius:4,background:"#faf8f4",padding:"16px 18px",fontFamily:"'Courier New',monospace",fontSize:11,color:"#222",lineHeight:1.8}}>
+                    <div style={{textAlign:"center",fontWeight:700,fontSize:12,marginBottom:2}}>THE CORNER BISTRO</div>
+                    <div style={{textAlign:"center",fontSize:9,color:"#888",marginBottom:8}}>123 Main St - (555) 867-5309</div>
+                    <div style={{borderTop:"1px dashed #ccc",paddingTop:8,marginBottom:4}}>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span>Burger Deluxe</span><span>$14.50</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span>Caesar Salad</span><span>$11.00</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span>Iced Tea (2)</span><span>$7.00</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}><span>Brownie Sundae</span><span>$9.50</span></div>
+                    </div>
+                    <div style={{borderTop:"1px dashed #ccc",paddingTop:8,marginTop:4}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,background:"rgba(0,255,135,0.18)",margin:"0 -6px",padding:"3px 6px",borderRadius:3,border:"1.5px solid #00CC6A"}}>
+                        <span>SUBTOTAL</span><span>$42.00</span>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",color:"#888",marginTop:2}}><span>Tax (8.5%)</span><span>$3.57</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:2,paddingTop:6,borderTop:"1px dashed #ccc",fontWeight:700}}><span>TOTAL</span><span>$45.57</span></div>
+                    </div>
+                  </div>
+                  <div style={{marginTop:12,display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{width:12,height:12,borderRadius:2,background:"rgba(0,255,135,0.18)",border:"1.5px solid #00CC6A"}}/>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Enter this amount — the subtotal before tax</span>
+                  </div>
+                </div>
+              )}
               <input type="number" placeholder="0.00" value={subtotal} onChange={e=>setSubtotal(e.target.value)} style={{width:"100%",padding:"10px 14px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:16,fontFamily:"'Clash Display','DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
             </div>
             {errMsg&&<div style={{fontSize:11,color:NEON.pink,marginBottom:12}}>{errMsg}</div>}
