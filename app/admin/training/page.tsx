@@ -664,6 +664,54 @@ export default function TrainingPage() {
         </>
       )}
 
+      {/* Business Forms */}
+      <SectionTitle icon="📋">Business Forms</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 32 }}>
+        <Card>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 10,
+              background: `linear-gradient(135deg, ${COLORS.neonOrange}, ${COLORS.neonPink})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 22,
+              flexShrink: 0,
+            }}>
+              📄
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "#fff", marginBottom: 4 }}>
+                Partner Signup Form
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.4 }}>
+                Printable offline signup form for in-person business partner registration. Covers business info, package selection, payout tiers, billing, and legal agreements.
+              </div>
+            </div>
+            <a
+              href="/partner-signup-form.html"
+              download="LetsGo-Partner-Signup-Form.html"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                background: COLORS.gradient1,
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: 13,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              Download
+            </a>
+          </div>
+        </Card>
+      </div>
+
       {/* Category Filter */}
       <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         {categories.map(cat => (
