@@ -298,7 +298,11 @@ function BusinessesPage() {
       });
 
     // Load media from business_media table via server API (bypasses RLS)
-    fetch(`/api/admin/businesses/media?businessId=${selectedId}`)
+    supabaseBrowser.auth.getSession().then(({ data: { session } }) => {
+      const authToken = session?.access_token || "";
+      fetch(`/api/admin/businesses/media?businessId=${selectedId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
       .then((res) => res.json())
       .then((mediaData: { photos?: { id: string; name: string; url: string; status: "active" | "paused" | "removed"; uploaded_at: string }[]; videos?: { id: string; name: string; url: string; status: "active" | "paused" | "removed"; uploaded_at: string }[] }) => {
         if (mediaData.photos || mediaData.videos) {
@@ -316,6 +320,7 @@ function BusinessesPage() {
         }
       })
       .catch((err) => console.error("[admin-businesses] Media load warning:", err));
+    });
   }, [selectedId]);
 
   // Helper to get the current value (edited or original)
@@ -2002,18 +2007,20 @@ function BusinessesPage() {
                           // Persist to business_media table
                           const mediaId = newPhotos[index].id;
                           if (mediaId) {
-                            fetch("/api/admin/businesses/media", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ id: mediaId, status }),
-                            })
-                              .then(async (res) => {
-                                if (!res.ok) {
-                                  const errText = await res.text().catch(() => "");
-                                  console.error("[admin] Photo status update failed:", res.status, errText);
-                                }
+                            supabaseBrowser.auth.getSession().then(({ data: { session: sess } }) => {
+                              fetch("/api/admin/businesses/media", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
+                                body: JSON.stringify({ id: mediaId, status }),
                               })
-                              .catch((err) => console.error("[admin] Photo status update error:", err));
+                                .then(async (res) => {
+                                  if (!res.ok) {
+                                    const errText = await res.text().catch(() => "");
+                                    console.error("[admin] Photo status update failed:", res.status, errText);
+                                  }
+                                })
+                                .catch((err) => console.error("[admin] Photo status update error:", err));
+                            });
                           }
                         }
                         updateField("photos", newPhotos);
@@ -2131,18 +2138,20 @@ function BusinessesPage() {
                           // Persist to business_media table
                           const mediaId = newVideos[index].id;
                           if (mediaId) {
-                            fetch("/api/admin/businesses/media", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ id: mediaId, status }),
-                            })
-                              .then(async (res) => {
-                                if (!res.ok) {
-                                  const errText = await res.text().catch(() => "");
-                                  console.error("[admin] Video status update failed:", res.status, errText);
-                                }
+                            supabaseBrowser.auth.getSession().then(({ data: { session: sess } }) => {
+                              fetch("/api/admin/businesses/media", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
+                                body: JSON.stringify({ id: mediaId, status }),
                               })
-                              .catch((err) => console.error("[admin] Video status update error:", err));
+                                .then(async (res) => {
+                                  if (!res.ok) {
+                                    const errText = await res.text().catch(() => "");
+                                    console.error("[admin] Video status update failed:", res.status, errText);
+                                  }
+                                })
+                                .catch((err) => console.error("[admin] Video status update error:", err));
+                            });
                           }
                         }
                         updateField("videos", newVideos);
