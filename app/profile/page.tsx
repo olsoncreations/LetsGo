@@ -14,6 +14,7 @@ import {
   DEFAULT_VISIT_THRESHOLDS,
   DEFAULT_CASHBACK_BPS,
 } from "@/lib/platformSettings";
+import { validateImageDimensions } from "@/lib/imageValidation";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { EarningsBannerAnim, ReceiptAnim, CashOutAnim, HeartAnim, TabSwitchAnim, PayoutTiersAnim, LevelUpAnim, MediaAnim, GameHistoryAnim, AnalyticsAnim, ProfileAnim, SupportAnim } from "@/components/TourIllustrations";
@@ -1252,6 +1253,10 @@ export default function LetsGoProfile() {
     const maxSize = expFile.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
     const maxLabel = expFile.type.startsWith("video/") ? "50MB" : "10MB";
     if (expFile.size > maxSize) { alert(`File too large. Max ${maxLabel} for ${expFile.type.startsWith("video/") ? "videos" : "images"}.`); return; }
+    if (expFile.type.startsWith("image/")) {
+      const dimResult = await validateImageDimensions(expFile, 1080);
+      if (!dimResult.valid) { alert(`Image must be at least 1080px wide. Your image is ${dimResult.width}x${dimResult.height}px.`); return; }
+    }
     setExpUploading(true);
     const ext = expFile.name.split(".").pop() || "jpg";
     const safeName = expFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
