@@ -11,6 +11,7 @@ import {
   DataTable,
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
+import { fetchTagsByCategory } from "@/lib/availableTags";
 
 // ==================== TYPES ====================
 
@@ -89,20 +90,14 @@ const STATUS_OPTIONS = [
   { value: "not_interested", label: "Not Interested" },
 ];
 
-const TYPE_OPTIONS = [
+// Default type options — replaced by DB-driven tags on mount
+const DEFAULT_TYPE_OPTIONS = [
   { value: "all", label: "All Types" },
   { value: "restaurant_bar", label: "Restaurants & Bars" },
   { value: "activity", label: "Activities" },
   { value: "salon_beauty", label: "Salons & Beauty" },
   { value: "other", label: "Other" },
 ];
-
-const TYPE_LABELS: Record<string, string> = {
-  restaurant_bar: "Restaurant/Bar",
-  activity: "Activity",
-  salon_beauty: "Salon/Beauty",
-  other: "Other",
-};
 
 const PRICE_LABELS = ["Free", "$", "$$", "$$$", "$$$$"];
 
@@ -206,6 +201,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [importing, setImporting] = useState<Set<string>>(new Set());
   const [importingAll, setImportingAll] = useState(false);
 
+  // ---------- Business type state (DB-driven) ----------
+  const [typeOptions, setTypeOptions] = useState(DEFAULT_TYPE_OPTIONS);
+  const [typeLabels, setTypeLabels] = useState<Record<string, string>>({});
+
   // ---------- Leads state ----------
   const [leads, setLeads] = useState<SalesLead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
@@ -248,6 +247,29 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     fetchLeads();
   }, [fetchLeads]);
 
+  // Fetch business types from DB tags table
+  useEffect(() => {
+    async function loadBusinessTypes() {
+      try {
+        const categories = await fetchTagsByCategory("business");
+        const btCat = categories.find((c) => c.name === "Business Type");
+        if (btCat && btCat.tags.length > 0) {
+          const options = [
+            { value: "all", label: "All Types" },
+            ...btCat.tags.map((t) => ({ value: t.name, label: t.name })),
+          ];
+          const labels: Record<string, string> = {};
+          btCat.tags.forEach((t) => { labels[t.name] = t.name; });
+          setTypeOptions(options);
+          setTypeLabels(labels);
+        }
+      } catch (err) {
+        console.error("Error fetching business types:", err);
+      }
+    }
+    loadBusinessTypes();
+  }, []);
+
   const fetchNotes = useCallback(async (leadId: string) => {
     setNotesLoading(true);
     try {
@@ -283,12 +305,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       // Build the query string: prepend type if selected
       let query = searchQuery.trim();
       if (!loadMore && searchType !== "all") {
-        const typePrefix = searchType === "restaurant_bar" ? "restaurants and bars"
-          : searchType === "activity" ? "activities and entertainment"
-          : "salons and beauty";
-        // Only prepend if the user's query doesn't already mention the type
-        if (!query.toLowerCase().includes(typePrefix.split(" ")[0])) {
-          query = `${typePrefix} in ${query}`;
+        // Use the tag name directly (e.g., "Restaurant", "Bowling", "Spa")
+        const typeName = searchType.toLowerCase();
+        if (!query.toLowerCase().includes(typeName)) {
+          query = `${searchType} in ${query}`;
         }
       }
 
@@ -347,7 +367,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       const { error } = await supabaseBrowser.from("sales_leads").insert({
         google_place_id: place.google_place_id,
         business_name: place.business_name,
-        business_type: place.business_type,
+        business_type: searchType !== "all" ? searchType : place.business_type,
         phone: place.phone || null,
         address: place.address || null,
         city: place.city || null,
@@ -409,7 +429,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       const rows = toImport.map((place) => ({
         google_place_id: place.google_place_id,
         business_name: place.business_name,
-        business_type: place.business_type,
+        business_type: searchType !== "all" ? searchType : place.business_type,
         phone: place.phone || null,
         address: place.address || null,
         city: place.city || null,
@@ -629,7 +649,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     ];
     const rows = filteredLeads.map((l) => [
       l.business_name,
-      TYPE_LABELS[l.business_type || ""] || l.business_type || "",
+      typeLabels[l.business_type || ""] || l.business_type || "",
       l.phone || "",
       l.address || "",
       l.city || "",
@@ -710,7 +730,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       label: "Type",
       render: (v: unknown) => (
         <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
-          {TYPE_LABELS[String(v)] || String(v)}
+          {typeLabels[String(v)] || String(v)}
         </span>
       ),
     },
@@ -809,7 +829,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       label: "Type",
       render: (v: unknown) => (
         <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
-          {TYPE_LABELS[String(v)] || String(v || "—")}
+          {typeLabels[String(v)] || String(v || "—")}
         </span>
       ),
     },
@@ -912,7 +932,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               onChange={(e) => setSearchType(e.target.value)}
               style={selectStyle}
             >
-              {TYPE_OPTIONS.map((o) => (
+              {typeOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
@@ -1005,7 +1025,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           <div>
             <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Type</label>
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={selectStyle}>
-              {TYPE_OPTIONS.map((o) => (
+              {typeOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
@@ -1092,7 +1112,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                     </span>
                   )}
                   <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
-                    {TYPE_LABELS[selectedLead.business_type || ""] || selectedLead.business_type}
+                    {typeLabels[selectedLead.business_type || ""] || selectedLead.business_type}
                   </span>
                 </div>
               </div>
