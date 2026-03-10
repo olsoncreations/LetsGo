@@ -72,9 +72,32 @@ function mapBusinessType(googleTypes: string[]): string {
 }
 
 /**
+ * Geocode a location string to lat/lng using Google Geocoding API.
+ * Returns null if geocoding fails.
+ */
+async function geocodeLocation(
+  location: string,
+  apiKey: string
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.status === "OK" && data.results?.length > 0) {
+      const loc = data.results[0].geometry.location;
+      return { lat: loc.lat, lng: loc.lng };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * POST /api/admin/sales/prospect
  * Proxies Google Places Text Search (New) API.
- * Body: { query: string, pageToken?: string }
+ * Body: { query: string, pageToken?: string, radiusMiles?: number }
  * Returns: { places: [...], nextPageToken?: string }
  */
 export async function POST(req: NextRequest) {
@@ -85,6 +108,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const query = body.query?.trim();
     const pageToken = body.pageToken;
+    const radiusMiles = typeof body.radiusMiles === "number" ? body.radiusMiles : null;
 
     if (!query) {
       return NextResponse.json({ error: "Search query is required" }, { status: 400 });
@@ -102,6 +126,19 @@ export async function POST(req: NextRequest) {
     };
     if (pageToken) {
       requestBody.pageToken = pageToken;
+    }
+
+    // If radius specified and no pageToken, geocode the location and add locationBias
+    if (radiusMiles && !pageToken) {
+      const coords = await geocodeLocation(query, apiKey);
+      if (coords) {
+        requestBody.locationBias = {
+          circle: {
+            center: { latitude: coords.lat, longitude: coords.lng },
+            radius: radiusMiles * 1609.34, // miles to meters
+          },
+        };
+      }
     }
 
     const fieldMask = [

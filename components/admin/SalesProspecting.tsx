@@ -193,6 +193,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   // ---------- Search state ----------
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("all");
+  const [searchRadius, setSearchRadius] = useState("20");
   const [searchResults, setSearchResults] = useState<GooglePlaceResult[]>([]);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -312,9 +313,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         }
       }
 
-      const body: Record<string, string> = loadMore
+      const body: Record<string, unknown> = loadMore
         ? { query: searchQuery.trim(), pageToken: nextPageToken || "" }
-        : { query };
+        : { query, radiusMiles: parseInt(searchRadius) || 20 };
 
       const res = await fetch("/api/admin/sales/prospect", {
         method: "POST",
@@ -935,6 +936,21 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               {typeOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>
+              Radius
+            </label>
+            <select
+              value={searchRadius}
+              onChange={(e) => setSearchRadius(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="5">5 miles</option>
+              <option value="10">10 miles</option>
+              <option value="20">20 miles</option>
+              <option value="50">50 miles</option>
             </select>
           </div>
           <button
