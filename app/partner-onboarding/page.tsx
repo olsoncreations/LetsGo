@@ -748,7 +748,7 @@ async function completeSignup() {
         <div className="form-card">
           <div style={{ textAlign: "center", padding: "60px 20px" }}>
             <div style={{ fontSize: "5rem", marginBottom: 24 }}>🎉</div>
-            <h1 className="success-title">Welcome to Let'sGo!</h1>
+            <h1 className="success-title">Welcome to LetsGo!</h1>
             <p className="success-subtitle">Your business profile has been submitted for review.</p>
 
             <div className="success-box">
@@ -861,7 +861,7 @@ function Header() {
     <div className="header">
       <div className="logo-wrap">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={LOGO_SRC} alt="Let'sGo" className="logo-img" />
+        <img src={LOGO_SRC} alt="LetsGo" className="logo-img" />
       </div>
       <div className="tagline">Partner with us to grow your business</div>
     </div>
@@ -933,7 +933,7 @@ function stepSubtitle(step: number) {
     case 6:
       return "Verify your business and build your profile with quality images.";
     case 7:
-      return "Review your package details and finalize your partnership with Let'sGo.";
+      return "Review your package details and finalize your partnership with LetsGo.";
     default:
       return "";
   }
@@ -1828,7 +1828,7 @@ function Step3({
             disabled={!isPremium}
             onChange={(e) => setData((p) => ({ ...p, wantsCustomAdsCall: e.target.checked }))}
           />
-          <span>I'd like a Let'sGo rep to contact me about custom advertising plans</span>
+          <span>I'd like a LetsGo rep to contact me about custom advertising plans</span>
         </label>
       </div>
     </form>
@@ -1902,6 +1902,19 @@ function Step4({
   tiers: { level: string; range: string }[];
   presetBps: Record<string, number[]>;
 }) {
+  // Sync BPS with the selected preset on first render (initial data has stale hardcoded values)
+  const synced = useRef(false);
+  useEffect(() => {
+    if (!synced.current && data.payoutPreset !== "custom") {
+      const correctBps = applyPayoutPreset(data.payoutPreset, presetBps);
+      const needsSync = JSON.stringify(data.payoutBps) !== JSON.stringify(correctBps);
+      if (needsSync) {
+        setData(prev => ({ ...prev, payoutBps: correctBps }));
+      }
+      synced.current = true;
+    }
+  }, [data.payoutPreset, data.payoutBps, presetBps, setData]);
+
   function setPreset(p: PayoutPreset) {
     setData((prev) => ({
       ...prev,
