@@ -72,3 +72,55 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ experiences });
 }
+
+/**
+ * DELETE /api/users/experiences?id=<experience_id>
+ * Deletes the authenticated user's own experience (DB row + storage file).
+ */
+export async function DELETE(req: NextRequest) {
+  const user = await authenticate(req);
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  const expId = req.nextUrl.searchParams.get("id");
+  if (!expId) {
+    return NextResponse.json({ error: "Missing experience id" }, { status: 400 });
+  }
+
+  // Fetch the record to verify ownership and get storage path
+  const { data: row, error: fetchErr } = await supabaseServer
+    .from("user_experience_media")
+    .select("id, user_id, storage_path")
+    .eq("id", expId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  }
+  if (!row) {
+    return NextResponse.json({ error: "Experience not found" }, { status: 404 });
+  }
+  if ((row as Record<string, unknown>).user_id !== user.id) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  const storagePath = (row as Record<string, unknown>).storage_path as string;
+
+  // Delete from storage (best effort — don't block on failure)
+  if (storagePath) {
+    await supabaseServer.storage.from("user-experiences").remove([storagePath]);
+  }
+
+  // Delete the DB row
+  const { error: delErr } = await supabaseServer
+    .from("user_experience_media")
+    .delete()
+    .eq("id", expId);
+
+  if (delErr) {
+    return NextResponse.json({ error: delErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

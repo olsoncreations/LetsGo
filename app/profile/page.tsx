@@ -703,7 +703,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
 
 interface CalcBiz { id: string; name: string; type: string; visits: number; level: number; rates: number[]; earned: number; balance: number; }
 interface CashoutDisplay { id: string; date: string; amount: number; method: string; status: string; fee_cents?: number; net_amount_cents?: number; breakdown?: { influencer_earnings_cents?: number; receipt_earnings_cents?: number; influencer_details?: { period: string; signups: number; amountCents: number }[] } | null; }
-interface ExperienceDisplay { id: string; businessId: string; businessName: string; mediaUrl: string; mediaType: string; caption: string; status: string; createdAt: string; }
+interface ExperienceDisplay { id: string; businessId: string; businessName: string; mediaUrl: string; mediaType: string; caption: string; status: string; createdAt: string; storagePath: string; }
 
 export default function LetsGoProfile() {
   const router = useRouter();
@@ -979,6 +979,7 @@ export default function LetsGoProfile() {
           mediaType: e.mediaType as string,
           caption: e.caption as string,
           status: e.status as string,
+          storagePath: (e.storagePath as string) || "",
           createdAt: new Date(e.createdAt as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         }));
         setExperiences(mapped);
@@ -1278,7 +1279,8 @@ export default function LetsGoProfile() {
         setExperiences(((expJson.experiences || []) as Record<string, unknown>[]).map((e) => ({
           id: e.id as string, businessId: e.businessId as string, businessName: e.businessName as string,
           mediaUrl: e.mediaUrl as string, mediaType: e.mediaType as string, caption: e.caption as string,
-          status: e.status as string, createdAt: new Date(e.createdAt as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          status: e.status as string, storagePath: (e.storagePath as string) || "",
+          createdAt: new Date(e.createdAt as string).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         })));
       }
       setExpUploadOpen(false);
@@ -1289,6 +1291,23 @@ export default function LetsGoProfile() {
     }
     setExpUploading(false);
   }, [token, profile, expFile, expSelectedBiz, expCaption]);
+
+  // ─── Experience delete handler ───
+  const handleDeleteExperience = useCallback(async (expId: string) => {
+    if (!token) return;
+    if (!confirm("Delete this experience? This cannot be undone.")) return;
+    const res = await fetch(`/api/users/experiences?id=${expId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setExperiences((prev) => prev.filter((e) => e.id !== expId));
+      setViewingExp(null);
+    } else {
+      const data = await res.json().catch(() => null);
+      alert(data?.error || "Failed to delete experience.");
+    }
+  }, [token]);
 
   // ─── Account management handlers ───
   const handleAccountAction = useCallback(async (action: "hold" | "delete_request" | "reinstate") => {
@@ -1452,7 +1471,12 @@ export default function LetsGoProfile() {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)" }}>{viewingExp.businessName}</div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 2 }}>{viewingExp.createdAt}{viewingExp.status !== "approved" && <span style={{ marginLeft: 8, color: viewingExp.status === "pending" ? NEON.yellow : NEON.pink, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{viewingExp.status}</span>}</div>
               </div>
-              <div onClick={() => setViewingExp(null)} style={{ cursor: "pointer", width: 32, height: 32, borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.35)", fontSize: 14, flexShrink: 0 }}>{"\u2715"}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div onClick={() => handleDeleteExperience(viewingExp.id)} style={{ cursor: "pointer", width: 32, height: 32, borderRadius: 4, border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Delete experience">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                </div>
+                <div onClick={() => setViewingExp(null)} style={{ cursor: "pointer", width: 32, height: 32, borderRadius: 4, border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.35)", fontSize: 14, flexShrink: 0 }}>{"\u2715"}</div>
+              </div>
             </div>
             {/* Media */}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", minHeight: 300, maxHeight: "65vh", overflow: "hidden" }}>
