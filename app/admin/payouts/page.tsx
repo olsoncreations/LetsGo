@@ -177,8 +177,9 @@ export default function PayoutsPage() {
 
     // Fetch progressive payout summaries via admin API (uses supabaseServer to bypass RLS)
     try {
+      const { data: { session: rSess } } = await supabaseBrowser.auth.getSession();
       const [receiptsRes, cashoutsRes, profilesRes] = await Promise.all([
-        fetch("/api/admin/receipts").then(r => r.json()),
+        fetch("/api/admin/receipts", { headers: { Authorization: `Bearer ${rSess?.access_token || ""}` } }).then(r => r.json()),
         supabaseBrowser.from("user_payouts").select("user_id, amount_cents, status"),
         supabaseBrowser.from("profiles").select("id, full_name, first_name, last_name, username"),
       ]);

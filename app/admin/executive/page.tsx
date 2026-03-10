@@ -398,7 +398,10 @@ export default function ExecutivePage() {
 
       // ---- GAME ENGAGEMENT (via server API to bypass RLS) ----
       try {
-        const gameRes = await fetch("/api/admin/game-stats");
+        const { data: { session: gSess } } = await supabaseBrowser.auth.getSession();
+        const gameRes = await fetch("/api/admin/game-stats", {
+          headers: { Authorization: `Bearer ${gSess?.access_token || ""}` },
+        });
         if (gameRes.ok) {
           const gs = await gameRes.json();
           setTotal5v3v1Games(gs.total5v3v1Games || 0);

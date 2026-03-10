@@ -260,7 +260,10 @@ export default function SettingsPage() {
       }
 
       // Fetch staff via server API to bypass RLS on staff_users
-      const staffRes = await fetch("/api/admin/staff");
+      const { data: { session: stSess } } = await supabaseBrowser.auth.getSession();
+      const staffRes = await fetch("/api/admin/staff", {
+        headers: { Authorization: `Bearer ${stSess?.access_token || ""}` },
+      });
       if (staffRes.ok) {
         const { staff } = await staffRes.json();
         if (staff) setStaffUsers(staff);
@@ -511,9 +514,10 @@ export default function SettingsPage() {
     setAddingStaff(true);
     try {
       // Server-side handles: email lookup (auth.users), duplicate check, insert
+      const { data: { session: addSess } } = await supabaseBrowser.auth.getSession();
       const res = await fetch("/api/admin/staff", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${addSess?.access_token || ""}` },
         body: JSON.stringify({
           email: newStaffEmail,
           name: newStaffName,
@@ -551,9 +555,10 @@ export default function SettingsPage() {
     }
     if (!confirm("Remove this staff member? They will lose admin access.")) return;
     try {
+      const { data: { session: delSess } } = await supabaseBrowser.auth.getSession();
       const res = await fetch("/api/admin/staff", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${delSess?.access_token || ""}` },
         body: JSON.stringify({ userId }),
       });
       const data = await res.json();

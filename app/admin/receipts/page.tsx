@@ -13,6 +13,7 @@ import {
   formatMoney,
   formatDateTime,
 } from "@/components/admin/components";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 // ==================== TYPES ====================
 interface Receipt {
@@ -105,7 +106,10 @@ export default function ReceiptsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/receipts");
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/receipts", {
+        headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+      });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "Failed to load receipts" }));
         throw new Error(errBody.error || `HTTP ${res.status}`);
@@ -193,9 +197,10 @@ export default function ReceiptsPage() {
   // Helper: update receipt statuses via server API (bypasses RLS)
   const updateReceiptStatus = async (ids: string[], status: string): Promise<boolean> => {
     try {
+      const { data: { session: sess } } = await supabaseBrowser.auth.getSession();
       const res = await fetch("/api/admin/receipts", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.access_token || ""}` },
         body: JSON.stringify({ ids, status }),
       });
       if (!res.ok) {

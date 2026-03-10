@@ -89,6 +89,11 @@ interface StatementRecord {
 }
 
 // ==================== BILLING PAGE ====================
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabaseBrowser.auth.getSession();
+  return { Authorization: `Bearer ${session?.access_token || ""}` };
+}
+
 export default function BillingPage() {
   // Data states
   const [billingData, setBillingData] = useState<BillingRecord[]>([]);
@@ -659,9 +664,10 @@ export default function BillingPage() {
             if (!confirm(`Generate invoices for ${periodLabel}? This will create invoices for all active businesses.`)) return;
             setActionLoading("generate");
             try {
+              const auth = await getAuthHeaders();
               const res = await fetch("/api/admin/billing/generate-invoices", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...auth },
                 body: JSON.stringify({ periodStart: rangeStart, periodEnd: rangeEnd }),
               });
               const data = await res.json();
@@ -673,9 +679,10 @@ export default function BillingPage() {
                 let msg = `Generated ${data.generated} invoices totaling ${formatMoney(data.totalCents)} (${data.skipped} skipped)`;
                 // Also generate influencer payouts for the same period
                 try {
+                  const infAuth = await getAuthHeaders();
                   const infRes = await fetch("/api/admin/billing/generate-influencer-payouts", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json", ...infAuth },
                     body: JSON.stringify({ periodStart: rangeStart, periodEnd: rangeEnd }),
                   });
                   const infData = await infRes.json();
@@ -720,9 +727,10 @@ export default function BillingPage() {
             if (!confirm(`Auto-charge ${pendingCount} pending invoice(s)? This will attempt to charge each business's payment method on file.`)) return;
             setActionLoading("charge");
             try {
+              const chAuth = await getAuthHeaders();
               const res = await fetch("/api/admin/billing/charge", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...chAuth },
                 body: JSON.stringify({ chargeAll: true }),
               });
               const data = await res.json();
@@ -758,9 +766,10 @@ export default function BillingPage() {
             if (!confirm(`Generate statements for ${periodLabel}?`)) return;
             setActionLoading("statements");
             try {
+              const stAuth = await getAuthHeaders();
               const res = await fetch("/api/admin/billing/statements", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...stAuth },
                 body: JSON.stringify({ periodStart: rangeStart, periodEnd: rangeEnd }),
               });
               const data = await res.json();
@@ -836,9 +845,10 @@ export default function BillingPage() {
                       e.stopPropagation();
                       if (!confirm(`Charge ${r.business_name} for ${formatMoney(r.total_due)}?`)) return;
                       try {
+                        const chAuth2 = await getAuthHeaders();
                         const res = await fetch("/api/admin/billing/charge", {
                           method: "POST",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { "Content-Type": "application/json", ...chAuth2 },
                           body: JSON.stringify({ invoiceIds: [r.id] }),
                         });
                         const data = await res.json();
@@ -899,9 +909,10 @@ export default function BillingPage() {
                   {s.status === "pending" ? (
                     <button onClick={async () => {
                       try {
+                        const sAuth = await getAuthHeaders();
                         const res = await fetch("/api/admin/billing/statements", {
                           method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
+                          headers: { "Content-Type": "application/json", ...sAuth },
                           body: JSON.stringify({ statementId: s.id, action: "mark_sent" }),
                         });
                         if (res.ok) {
@@ -1050,9 +1061,10 @@ export default function BillingPage() {
                     <button
                       onClick={async () => {
                         try {
+                          const mpAuth = await getAuthHeaders();
                           const res = await fetch("/api/admin/billing/invoices", {
                             method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
+                            headers: { "Content-Type": "application/json", ...mpAuth },
                             body: JSON.stringify({ invoiceId: selectedBill.id, action: "mark_paid" }),
                           });
                           if (res.ok) {
@@ -1085,9 +1097,10 @@ export default function BillingPage() {
                         const reason = prompt("Reason for voiding this invoice:");
                         if (reason === null) return;
                         try {
+                          const vAuth = await getAuthHeaders();
                           const res = await fetch("/api/admin/billing/invoices", {
                             method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
+                            headers: { "Content-Type": "application/json", ...vAuth },
                             body: JSON.stringify({ invoiceId: selectedBill.id, action: "void", reason }),
                           });
                           if (res.ok) {

@@ -136,7 +136,10 @@ export default function MessagingPage() {
       // 5. Fetch staff user IDs via server API (bypasses RLS on staff_users)
       let staffRows: { user_id: string; name: string }[] = [];
       try {
-        const staffRes = await fetch("/api/admin/staff");
+        const { data: { session: staffSess } } = await supabaseBrowser.auth.getSession();
+        const staffRes = await fetch("/api/admin/staff", {
+          headers: { Authorization: `Bearer ${staffSess?.access_token || ""}` },
+        });
         if (staffRes.ok) {
           const { staff } = await staffRes.json();
           staffRows = (staff || []).map((s: Record<string, unknown>) => ({ user_id: s.user_id as string, name: s.name as string }));
@@ -463,7 +466,10 @@ export default function MessagingPage() {
           sublabel: i.code ? `Code: ${i.code}` : i.email || "",
         })));
       } else if (type === "staff") {
-        const res = await fetch("/api/admin/staff");
+        const { data: { session: sSess } } = await supabaseBrowser.auth.getSession();
+        const res = await fetch("/api/admin/staff", {
+          headers: { Authorization: `Bearer ${sSess?.access_token || ""}` },
+        });
         if (res.ok) {
           const { staff } = await res.json();
           const q = query.toLowerCase();
