@@ -962,12 +962,12 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <h2 style={{ fontSize: "clamp(24px, 7vw, 36px)", fontWeight: 900, color: "#fff", margin: 0, lineHeight: 1.05, fontFamily: "'Dela Gothic One', sans-serif", textShadow: "0 2px 20px rgba(0,0,0,0.6)", letterSpacing: -0.5 }}>{biz.name}</h2>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <FollowButton followed={followed} onToggle={onToggleFollow} />
             <ShareButton name={biz.name} />
             <LikeButton liked={liked} onToggle={onToggle} />
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+          <FollowButton followed={followed} onToggle={onToggleFollow} />
           <span style={{
             display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 50,
             background: biz.isOpen ? "rgba(57,255,20,0.12)" : "rgba(255,45,146,0.12)",
