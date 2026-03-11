@@ -1291,19 +1291,17 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           >
             {searching ? "Searching..." : "🔍 Search"}
           </button>
-          {canGenerate && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating || searching || !searchQuery.trim()}
-              style={{
-                ...btnPrimary,
-                background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
-                opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
-              }}
-            >
-              {generating ? "Generating..." : "⚡ Generate Businesses"}
-            </button>
-          )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating || searching || !searchQuery.trim()}
+            style={{
+              ...btnPrimary,
+              background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+              opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
+            }}
+          >
+            {generating ? "Generating..." : "⚡ Generate Businesses"}
+          </button>
           {generating && (
             <button
               onClick={() => { generateAbortRef.current = true; }}
