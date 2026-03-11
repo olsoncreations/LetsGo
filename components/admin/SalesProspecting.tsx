@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { COLORS } from "@/components/admin/constants";
 import {
@@ -312,6 +312,7 @@ function renderStars(rating: number | null): string {
 
 export default function SalesProspecting({ salesReps }: ProspectingProps) {
   // ---------- Search state ----------
+  const locationInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("all");
   const [searchRadius, setSearchRadius] = useState("20");
@@ -398,6 +399,28 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       }
     }
     loadStaffRole();
+  }, []);
+
+  // Google Places Autocomplete for location input (cities only)
+  useEffect(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const g = (window as any).google;
+    if (!g?.maps?.places?.Autocomplete || !locationInputRef.current) return;
+
+    const ac = new g.maps.places.Autocomplete(locationInputRef.current, {
+      types: ["(cities)"],
+      fields: ["formatted_address", "name"],
+      componentRestrictions: { country: "us" },
+    });
+
+    const listener = ac.addListener("place_changed", () => {
+      const place = ac.getPlace();
+      const value = place?.formatted_address || place?.name || "";
+      if (value) setSearchQuery(value);
+    });
+
+    return () => listener.remove();
+    /* eslint-enable @typescript-eslint/no-explicit-any */
   }, []);
 
   // Fetch business types from DB tags table
@@ -1247,6 +1270,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               Location / Search
             </label>
             <input
+              ref={locationInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
