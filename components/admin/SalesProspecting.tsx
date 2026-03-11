@@ -202,6 +202,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [importing, setImporting] = useState<Set<string>>(new Set());
   const [importingAll, setImportingAll] = useState(false);
 
+  // ---------- Staff role state ----------
+  const [staffRole, setStaffRole] = useState<string | null>(null);
+  const canGenerate = staffRole === "admin" || staffRole === "manager";
+
   // ---------- Generate state ----------
   const [generating, setGenerating] = useState(false);
   const [generateProgress, setGenerateProgress] = useState({ current: 0, total: 0, type: "", radius: 0, imported: 0, skipped: 0 });
@@ -253,6 +257,25 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  // Fetch current staff role
+  useEffect(() => {
+    async function loadStaffRole() {
+      try {
+        const { data: { user } } = await supabaseBrowser.auth.getUser();
+        if (!user) return;
+        const { data } = await supabaseBrowser
+          .from("staff_users")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (data) setStaffRole(data.role as string);
+      } catch (err) {
+        console.error("Error fetching staff role:", err);
+      }
+    }
+    loadStaffRole();
+  }, []);
 
   // Fetch business types from DB tags table
   useEffect(() => {
@@ -1113,17 +1136,19 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           >
             {searching ? "Searching..." : "🔍 Search"}
           </button>
-          <button
-            onClick={handleGenerate}
-            disabled={generating || searching || !searchQuery.trim()}
-            style={{
-              ...btnPrimary,
-              background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
-              opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
-            }}
-          >
-            {generating ? "Generating..." : "⚡ Generate Businesses"}
-          </button>
+          {canGenerate && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating || searching || !searchQuery.trim()}
+              style={{
+                ...btnPrimary,
+                background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+                opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
+              }}
+            >
+              {generating ? "Generating..." : "⚡ Generate Businesses"}
+            </button>
+          )}
           {generating && (
             <button
               onClick={() => { generateAbortRef.current = true; }}
