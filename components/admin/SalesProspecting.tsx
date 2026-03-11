@@ -101,6 +101,127 @@ const DEFAULT_TYPE_OPTIONS = [
 
 const PRICE_LABELS = ["Free", "$", "$$", "$$$", "$$$$"];
 
+// Google Place types for comprehensive prospecting searches
+// Each type becomes a unique search query to maximize coverage
+const GOOGLE_PLACE_TYPES: { type: string; label: string; category: string }[] = [
+  // --- Restaurants (by cuisine) ---
+  { type: "american_restaurant", label: "American Restaurant", category: "Restaurant" },
+  { type: "asian_restaurant", label: "Asian Restaurant", category: "Restaurant" },
+  { type: "barbecue_restaurant", label: "BBQ Restaurant", category: "Restaurant" },
+  { type: "brazilian_restaurant", label: "Brazilian Restaurant", category: "Restaurant" },
+  { type: "breakfast_restaurant", label: "Breakfast Restaurant", category: "Restaurant" },
+  { type: "brunch_restaurant", label: "Brunch Restaurant", category: "Restaurant" },
+  { type: "buffet_restaurant", label: "Buffet Restaurant", category: "Restaurant" },
+  { type: "cajun_restaurant", label: "Cajun Restaurant", category: "Restaurant" },
+  { type: "caribbean_restaurant", label: "Caribbean Restaurant", category: "Restaurant" },
+  { type: "chicken_restaurant", label: "Chicken Restaurant", category: "Restaurant" },
+  { type: "chinese_restaurant", label: "Chinese Restaurant", category: "Restaurant" },
+  { type: "cuban_restaurant", label: "Cuban Restaurant", category: "Restaurant" },
+  { type: "diner", label: "Diner", category: "Restaurant" },
+  { type: "ethiopian_restaurant", label: "Ethiopian Restaurant", category: "Restaurant" },
+  { type: "family_restaurant", label: "Family Restaurant", category: "Restaurant" },
+  { type: "fast_food_restaurant", label: "Fast Food", category: "Restaurant" },
+  { type: "fine_dining_restaurant", label: "Fine Dining", category: "Restaurant" },
+  { type: "french_restaurant", label: "French Restaurant", category: "Restaurant" },
+  { type: "german_restaurant", label: "German Restaurant", category: "Restaurant" },
+  { type: "greek_restaurant", label: "Greek Restaurant", category: "Restaurant" },
+  { type: "hamburger_restaurant", label: "Burger Restaurant", category: "Restaurant" },
+  { type: "indian_restaurant", label: "Indian Restaurant", category: "Restaurant" },
+  { type: "italian_restaurant", label: "Italian Restaurant", category: "Restaurant" },
+  { type: "japanese_restaurant", label: "Japanese Restaurant", category: "Restaurant" },
+  { type: "korean_restaurant", label: "Korean Restaurant", category: "Restaurant" },
+  { type: "latin_american_restaurant", label: "Latin American Restaurant", category: "Restaurant" },
+  { type: "lebanese_restaurant", label: "Lebanese Restaurant", category: "Restaurant" },
+  { type: "mediterranean_restaurant", label: "Mediterranean Restaurant", category: "Restaurant" },
+  { type: "mexican_restaurant", label: "Mexican Restaurant", category: "Restaurant" },
+  { type: "middle_eastern_restaurant", label: "Middle Eastern Restaurant", category: "Restaurant" },
+  { type: "peruvian_restaurant", label: "Peruvian Restaurant", category: "Restaurant" },
+  { type: "pizza_restaurant", label: "Pizza Restaurant", category: "Restaurant" },
+  { type: "ramen_restaurant", label: "Ramen Restaurant", category: "Restaurant" },
+  { type: "restaurant", label: "Restaurant (General)", category: "Restaurant" },
+  { type: "seafood_restaurant", label: "Seafood Restaurant", category: "Restaurant" },
+  { type: "soul_food_restaurant", label: "Soul Food Restaurant", category: "Restaurant" },
+  { type: "spanish_restaurant", label: "Spanish Restaurant", category: "Restaurant" },
+  { type: "steak_house", label: "Steak House", category: "Restaurant" },
+  { type: "sushi_restaurant", label: "Sushi Restaurant", category: "Restaurant" },
+  { type: "thai_restaurant", label: "Thai Restaurant", category: "Restaurant" },
+  { type: "turkish_restaurant", label: "Turkish Restaurant", category: "Restaurant" },
+  { type: "vegan_restaurant", label: "Vegan Restaurant", category: "Restaurant" },
+  { type: "vegetarian_restaurant", label: "Vegetarian Restaurant", category: "Restaurant" },
+  { type: "vietnamese_restaurant", label: "Vietnamese Restaurant", category: "Restaurant" },
+  // --- Cafes, Bakeries, Desserts ---
+  { type: "bakery", label: "Bakery", category: "Bakery" },
+  { type: "cafe", label: "Cafe", category: "Coffee" },
+  { type: "coffee_shop", label: "Coffee Shop", category: "Coffee" },
+  { type: "dessert_restaurant", label: "Dessert Restaurant", category: "Restaurant" },
+  { type: "dessert_shop", label: "Dessert Shop", category: "Bakery" },
+  { type: "donut_shop", label: "Donut Shop", category: "Bakery" },
+  { type: "ice_cream_shop", label: "Ice Cream Shop", category: "Ice Cream" },
+  { type: "juice_shop", label: "Juice Shop", category: "Juice Bar" },
+  { type: "pastry_shop", label: "Pastry Shop", category: "Bakery" },
+  { type: "tea_house", label: "Tea House", category: "Coffee" },
+  // --- Bars & Nightlife ---
+  { type: "bar", label: "Bar", category: "Bar" },
+  { type: "bar_and_grill", label: "Bar & Grill", category: "Bar" },
+  { type: "beer_garden", label: "Beer Garden", category: "Bar" },
+  { type: "brewery", label: "Brewery", category: "Brewery" },
+  { type: "brewpub", label: "Brewpub", category: "Brewery" },
+  { type: "cocktail_bar", label: "Cocktail Bar", category: "Bar" },
+  { type: "gastropub", label: "Gastropub", category: "Bar" },
+  { type: "hookah_bar", label: "Hookah Bar", category: "Bar" },
+  { type: "irish_pub", label: "Irish Pub", category: "Pub" },
+  { type: "lounge_bar", label: "Lounge", category: "Lounge" },
+  { type: "night_club", label: "Nightclub", category: "Nightclub" },
+  { type: "pub", label: "Pub", category: "Pub" },
+  { type: "sports_bar", label: "Sports Bar", category: "Bar" },
+  { type: "wine_bar", label: "Wine Bar", category: "Winery" },
+  { type: "winery", label: "Winery", category: "Winery" },
+  // --- Food Shops & Delis ---
+  { type: "deli", label: "Deli", category: "Deli" },
+  { type: "sandwich_shop", label: "Sandwich Shop", category: "Deli" },
+  { type: "food_court", label: "Food Court", category: "Restaurant" },
+  { type: "meal_delivery", label: "Meal Delivery", category: "Food Truck" },
+  { type: "meal_takeaway", label: "Meal Takeaway", category: "Food Truck" },
+  // --- Entertainment & Activities ---
+  { type: "amusement_center", label: "Amusement Center", category: "Entertainment" },
+  { type: "amusement_park", label: "Amusement Park", category: "Entertainment" },
+  { type: "aquarium", label: "Aquarium", category: "Activity" },
+  { type: "bowling_alley", label: "Bowling Alley", category: "Bowling" },
+  { type: "casino", label: "Casino", category: "Entertainment" },
+  { type: "comedy_club", label: "Comedy Club", category: "Comedy Club" },
+  { type: "concert_hall", label: "Concert Hall", category: "Entertainment" },
+  { type: "escape_room", label: "Escape Room", category: "Escape Room" },
+  { type: "go_karting_venue", label: "Go Karts", category: "Entertainment" },
+  { type: "karaoke", label: "Karaoke", category: "Karaoke" },
+  { type: "live_music_venue", label: "Live Music Venue", category: "Entertainment" },
+  { type: "miniature_golf_course", label: "Mini Golf", category: "Mini Golf" },
+  { type: "movie_theater", label: "Movie Theater", category: "Theater" },
+  { type: "paintball_center", label: "Paintball", category: "Entertainment" },
+  { type: "tourist_attraction", label: "Tourist Attraction", category: "Activity" },
+  { type: "video_arcade", label: "Arcade", category: "Arcade" },
+  { type: "zoo", label: "Zoo", category: "Activity" },
+  // --- Arts & Culture ---
+  { type: "art_gallery", label: "Art Gallery", category: "Art Gallery" },
+  { type: "museum", label: "Museum", category: "Museum" },
+  // --- Beauty & Wellness ---
+  { type: "barber_shop", label: "Barber Shop", category: "Salon/Beauty" },
+  { type: "beauty_salon", label: "Beauty Salon", category: "Salon/Beauty" },
+  { type: "hair_salon", label: "Hair Salon", category: "Salon/Beauty" },
+  { type: "nail_salon", label: "Nail Salon", category: "Salon/Beauty" },
+  { type: "spa", label: "Spa", category: "Spa" },
+  { type: "tanning_studio", label: "Tanning Studio", category: "Salon/Beauty" },
+  { type: "yoga_studio", label: "Yoga Studio", category: "Yoga Studio" },
+  // --- Fitness ---
+  { type: "fitness_center", label: "Fitness Center", category: "Gym" },
+  { type: "gym", label: "Gym", category: "Gym" },
+  { type: "sports_club", label: "Sports Club", category: "Activity" },
+  { type: "swimming_pool", label: "Swimming Pool", category: "Activity" },
+  // --- Venues ---
+  { type: "banquet_hall", label: "Banquet Hall", category: "Entertainment" },
+  { type: "event_venue", label: "Event Venue", category: "Entertainment" },
+  { type: "wedding_venue", label: "Wedding Venue", category: "Entertainment" },
+];
+
 const selectStyle: React.CSSProperties = {
   padding: "10px 14px",
   background: COLORS.cardBg,
@@ -508,101 +629,101 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       return;
     }
 
-    const types = typeOptions.filter((o) => o.value !== "all");
-    const radii = [5, 10, 20, 50];
-    const totalSteps = types.length * radii.length;
+    const totalSteps = GOOGLE_PLACE_TYPES.length;
     let totalImported = 0;
     let totalSkipped = 0;
 
     setGenerating(true);
     generateAbortRef.current = false;
-    setGenerateProgress({ current: 0, total: totalSteps, type: "", radius: 0, imported: 0, skipped: 0 });
+    setGenerateProgress({ current: 0, total: totalSteps, type: "", radius: 50, imported: 0, skipped: 0 });
 
     try {
       const token = await getAuthToken();
-      let stepIndex = 0;
 
-      for (const radius of radii) {
-        for (const typeOpt of types) {
+      for (let i = 0; i < GOOGLE_PLACE_TYPES.length; i++) {
+        if (generateAbortRef.current) break;
+
+        const gType = GOOGLE_PLACE_TYPES[i];
+        setGenerateProgress({
+          current: i + 1,
+          total: totalSteps,
+          type: gType.label,
+          radius: 50,
+          imported: totalImported,
+          skipped: totalSkipped,
+        });
+
+        // Use the Google type name as the search query
+        const query = `${gType.label} in ${location}`;
+        let pageToken: string | null = null;
+        let pageCount = 0;
+
+        // Page through results (up to 3 pages = 60 results per type)
+        do {
           if (generateAbortRef.current) break;
 
-          stepIndex++;
-          setGenerateProgress({ current: stepIndex, total: totalSteps, type: typeOpt.label, radius, imported: totalImported, skipped: totalSkipped });
+          const body: Record<string, unknown> = pageToken
+            ? { query, pageToken }
+            : { query, radiusMiles: 50 };
 
-          // Search this type + radius combo
-          const query = `${typeOpt.value} in ${location}`;
-          let pageToken: string | null = null;
-          let pageCount = 0;
+          const searchRes = await fetch("/api/admin/sales/prospect", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          });
 
-          // Page through results (up to 3 pages = 60 results)
-          do {
-            if (generateAbortRef.current) break;
+          if (!searchRes.ok) {
+            console.error(`Search failed for "${query}":`, await searchRes.text());
+            break;
+          }
 
-            const body: Record<string, unknown> = pageToken
-              ? { query, pageToken }
-              : { query, radiusMiles: radius };
+          const searchData = await searchRes.json();
+          const places = searchData.places || [];
 
-            const searchRes = await fetch("/api/admin/sales/prospect", {
+          if (places.length > 0) {
+            // Use the Google type's category as the business_type for our DB
+            const rows = places.map((place: GooglePlaceResult) => ({
+              google_place_id: place.google_place_id,
+              business_name: place.business_name,
+              business_type: gType.category,
+              phone: place.phone || null,
+              address: place.address || null,
+              city: place.city || null,
+              state: place.state || null,
+              zip: place.zip || null,
+              website: place.website || null,
+              latitude: place.latitude,
+              longitude: place.longitude,
+              google_rating: place.google_rating,
+              google_price_level: place.google_price_level,
+              google_total_ratings: place.google_total_ratings,
+              search_query: query,
+              search_location: place.city && place.state ? `${place.city}, ${place.state}` : location,
+            }));
+
+            const importRes = await fetch("/api/admin/sales/prospect/import", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
               },
-              body: JSON.stringify(body),
+              body: JSON.stringify({ leads: rows }),
             });
 
-            if (!searchRes.ok) {
-              console.error(`Search failed for "${query}" at ${radius}mi:`, await searchRes.text());
-              break;
+            if (importRes.ok) {
+              const importData = await importRes.json();
+              totalImported += importData.imported || 0;
+              totalSkipped += importData.skipped || 0;
+              setGenerateProgress((prev) => ({ ...prev, imported: totalImported, skipped: totalSkipped }));
             }
+          }
 
-            const searchData = await searchRes.json();
-            const places = searchData.places || [];
-
-            if (places.length > 0) {
-              // Build lead rows with the correct type
-              const rows = places.map((place: GooglePlaceResult) => ({
-                google_place_id: place.google_place_id,
-                business_name: place.business_name,
-                business_type: typeOpt.value,
-                phone: place.phone || null,
-                address: place.address || null,
-                city: place.city || null,
-                state: place.state || null,
-                zip: place.zip || null,
-                website: place.website || null,
-                latitude: place.latitude,
-                longitude: place.longitude,
-                google_rating: place.google_rating,
-                google_price_level: place.google_price_level,
-                google_total_ratings: place.google_total_ratings,
-                search_query: query,
-                search_location: place.city && place.state ? `${place.city}, ${place.state}` : location,
-              }));
-
-              // Import via API
-              const importRes = await fetch("/api/admin/sales/prospect/import", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ leads: rows }),
-              });
-
-              if (importRes.ok) {
-                const importData = await importRes.json();
-                totalImported += importData.imported || 0;
-                totalSkipped += importData.skipped || 0;
-                setGenerateProgress((prev) => ({ ...prev, imported: totalImported, skipped: totalSkipped }));
-              }
-            }
-
-            pageToken = searchData.nextPageToken || null;
-            pageCount++;
-          } while (pageToken && pageCount < 3);
-        }
-        if (generateAbortRef.current) break;
+          pageToken = searchData.nextPageToken || null;
+          pageCount++;
+        } while (pageToken && pageCount < 3);
       }
 
       logAudit({
@@ -610,7 +731,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         tab: AUDIT_TABS.SALES,
         subTab: "Prospecting",
         targetType: "sales_lead",
-        details: `Generated leads for "${location}": ${totalImported} imported, ${totalSkipped} duplicates skipped`,
+        details: `Generated leads for "${location}" using ${GOOGLE_PLACE_TYPES.length} Google types: ${totalImported} imported, ${totalSkipped} duplicates skipped`,
       });
 
       fetchLeads();
