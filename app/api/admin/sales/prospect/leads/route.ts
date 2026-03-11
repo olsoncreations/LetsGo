@@ -23,18 +23,31 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { data, count, error } = await supabaseServer
-      .from("sales_leads")
-      .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .limit(10000);
+    // Supabase caps at 1000 rows per request — paginate to get all
+    const PAGE_SIZE = 1000;
+    let allLeads: Record<string, unknown>[] = [];
+    let from = 0;
+    let hasMore = true;
 
-    if (error) {
-      console.error("Fetch leads error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    while (hasMore) {
+      const { data, error } = await supabaseServer
+        .from("sales_leads")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error("Fetch leads error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      const rows = data || [];
+      allLeads = allLeads.concat(rows);
+      from += PAGE_SIZE;
+      hasMore = rows.length === PAGE_SIZE;
     }
 
-    return NextResponse.json({ leads: data || [], totalCount: count });
+    return NextResponse.json({ leads: allLeads, totalCount: allLeads.length });
   } catch (err) {
     console.error("Leads API error:", err);
     return NextResponse.json(
