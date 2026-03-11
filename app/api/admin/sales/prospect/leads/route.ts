@@ -23,18 +23,18 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { data, error } = await supabaseServer
+    const { data, count, error } = await supabaseServer
       .from("sales_leads")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .range(0, 9999);
+      .limit(10000);
 
     if (error) {
       console.error("Fetch leads error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ leads: data || [] });
+    return NextResponse.json({ leads: data || [], totalCount: count });
   } catch (err) {
     console.error("Leads API error:", err);
     return NextResponse.json(
