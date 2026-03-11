@@ -228,20 +228,21 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const fetchLeads = useCallback(async () => {
     setLeadsLoading(true);
     try {
-      const { data, error } = await supabaseBrowser
-        .from("sales_leads")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      if (data) {
-        setLeads(data as SalesLead[]);
-        setImportedPlaceIds(new Set(data.map((d: SalesLead) => d.google_place_id)));
-      }
+      const token = await getAuthToken();
+      const res = await fetch("/api/admin/sales/prospect/leads", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch leads");
+      const data = await res.json();
+      const leadsData = (data.leads || []) as SalesLead[];
+      setLeads(leadsData);
+      setImportedPlaceIds(new Set(leadsData.map((d) => d.google_place_id)));
     } catch (err) {
       console.error("Error fetching leads:", err);
     } finally {
       setLeadsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -274,18 +275,19 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const fetchNotes = useCallback(async (leadId: string) => {
     setNotesLoading(true);
     try {
-      const { data, error } = await supabaseBrowser
-        .from("sales_lead_notes")
-        .select("*")
-        .eq("lead_id", leadId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setLeadNotes((data || []) as LeadNote[]);
+      const token = await getAuthToken();
+      const res = await fetch(`/api/admin/sales/prospect/notes?leadId=${leadId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch notes");
+      const data = await res.json();
+      setLeadNotes((data.notes || []) as LeadNote[]);
     } catch (err) {
       console.error("Error fetching notes:", err);
     } finally {
       setNotesLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------- Search handlers ----------
@@ -348,15 +350,25 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   // ---------- Import handlers ----------
 
-  async function getStaffName(): Promise<string> {
-    const { data: { user } } = await supabaseBrowser.auth.getUser();
-    if (!user) return "Unknown";
-    const { data: profile } = await supabaseBrowser
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-    return (profile?.full_name as string) || user.email || "Unknown";
+  function buildLeadRow(place: GooglePlaceResult) {
+    return {
+      google_place_id: place.google_place_id,
+      business_name: place.business_name,
+      business_type: searchType !== "all" ? searchType : place.business_type,
+      phone: place.phone || null,
+      address: place.address || null,
+      city: place.city || null,
+      state: place.state || null,
+      zip: place.zip || null,
+      website: place.website || null,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      google_rating: place.google_rating,
+      google_price_level: place.google_price_level,
+      google_total_ratings: place.google_total_ratings,
+      search_query: searchQuery,
+      search_location: place.city && place.state ? `${place.city}, ${place.state}` : searchQuery,
+    };
   }
 
   async function handleImportLead(place: GooglePlaceResult) {
@@ -364,49 +376,33 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setImporting((prev) => new Set(prev).add(place.google_place_id));
 
     try {
-      const staffName = await getStaffName();
-      const { error } = await supabaseBrowser.from("sales_leads").insert({
-        google_place_id: place.google_place_id,
-        business_name: place.business_name,
-        business_type: searchType !== "all" ? searchType : place.business_type,
-        phone: place.phone || null,
-        address: place.address || null,
-        city: place.city || null,
-        state: place.state || null,
-        zip: place.zip || null,
-        website: place.website || null,
-        latitude: place.latitude,
-        longitude: place.longitude,
-        google_rating: place.google_rating,
-        google_price_level: place.google_price_level,
-        google_total_ratings: place.google_total_ratings,
-        imported_by: staffName,
-        search_query: searchQuery,
-        search_location: place.city && place.state ? `${place.city}, ${place.state}` : searchQuery,
+      const token = await getAuthToken();
+      const res = await fetch("/api/admin/sales/prospect/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ leads: [buildLeadRow(place)] }),
       });
 
-      if (error) {
-        // Duplicate — already imported
-        if (error.code === "23505") {
-          setImportedPlaceIds((prev) => new Set(prev).add(place.google_place_id));
-        } else {
-          throw error;
-        }
-      } else {
-        setImportedPlaceIds((prev) => new Set(prev).add(place.google_place_id));
-        // Remove from search results
-        setSearchResults((prev) => prev.filter((p) => p.google_place_id !== place.google_place_id));
-        logAudit({
-          action: "import_lead",
-          tab: AUDIT_TABS.SALES,
-          subTab: "Prospecting",
-          targetType: "sales_lead",
-          entityName: place.business_name,
-          details: `Imported from Google Places: ${place.address}`,
-        });
-        // Refresh leads list
-        fetchLeads();
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Import failed");
       }
+
+      setImportedPlaceIds((prev) => new Set(prev).add(place.google_place_id));
+      // Remove from search results
+      setSearchResults((prev) => prev.filter((p) => p.google_place_id !== place.google_place_id));
+      logAudit({
+        action: "import_lead",
+        tab: AUDIT_TABS.SALES,
+        subTab: "Prospecting",
+        targetType: "sales_lead",
+        entityName: place.business_name,
+        details: `Imported from Google Places: ${place.address}`,
+      });
+      fetchLeads();
     } catch (err) {
       console.error("Import error:", err);
       alert(`Failed to import ${place.business_name}`);
@@ -428,47 +424,33 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setImportingAll(true);
 
     try {
-      const staffName = await getStaffName();
-      const rows = toImport.map((place) => ({
-        google_place_id: place.google_place_id,
-        business_name: place.business_name,
-        business_type: searchType !== "all" ? searchType : place.business_type,
-        phone: place.phone || null,
-        address: place.address || null,
-        city: place.city || null,
-        state: place.state || null,
-        zip: place.zip || null,
-        website: place.website || null,
-        latitude: place.latitude,
-        longitude: place.longitude,
-        google_rating: place.google_rating,
-        google_price_level: place.google_price_level,
-        google_total_ratings: place.google_total_ratings,
-        imported_by: staffName,
-        search_query: searchQuery,
-        search_location: toImport[0]?.city && toImport[0]?.state
-          ? `${toImport[0].city}, ${toImport[0].state}`
-          : searchQuery,
-      }));
+      const token = await getAuthToken();
+      const rows = toImport.map(buildLeadRow);
 
-      // Use upsert to skip duplicates
-      const { data, error } = await supabaseBrowser
-        .from("sales_leads")
-        .upsert(rows, { onConflict: "google_place_id", ignoreDuplicates: true })
-        .select("google_place_id");
+      const res = await fetch("/api/admin/sales/prospect/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ leads: rows }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Bulk import failed");
+      }
 
-      const imported = (data || []).length;
+      const data = await res.json();
+      const imported = data.imported || 0;
+
+      // Mark all as imported and clear from search results
       setImportedPlaceIds((prev) => {
         const next = new Set(prev);
         toImport.forEach((p) => next.add(p.google_place_id));
         return next;
       });
-
-      // Clear imported results from search table
-      const importedIds = new Set(toImport.map((p) => p.google_place_id));
-      setSearchResults((prev) => prev.filter((p) => !importedIds.has(p.google_place_id)));
+      setSearchResults((prev) => prev.filter((p) => !toImport.some((t) => t.google_place_id === p.google_place_id)));
 
       logAudit({
         action: "bulk_import_leads",
@@ -479,10 +461,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       });
 
       fetchLeads();
-      alert(`Imported ${imported} new leads (${toImport.length - imported} skipped as duplicates).`);
+      alert(`Imported ${imported} new leads (${data.skipped || 0} skipped as duplicates).`);
     } catch (err) {
       console.error("Bulk import error:", err);
-      alert("Bulk import failed. Some leads may have been imported.");
+      alert("Bulk import failed. Check console for details.");
     } finally {
       setImportingAll(false);
     }
@@ -499,13 +481,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       updates.last_contacted_at = new Date().toISOString();
     }
 
-    const { error } = await supabaseBrowser
-      .from("sales_leads")
-      .update(updates)
-      .eq("id", leadId);
+    const token = await getAuthToken();
+    const res = await fetch("/api/admin/sales/prospect/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: leadId, updates }),
+    });
 
-    if (error) {
-      console.error("Status update error:", error);
+    if (!res.ok) {
+      console.error("Status update error:", await res.text());
       return;
     }
 
@@ -521,7 +505,6 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       newValue: newStatus,
     });
 
-    // Update local state
     setLeads((prev) =>
       prev.map((l) => (l.id === leadId ? { ...l, ...updates, status: newStatus } as SalesLead : l))
     );
@@ -534,13 +517,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead) return;
 
-    const { error } = await supabaseBrowser
-      .from("sales_leads")
-      .update({ assigned_rep_id: repId })
-      .eq("id", leadId);
+    const token = await getAuthToken();
+    const res = await fetch("/api/admin/sales/prospect/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: leadId, updates: { assigned_rep_id: repId } }),
+    });
 
-    if (error) {
-      console.error("Rep assign error:", error);
+    if (!res.ok) {
+      console.error("Rep assign error:", await res.text());
       return;
     }
 
@@ -569,13 +554,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     const lead = leads.find((l) => l.id === leadId);
     if (!lead) return;
 
-    const { error } = await supabaseBrowser
-      .from("sales_leads")
-      .update({ status: "contacted", last_contacted_at: now })
-      .eq("id", leadId);
+    const token = await getAuthToken();
+    const res = await fetch("/api/admin/sales/prospect/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: leadId, updates: { status: "contacted", last_contacted_at: now } }),
+    });
 
-    if (error) {
-      console.error("Mark contacted error:", error);
+    if (!res.ok) {
+      console.error("Mark contacted error:", await res.text());
       return;
     }
 
@@ -603,15 +590,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   async function handleAddNote() {
     if (!selectedLead || !newNote.trim()) return;
 
-    const staffName = await getStaffName();
-    const { error } = await supabaseBrowser.from("sales_lead_notes").insert({
-      lead_id: selectedLead.id,
-      note: newNote.trim(),
-      created_by: staffName,
+    const token = await getAuthToken();
+    const res = await fetch("/api/admin/sales/prospect/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ leadId: selectedLead.id, note: newNote.trim() }),
     });
 
-    if (error) {
-      console.error("Add note error:", error);
+    if (!res.ok) {
+      console.error("Add note error:", await res.text());
       return;
     }
 
@@ -622,13 +609,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   async function handleDeleteLead() {
     if (!selectedLead) return;
 
-    const { error } = await supabaseBrowser
-      .from("sales_leads")
-      .delete()
-      .eq("id", selectedLead.id);
+    const token = await getAuthToken();
+    const res = await fetch("/api/admin/sales/prospect/leads", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: selectedLead.id }),
+    });
 
-    if (error) {
-      console.error("Delete lead error:", error);
+    if (!res.ok) {
+      console.error("Delete lead error:", await res.text());
       return;
     }
 
