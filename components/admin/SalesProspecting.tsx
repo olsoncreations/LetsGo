@@ -202,6 +202,11 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [importing, setImporting] = useState<Set<string>>(new Set());
   const [importingAll, setImportingAll] = useState(false);
 
+  // ---------- Generate state ----------
+  const [generating, setGenerating] = useState(false);
+  const [generateProgress, setGenerateProgress] = useState({ current: 0, total: 0, type: "", radius: 0, imported: 0, skipped: 0 });
+  const generateAbortRef = React.useRef(false);
+
   // ---------- Business type state (DB-driven) ----------
   const [typeOptions, setTypeOptions] = useState(DEFAULT_TYPE_OPTIONS);
   const [typeLabels, setTypeLabels] = useState<Record<string, string>>({});
@@ -467,6 +472,131 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       alert("Bulk import failed. Check console for details.");
     } finally {
       setImportingAll(false);
+    }
+  }
+
+  // ---------- Generate All handler ----------
+
+  async function handleGenerate() {
+    const location = searchQuery.trim();
+    if (!location) {
+      alert("Enter a location first (e.g., Omaha, NE)");
+      return;
+    }
+
+    const types = typeOptions.filter((o) => o.value !== "all");
+    const radii = [5, 10, 20, 50];
+    const totalSteps = types.length * radii.length;
+    let totalImported = 0;
+    let totalSkipped = 0;
+
+    setGenerating(true);
+    generateAbortRef.current = false;
+    setGenerateProgress({ current: 0, total: totalSteps, type: "", radius: 0, imported: 0, skipped: 0 });
+
+    try {
+      const token = await getAuthToken();
+      let stepIndex = 0;
+
+      for (const radius of radii) {
+        for (const typeOpt of types) {
+          if (generateAbortRef.current) break;
+
+          stepIndex++;
+          setGenerateProgress({ current: stepIndex, total: totalSteps, type: typeOpt.label, radius, imported: totalImported, skipped: totalSkipped });
+
+          // Search this type + radius combo
+          const query = `${typeOpt.value} in ${location}`;
+          let pageToken: string | null = null;
+          let pageCount = 0;
+
+          // Page through results (up to 3 pages = 60 results)
+          do {
+            if (generateAbortRef.current) break;
+
+            const body: Record<string, unknown> = pageToken
+              ? { query, pageToken }
+              : { query, radiusMiles: radius };
+
+            const searchRes = await fetch("/api/admin/sales/prospect", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(body),
+            });
+
+            if (!searchRes.ok) {
+              console.error(`Search failed for "${query}" at ${radius}mi:`, await searchRes.text());
+              break;
+            }
+
+            const searchData = await searchRes.json();
+            const places = searchData.places || [];
+
+            if (places.length > 0) {
+              // Build lead rows with the correct type
+              const rows = places.map((place: GooglePlaceResult) => ({
+                google_place_id: place.google_place_id,
+                business_name: place.business_name,
+                business_type: typeOpt.value,
+                phone: place.phone || null,
+                address: place.address || null,
+                city: place.city || null,
+                state: place.state || null,
+                zip: place.zip || null,
+                website: place.website || null,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                google_rating: place.google_rating,
+                google_price_level: place.google_price_level,
+                google_total_ratings: place.google_total_ratings,
+                search_query: query,
+                search_location: place.city && place.state ? `${place.city}, ${place.state}` : location,
+              }));
+
+              // Import via API
+              const importRes = await fetch("/api/admin/sales/prospect/import", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ leads: rows }),
+              });
+
+              if (importRes.ok) {
+                const importData = await importRes.json();
+                totalImported += importData.imported || 0;
+                totalSkipped += importData.skipped || 0;
+                setGenerateProgress((prev) => ({ ...prev, imported: totalImported, skipped: totalSkipped }));
+              }
+            }
+
+            pageToken = searchData.nextPageToken || null;
+            pageCount++;
+          } while (pageToken && pageCount < 3);
+        }
+        if (generateAbortRef.current) break;
+      }
+
+      logAudit({
+        action: "generate_all_leads",
+        tab: AUDIT_TABS.SALES,
+        subTab: "Prospecting",
+        targetType: "sales_lead",
+        details: `Generated leads for "${location}": ${totalImported} imported, ${totalSkipped} duplicates skipped`,
+      });
+
+      fetchLeads();
+      alert(`Done! ${totalImported} businesses imported, ${totalSkipped} duplicates skipped.`);
+    } catch (err) {
+      console.error("Generate error:", err);
+      alert(`Generation stopped. ${totalImported} imported so far. Error: ${err instanceof Error ? err.message : "Unknown"}`);
+      fetchLeads();
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -978,12 +1108,59 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           </div>
           <button
             onClick={() => handleSearch()}
-            disabled={searching || !searchQuery.trim()}
-            style={{ ...btnPrimary, opacity: searching || !searchQuery.trim() ? 0.6 : 1 }}
+            disabled={searching || generating || !searchQuery.trim()}
+            style={{ ...btnPrimary, opacity: searching || generating || !searchQuery.trim() ? 0.6 : 1 }}
           >
             {searching ? "Searching..." : "🔍 Search"}
           </button>
+          <button
+            onClick={handleGenerate}
+            disabled={generating || searching || !searchQuery.trim()}
+            style={{
+              ...btnPrimary,
+              background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+              opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
+            }}
+          >
+            {generating ? "Generating..." : "⚡ Generate Businesses"}
+          </button>
+          {generating && (
+            <button
+              onClick={() => { generateAbortRef.current = true; }}
+              style={{ ...btnSecondary, color: COLORS.neonRed, borderColor: COLORS.neonRed }}
+            >
+              ✕ Stop
+            </button>
+          )}
         </div>
+
+        {/* Generate progress */}
+        {generating && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 12, color: COLORS.textSecondary }}>
+              <span>
+                Searching <strong style={{ color: COLORS.neonGreen }}>{generateProgress.type}</strong> at <strong style={{ color: COLORS.neonBlue }}>{generateProgress.radius} miles</strong>
+              </span>
+              <span>{generateProgress.current} / {generateProgress.total} steps</span>
+            </div>
+            <div style={{ width: "100%", height: 8, background: COLORS.cardBorder, borderRadius: 4, overflow: "hidden" }}>
+              <div
+                style={{
+                  width: `${generateProgress.total > 0 ? (generateProgress.current / generateProgress.total) * 100 : 0}%`,
+                  height: "100%",
+                  background: `linear-gradient(90deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+                  borderRadius: 4,
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: COLORS.textSecondary }}>
+              <span style={{ color: COLORS.neonGreen, fontWeight: 600 }}>{generateProgress.imported}</span> imported
+              {" · "}
+              <span style={{ color: COLORS.neonYellow }}>{generateProgress.skipped}</span> duplicates skipped
+            </div>
+          </div>
+        )}
 
         {searchError && (
           <div style={{ marginTop: 12, padding: "10px 16px", background: "rgba(255,49,49,0.15)", border: "1px solid rgba(255,49,49,0.3)", borderRadius: 8, color: "#ff6b6b", fontSize: 13 }}>
