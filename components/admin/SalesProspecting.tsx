@@ -394,6 +394,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         }
       } else {
         setImportedPlaceIds((prev) => new Set(prev).add(place.google_place_id));
+        // Remove from search results
+        setSearchResults((prev) => prev.filter((p) => p.google_place_id !== place.google_place_id));
         logAudit({
           action: "import_lead",
           tab: AUDIT_TABS.SALES,
@@ -463,6 +465,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         toImport.forEach((p) => next.add(p.google_place_id));
         return next;
       });
+
+      // Clear imported results from search table
+      const importedIds = new Set(toImport.map((p) => p.google_place_id));
+      setSearchResults((prev) => prev.filter((p) => !importedIds.has(p.google_place_id)));
 
       logAudit({
         action: "bulk_import_leads",

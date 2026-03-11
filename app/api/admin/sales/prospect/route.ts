@@ -51,24 +51,54 @@ const PRICE_LEVEL_MAP: Record<string, number> = {
   PRICE_LEVEL_VERY_EXPENSIVE: 4,
 };
 
+// Maps Google Places types to our DB tag names (Business Type category)
 function mapBusinessType(googleTypes: string[]): string {
-  if (googleTypes.some(t => ["restaurant", "food", "cafe", "bakery", "meal_delivery", "meal_takeaway"].includes(t))) {
-    return "restaurant_bar";
+  for (const t of googleTypes) {
+    switch (t) {
+      case "restaurant":
+      case "food":
+      case "meal_delivery":
+      case "meal_takeaway":
+        return "Restaurant";
+      case "bar":
+      case "night_club":
+        return "Bar";
+      case "cafe":
+        return "Coffee";
+      case "bakery":
+        return "Bakery";
+      case "liquor_store":
+        return "Pub";
+      case "beauty_salon":
+      case "hair_care":
+        return "Salon/Beauty";
+      case "spa":
+        return "Spa";
+      case "gym":
+        return "Gym";
+      case "bowling_alley":
+        return "Bowling";
+      case "movie_theater":
+      case "amusement_park":
+      case "casino":
+        return "Entertainment";
+      case "art_gallery":
+        return "Art Gallery";
+      case "museum":
+        return "Museum";
+      case "stadium":
+      case "tourist_attraction":
+      case "park":
+      case "zoo":
+      case "aquarium":
+        return "Activity";
+      case "shopping_mall":
+        return "Entertainment";
+      default:
+        break;
+    }
   }
-  if (googleTypes.some(t => ["bar", "night_club", "liquor_store"].includes(t))) {
-    return "restaurant_bar";
-  }
-  if (googleTypes.some(t => ["beauty_salon", "hair_care", "spa"].includes(t))) {
-    return "salon_beauty";
-  }
-  if (googleTypes.some(t => [
-    "gym", "bowling_alley", "amusement_park", "movie_theater",
-    "stadium", "tourist_attraction", "park", "zoo", "aquarium",
-    "art_gallery", "museum", "casino", "shopping_mall",
-  ].includes(t))) {
-    return "activity";
-  }
-  return "other";
+  return "Activity";
 }
 
 /**
