@@ -841,8 +841,17 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       ),
     },
     {
+      key: "address",
+      label: "Address",
+      render: (v: unknown) => (
+        <span style={{ color: COLORS.textSecondary, fontSize: 12, maxWidth: 220, display: "inline-block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {String(v || "—")}
+        </span>
+      ),
+    },
+    {
       key: "city",
-      label: "Location",
+      label: "City/State",
       render: (_v: unknown, row: Record<string, unknown>) => (
         <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
           {row.city && row.state ? `${String(row.city)}, ${String(row.state)}` : String(row.city || row.state || "—")}
@@ -866,12 +875,31 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         ),
     },
     {
+      key: "website",
+      label: "Website",
+      render: (v: unknown) =>
+        v ? (
+          <a
+            href={String(v)}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: COLORS.neonGreen, fontSize: 12, textDecoration: "none", maxWidth: 160, display: "inline-block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {String(v).replace(/^https?:\/\/(www\.)?/, "")}
+          </a>
+        ) : (
+          <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>—</span>
+        ),
+    },
+    {
       key: "google_rating",
       label: "Rating",
       align: "center" as const,
-      render: (v: unknown) => (
+      render: (v: unknown, row: Record<string, unknown>) => (
         <span style={{ color: COLORS.neonYellow, fontSize: 12 }}>
           {renderStars(v as number | null)}
+          {row.google_total_ratings ? <span style={{ color: COLORS.textSecondary, marginLeft: 4 }}>({String(row.google_total_ratings)})</span> : null}
         </span>
       ),
     },
