@@ -1281,7 +1281,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             {breakdownByType.map(([type, count]) => (
               <span
                 key={type}
-                onClick={() => setFilterType(type)}
+                onClick={() => setFilterType(filterType === type ? "all" : type)}
                 style={{
                   padding: "4px 10px",
                   background: filterType === type ? "rgba(0,212,255,0.2)" : "rgba(255,255,255,0.05)",
@@ -1302,7 +1302,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             {breakdownByCity.map(([city, count]) => (
               <span
                 key={city}
-                onClick={() => setFilterCity(city.split(",")[0].trim())}
+                onClick={() => { const c = city.split(",")[0].trim(); setFilterCity(filterCity === c ? "all" : c); }}
                 style={{
                   padding: "4px 10px",
                   background: filterCity === city.split(",")[0].trim() ? "rgba(57,255,20,0.2)" : "rgba(255,255,255,0.05)",
