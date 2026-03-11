@@ -380,18 +380,19 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Fetch current staff role
+  // Fetch current staff role via server-side API (bypasses RLS)
   useEffect(() => {
     async function loadStaffRole() {
       try {
-        const { data: { user } } = await supabaseBrowser.auth.getUser();
-        if (!user) return;
-        const { data } = await supabaseBrowser
-          .from("staff_users")
-          .select("role")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        if (data) setStaffRole(data.role as string);
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch("/api/admin/sales/prospect/role", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.role) setStaffRole(data.role as string);
+        }
       } catch (err) {
         console.error("Error fetching staff role:", err);
       }
