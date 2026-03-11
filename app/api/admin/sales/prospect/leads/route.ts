@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabaseServer
       .from("sales_leads")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(0, 9999);
 
     if (error) {
       console.error("Fetch leads error:", error);
