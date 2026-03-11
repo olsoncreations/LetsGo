@@ -324,6 +324,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [importing, setImporting] = useState<Set<string>>(new Set());
   const [importingAll, setImportingAll] = useState(false);
 
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+
   // ---------- Staff role state ----------
   const [staffRole, setStaffRole] = useState<string | null>(null);
   const canGenerate = staffRole === "admin" || staffRole === "manager";
@@ -1418,7 +1420,26 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         <StatCard label="Conversion" value={`${stats.convRate}%`} />
       </div>
 
-      {/* Breakdown stats */}
+      {/* Breakdown stats — collapsible */}
+      <div
+        onClick={() => setBreakdownOpen(!breakdownOpen)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          cursor: "pointer",
+          marginBottom: breakdownOpen ? 16 : 24,
+          userSelect: "none",
+        }}
+      >
+        <span style={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
+          Breakdown by Type & City
+        </span>
+        <span style={{ color: COLORS.textSecondary, fontSize: 11, transition: "transform 0.2s", display: "inline-block", transform: breakdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+          ▼
+        </span>
+      </div>
+      {breakdownOpen && (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
         <Card title="By Business Type">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1463,6 +1484,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           </div>
         </Card>
       </div>
+      )}
 
       {/* Filters + Export */}
       <Card>
