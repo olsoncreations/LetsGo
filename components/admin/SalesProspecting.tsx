@@ -223,6 +223,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRep, setFilterRep] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [filterCity, setFilterCity] = useState("all");
   const [filterSearch, setFilterSearch] = useState("");
 
   // ---------- Modal state ----------
@@ -839,6 +840,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       if (filterStatus !== "all" && l.status !== filterStatus) return false;
       if (filterRep !== "all" && (l.assigned_rep_id || "unassigned") !== filterRep) return false;
       if (filterType !== "all" && l.business_type !== filterType) return false;
+      if (filterCity !== "all" && (l.city || "") !== filterCity) return false;
       if (filterSearch) {
         const s = filterSearch.toLowerCase();
         const match =
@@ -850,7 +852,19 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       }
       return true;
     });
-  }, [leads, filterStatus, filterRep, filterType, filterSearch]);
+  }, [leads, filterStatus, filterRep, filterType, filterCity, filterSearch]);
+
+  // City options for filter (derived from leads data)
+  const cityOptions = useMemo(() => {
+    const cities = new Map<string, number>();
+    leads.forEach((l) => {
+      const city = l.city || "Unknown";
+      cities.set(city, (cities.get(city) || 0) + 1);
+    });
+    return Array.from(cities.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([city, count]) => ({ value: city, label: `${city} (${count})` }));
+  }, [leads]);
 
   // Stats
   const stats = useMemo(() => {
@@ -862,6 +876,25 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     const signedUp = leads.filter((l) => l.status === "signed_up").length;
     const convRate = total > 0 ? ((signedUp / total) * 100).toFixed(1) : "0.0";
     return { total, notContacted, inPipeline, signedUp, convRate };
+  }, [leads]);
+
+  // Breakdown stats: by type and by city
+  const breakdownByType = useMemo(() => {
+    const map = new Map<string, number>();
+    leads.forEach((l) => {
+      const type = l.business_type || "Unknown";
+      map.set(type, (map.get(type) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [leads]);
+
+  const breakdownByCity = useMemo(() => {
+    const map = new Map<string, number>();
+    leads.forEach((l) => {
+      const city = l.city && l.state ? `${l.city}, ${l.state}` : l.city || "Unknown";
+      map.set(city, (map.get(city) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [leads]);
 
   // ---------- Search results columns ----------
@@ -995,7 +1028,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       key: "city",
       label: "City/State",
       render: (_v: unknown, row: Record<string, unknown>) => (
-        <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+        <span style={{ color: COLORS.textSecondary, fontSize: 12, whiteSpace: "nowrap" }}>
           {row.city && row.state ? `${String(row.city)}, ${String(row.state)}` : String(row.city || row.state || "—")}
         </span>
       ),
@@ -1007,7 +1040,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         v ? (
           <a
             href={`tel:${String(v)}`}
-            style={{ color: COLORS.neonBlue, fontSize: 12, textDecoration: "none" }}
+            style={{ color: COLORS.neonBlue, fontSize: 12, textDecoration: "none", whiteSpace: "nowrap" }}
             onClick={(e) => e.stopPropagation()}
           >
             {String(v)}
@@ -1039,7 +1072,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       label: "Rating",
       align: "center" as const,
       render: (v: unknown, row: Record<string, unknown>) => (
-        <span style={{ color: COLORS.neonYellow, fontSize: 12 }}>
+        <span style={{ color: COLORS.neonYellow, fontSize: 12, whiteSpace: "nowrap" }}>
           {renderStars(v as number | null)}
           {row.google_total_ratings ? <span style={{ color: COLORS.textSecondary, marginLeft: 4 }}>({String(row.google_total_ratings)})</span> : null}
         </span>
@@ -1049,7 +1082,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       key: "status",
       label: "Status",
       align: "center" as const,
-      render: (v: unknown) => <Badge status={String(v)} />,
+      render: (v: unknown) => <span style={{ whiteSpace: "nowrap" }}><Badge status={String(v)} /></span>,
     },
     {
       key: "assigned_rep_id",
@@ -1057,7 +1090,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       render: (v: unknown) => {
         const rep = v ? salesReps.find((r) => r.id === String(v)) : null;
         return (
-          <span style={{ color: rep ? COLORS.textPrimary : COLORS.textSecondary, fontSize: 12 }}>
+          <span style={{ color: rep ? COLORS.textPrimary : COLORS.textSecondary, fontSize: 12, whiteSpace: "nowrap" }}>
             {rep?.name || "Unassigned"}
           </span>
         );
@@ -1067,7 +1100,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       key: "last_contacted_at",
       label: "Last Contact",
       render: (v: unknown) => (
-        <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+        <span style={{ color: COLORS.textSecondary, fontSize: 12, whiteSpace: "nowrap" }}>
           {formatDate(v as string | null)}
         </span>
       ),
@@ -1241,6 +1274,52 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         <StatCard label="Conversion" value={`${stats.convRate}%`} />
       </div>
 
+      {/* Breakdown stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        <Card title="By Business Type">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {breakdownByType.map(([type, count]) => (
+              <span
+                key={type}
+                onClick={() => setFilterType(type)}
+                style={{
+                  padding: "4px 10px",
+                  background: filterType === type ? "rgba(0,212,255,0.2)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${filterType === type ? COLORS.neonBlue : COLORS.cardBorder}`,
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: COLORS.textPrimary,
+                  cursor: "pointer",
+                }}
+              >
+                {typeLabels[type] || type} <strong style={{ color: COLORS.neonBlue }}>{count}</strong>
+              </span>
+            ))}
+          </div>
+        </Card>
+        <Card title="By City">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {breakdownByCity.map(([city, count]) => (
+              <span
+                key={city}
+                onClick={() => setFilterCity(city.split(",")[0].trim())}
+                style={{
+                  padding: "4px 10px",
+                  background: filterCity === city.split(",")[0].trim() ? "rgba(57,255,20,0.2)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${filterCity === city.split(",")[0].trim() ? COLORS.neonGreen : COLORS.cardBorder}`,
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: COLORS.textPrimary,
+                  cursor: "pointer",
+                }}
+              >
+                {city} <strong style={{ color: COLORS.neonGreen }}>{count}</strong>
+              </span>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       {/* Filters + Export */}
       <Card>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
@@ -1267,6 +1346,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Type</label>
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={selectStyle}>
               {typeOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>City</label>
+            <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} style={selectStyle}>
+              <option value="all">All Cities</option>
+              {cityOptions.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
