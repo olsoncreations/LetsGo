@@ -340,6 +340,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [zipCode, setZipCode] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -398,12 +399,17 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
     setMessage("");
 
     if (type === "user") {
-      if (!email || !password || !firstName || !lastName || !zipCode) {
+      if (!email || !password || !firstName || !lastName || !zipCode || !phone) {
         setError("Please fill in all fields.");
         return;
       }
       if (!/^\d{5}$/.test(zipCode)) {
         setError("Please enter a valid 5-digit zip code.");
+        return;
+      }
+      const digitsOnly = phone.replace(/\D/g, "");
+      if (digitsOnly.length !== 10) {
+        setError("Please enter a valid 10-digit phone number.");
         return;
       }
     } else {
@@ -433,6 +439,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
             last_name: lastName.trim(),
             full_name: `${firstName.trim()} ${lastName.trim()}`,
             zip_code: zipCode.trim(),
+            phone: phone.replace(/\D/g, ""),
             user_type: type,
           }
         : { full_name: fullName, user_type: type };
@@ -468,6 +475,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
           profilePayload.last_name = lastName.trim();
           profilePayload.full_name = `${firstName.trim()} ${lastName.trim()}`;
           profilePayload.zip_code = zipCode.trim();
+          profilePayload.phone = phone.replace(/\D/g, "");
         } else {
           profilePayload.full_name = fullName.trim();
         }
@@ -625,7 +633,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
           </div>
         ) : (<>
         <h2 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.5rem", color: "white", textAlign: "center" }}>
-          {type === "business" ? "Business Portal" : "Explorer Account"}
+          {type === "business" ? "Business & LetsGo Sales Rep Portal" : "Explorer & LetsGo Influencer Portal"}
         </h2>
         <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", textAlign: "center", marginBottom: "1.5rem" }}>
           {mode === "signin" ? "Sign in to continue" : "Create your account"}
@@ -747,6 +755,31 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
                   placeholder="90210"
                   inputMode="numeric"
                   maxLength={5}
+                  required
+                  disabled={loading}
+                  style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: "0.375rem" }}>Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    let formatted = digits;
+                    if (digits.length > 6) {
+                      formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+                    } else if (digits.length > 3) {
+                      formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+                    } else if (digits.length > 0) {
+                      formatted = `(${digits}`;
+                    }
+                    setPhone(formatted);
+                  }}
+                  placeholder="(555) 123-4567"
+                  inputMode="tel"
+                  maxLength={14}
                   required
                   disabled={loading}
                   style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }}
@@ -963,12 +996,55 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
 }
 
 // ============================================
+// Apply Button — gradient text underline style
+// ============================================
+function ApplyButton({ type, onClick }: { type: "sales_rep" | "influencer"; onClick: () => void }) {
+  const isSales = type === "sales_rep";
+  const label = isSales ? "Apply to be a LetsGo Sales Representative" : "Apply to be a LetsGo Influencer";
+  const icon = isSales ? "\uD83D\uDCBC" : "\u2728";
+
+  const c = isSales
+    ? { solid: "#00bfff", rgb: "0,191,255" }
+    : { solid: "#ffd93d", rgb: "255,217,61" };
+
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") onClick(); }}
+      className="apply-cycle-btn"
+      style={{
+        cursor: "pointer", fontSize: "0.88rem", fontWeight: 600,
+        background: `linear-gradient(90deg, rgba(255,255,255,0.7), ${c.solid})`,
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+        backgroundClip: "text",
+        transition: "all 0.3s ease",
+        display: "inline-flex", flexDirection: "column", alignItems: "center",
+        position: "relative",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(90deg, #fff, ${c.solid})`; e.currentTarget.style.WebkitBackgroundClip = "text"; e.currentTarget.style.WebkitTextFillColor = "transparent"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(90deg, rgba(255,255,255,0.7), ${c.solid})`; e.currentTarget.style.WebkitBackgroundClip = "text"; e.currentTarget.style.WebkitTextFillColor = "transparent"; }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", paddingBottom: "5px" }}>
+        <span>{icon}</span> {label} &rarr;
+      </span>
+      <span style={{
+        display: "block", width: "100%", height: 2.5, borderRadius: 2,
+        background: `linear-gradient(90deg, transparent, ${c.solid}, transparent)`,
+      }} />
+    </span>
+  );
+}
+
+// ============================================
 // Main Welcome Page Component
 // ============================================
 export default function WelcomePage() {
   const router = useRouter();
   const [hoveredSide, setHoveredSide] = useState<"business" | "user" | null>(null);
   const [authModal, setAuthModal] = useState<{ open: boolean; type: "business" | "user"; mode: "signin" | "signup" }>({ open: false, type: "business", mode: "signin" });
+  const [applyRedirect, setApplyRedirect] = useState<string | null>(null);
 
   // Influencer referral code from URL
   const [influencerCode, setInfluencerCode] = useState("");
@@ -1029,6 +1105,14 @@ export default function WelcomePage() {
 
   function handleAuthSuccess(userId: string, hasExistingBusiness?: boolean, businessId?: string) {
     setAuthModal({ ...authModal, open: false });
+
+    // If user clicked an apply button, redirect to the apply page after auth
+    if (applyRedirect) {
+      const dest = applyRedirect;
+      setApplyRedirect(null);
+      router.push(dest);
+      return;
+    }
 
     if (authModal.type === "business") {
       if (hasExistingBusiness && businessId) {
@@ -1160,6 +1244,21 @@ export default function WelcomePage() {
             padding: 0.35rem 0.8rem;
           }
 
+          .welcome-apply-cta {
+            margin-top: 4rem !important;
+            margin-bottom: 0.5rem;
+            animation: applyCTAFade 0.6s ease both;
+          }
+
+          .apply-cycle-btn {
+            font-family: inherit;
+          }
+
+          @keyframes applyCTAFade {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+
           .mobile-logo {
             top: 0.6rem !important;
             padding: 0.4rem 1rem !important;
@@ -1205,7 +1304,7 @@ export default function WelcomePage() {
       >
         <Image
           src="/lg-logo.png"
-          alt="Let's Go"
+          alt="LetsGo"
           width={140}
           height={42}
           sizes="(max-width: 768px) 100px, 140px"
@@ -1317,6 +1416,9 @@ export default function WelcomePage() {
                 New here? Start onboarding →
               </button>
             </div>
+            <div className="welcome-apply-cta" style={{ marginTop: "6rem" }}>
+              <ApplyButton type="sales_rep" onClick={() => { setApplyRedirect("/apply/sales-rep"); setAuthModal({ open: true, type: "business", mode: "signup" }); }} />
+            </div>
           </div>
         </div>
 
@@ -1380,6 +1482,9 @@ export default function WelcomePage() {
               >
                 New explorer? Create account →
               </button>
+            </div>
+            <div className="welcome-apply-cta" style={{ marginTop: "6rem" }}>
+              <ApplyButton type="influencer" onClick={() => { setApplyRedirect("/apply/influencer"); setAuthModal({ open: true, type: "user", mode: "signup" }); }} />
             </div>
           </div>
         </div>
