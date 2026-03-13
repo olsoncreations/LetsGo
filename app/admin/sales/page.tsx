@@ -36,12 +36,45 @@ interface SalesRep {
   role: string;
   division_id: string | null;
   zone_id: string | null;
+  county_id: string | null;
+  state: string | null;
   city: string | null;
   supervisor_id: string | null;
   hire_date: string | null;
   status: string;
   avatar: string | null;
   individual_quota: number | null;
+  legal_name: string | null;
+  tax_id: string | null;
+  address_street: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  w9_status: string | null;
+}
+
+interface SalesCounty {
+  id: string;
+  fips: string;
+  name: string;
+  state: string;
+  zone_id: string | null;
+  quota: number;
+  created_at: string;
+}
+
+interface SalesRep1099 {
+  id: string;
+  rep_id: string;
+  tax_year: number;
+  total_earnings_cents: number;
+  generated_at: string;
+  generated_by: string | null;
+  sent_at: string | null;
+  sent_method: string | null;
+  filed_with_irs: boolean;
+  notes: string | null;
+  created_at: string;
 }
 
 interface SalesSignup {
@@ -130,6 +163,24 @@ interface QuotaOverride {
   period: string;
 }
 
+interface RoleApplication {
+  id: string;
+  user_id: string;
+  application_type: string;
+  status: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  payload: Record<string, string | boolean | number | null>;
+  review_message: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /* ==================== HELPERS ==================== */
 
 const ROLE_LABELS: Record<string, string> = {
@@ -138,9 +189,17 @@ const ROLE_LABELS: Record<string, string> = {
   city_sales_manager: "City Sales Manager",
   team_lead: "Team Lead",
   sales_rep: "Sales Rep",
+  in_training: "In Training",
 };
 
-const ROLE_HIERARCHY = ["vp_smb_sales", "zone_sales_director", "city_sales_manager", "team_lead", "sales_rep"];
+const formatPhone = (raw: string): string => {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+};
+
+const ROLE_HIERARCHY = ["vp_smb_sales", "zone_sales_director", "city_sales_manager", "team_lead", "sales_rep", "in_training"];
 
 function Avatar({ name, initials }: { name: string; initials?: string | null }) {
   const init = initials || name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -255,6 +314,7 @@ export default function SalesPage() {
   const [repeatCustomers, setRepeatCustomers] = useState<RepeatCustomer[]>([]);
   const [config, setConfig] = useState<SalesConfig[]>([]);
   const [quotaOverrides, setQuotaOverrides] = useState<QuotaOverride[]>([]);
+  const [counties, setCounties] = useState<SalesCounty[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Ad campaign revenue (from business_ad_campaigns)
@@ -265,14 +325,29 @@ export default function SalesPage() {
   const [salesPeriod, setSalesPeriod] = useState("month");
   const [poolMatrixPeriod, setPoolMatrixPeriod] = useState("month");
   const [geoBreakdownView, setGeoBreakdownView] = useState("division");
+  const [quotaRollupView, setQuotaRollupView] = useState<"division" | "state" | "county">("division");
+  const [quotaRollupDrill, setQuotaRollupDrill] = useState<{ type: "state" | "county" | "rep"; parentId: string; parentName: string } | null>(null);
   const [geoSummaryView, setGeoSummaryView] = useState("division");
   const [geoSearchQuery, setGeoSearchQuery] = useState("");
+  // Breakdown filters
+  const [stateFilterDiv, setStateFilterDiv] = useState("all");
+  const [stateFilterSearch, setStateFilterSearch] = useState("");
+  const [countyFilterDiv, setCountyFilterDiv] = useState("all");
+  const [countyFilterState, setCountyFilterState] = useState("all");
+  const [countyFilterSearch, setCountyFilterSearch] = useState("");
+  const [cityFilterDiv, setCityFilterDiv] = useState("all");
+  const [cityFilterState, setCityFilterState] = useState("all");
+  const [cityFilterSearch, setCityFilterSearch] = useState("");
+  const [supFilterDiv, setSupFilterDiv] = useState("all");
+  const [supFilterSearch, setSupFilterSearch] = useState("");
+  const [supCollapsed, setSupCollapsed] = useState<Set<string>>(new Set());
   const [selectedRep, setSelectedRep] = useState<SalesRep | null>(null);
   const [signupTypeFilter, setSignupTypeFilter] = useState("all");
   const [signupSearchQuery, setSignupSearchQuery] = useState("");
   const [signupFilters, setSignupFilters] = useState({ dateFrom: "", dateTo: "", zone: "all", rep: "all", plan: "all" });
   const [historyFilter, setHistoryFilter] = useState("all");
   const [historyRepFilter, setHistoryRepFilter] = useState("all");
+  const [historyDivisionFilter, setHistoryDivisionFilter] = useState("all");
   const [payoutPeriodFilter, setPayoutPeriodFilter] = useState("all");
   const [payoutStatusFilter, setPayoutStatusFilter] = useState("all");
   const [payoutDateFilter, setPayoutDateFilter] = useState({ from: "", to: "" });
@@ -281,8 +356,48 @@ export default function SalesPage() {
   const [showBonusDetailsModal, setShowBonusDetailsModal] = useState(false);
   const [selectedBonusQuarter, setSelectedBonusQuarter] = useState<BonusPool | null>(null);
 
+  // Applications tab state
+  const [applications, setApplications] = useState<RoleApplication[]>([]);
+  const [appStatusFilter, setAppStatusFilter] = useState("all");
+  const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
+  const [appLoading, setAppLoading] = useState(false);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<RoleApplication | null>(null);
+  const [approveData, setApproveData] = useState({ role: "sales_rep", zone_id: "", division_id: "", supervisor_id: "", individual_quota: "2", state: "", county_id: "" });
+  const [rejectReason, setRejectReason] = useState("");
+  const [appActionLoading, setAppActionLoading] = useState(false);
+  const [showEditAppModal, setShowEditAppModal] = useState(false);
+  const [editAppData, setEditAppData] = useState<{ full_name: string; email: string; phone: string; city: string; state: string }>({ full_name: "", email: "", phone: "", city: "", state: "" });
+  const [showDeleteAppModal, setShowDeleteAppModal] = useState(false);
+
+  // 1099-NEC tab state
+  const [nec1099s, setNec1099s] = useState<SalesRep1099[]>([]);
+  const [nec1099Year, setNec1099Year] = useState(new Date().getFullYear());
+  const [showTaxInfoModal, setShowTaxInfoModal] = useState(false);
+  const [taxInfoRep, setTaxInfoRep] = useState<SalesRep | null>(null);
+  const [taxInfoForm, setTaxInfoForm] = useState({ legal_name: "", tax_id: "", address_street: "", address_city: "", address_state: "", address_zip: "", w9_status: "not_requested" });
+  const [taxInfoSaving, setTaxInfoSaving] = useState(false);
+  const [showSentModal, setShowSentModal] = useState(false);
+  const [sentMethod, setSentMethod] = useState<string>("email");
+  const [sentRep, setSentRep] = useState<SalesRep | null>(null);
+  const [necGenerating, setNecGenerating] = useState(false);
+
   // Filters
   const [salesFilters, setSalesFilters] = useState({ dateFrom: "", dateTo: "", zone: "all", state: "all", rep: "all" });
+
+  // State name + division color lookups
+  const stateNames: Record<string, string> = {
+    NE: "Nebraska", IA: "Iowa", KS: "Kansas", MO: "Missouri", CO: "Colorado", WY: "Wyoming", UT: "Utah", TX: "Texas", AZ: "Arizona", NM: "New Mexico",
+    FL: "Florida", GA: "Georgia", AL: "Alabama", NY: "New York", PA: "Pennsylvania", NJ: "New Jersey", CA: "California", WA: "Washington", OR: "Oregon",
+    ND: "North Dakota", SD: "South Dakota", CT: "Connecticut", MA: "Massachusetts", OH: "Ohio", MN: "Minnesota", WI: "Wisconsin", IL: "Illinois",
+    IN: "Indiana", MI: "Michigan", MT: "Montana", ID: "Idaho", OK: "Oklahoma", SC: "South Carolina", NC: "North Carolina", TN: "Tennessee",
+    MS: "Mississippi", LA: "Louisiana", AR: "Arkansas", VA: "Virginia", MD: "Maryland", DE: "Delaware", RI: "Rhode Island", HI: "Hawaii", AK: "Alaska",
+    ME: "Maine", NH: "New Hampshire", VT: "Vermont", NV: "Nevada", WV: "West Virginia", KY: "Kentucky", DC: "Washington D.C.",
+  };
+  const divisionColors: Record<string, string> = {
+    Northeast: "#cc0000", Southeast: "#8b2fc9", Mideast: COLORS.neonBlue, Midwest: COLORS.neonOrange, West: COLORS.neonGreen,
+  };
 
   // Modals
   const [showAddSaleModal, setShowAddSaleModal] = useState(false);
@@ -291,6 +406,8 @@ export default function SalesPage() {
   const [showEditQuotaModal, setShowEditQuotaModal] = useState(false);
   const [showEditSignupModal, setShowEditSignupModal] = useState(false);
   const [editingSignup, setEditingSignup] = useState<{ id: string; type: "outbound" | "inbound"; commission_cents?: number; pool_contribution_cents?: number } | null>(null);
+  const [editingRepId, setEditingRepId] = useState<string | null>(null);
+  const [editRepData, setEditRepData] = useState<Partial<SalesRep> & { individual_quota_str: string }>({ individual_quota_str: "2" });
 
   // Form state
   const [newSale, setNewSale] = useState({ rep_id: "", business_name: "", plan: "basic", ad_spend: 0, notes: "", city: "", state: "" });
@@ -298,7 +415,8 @@ export default function SalesPage() {
   const [newRep, setNewRep] = useState({
     name: "", email: "", phone: "", role: "sales_rep",
     division_id: "", zone_id: "", city: "", supervisor_id: "",
-    hire_date: new Date().toISOString().slice(0, 10), individual_quota: 60
+    hire_date: new Date().toISOString().slice(0, 10), individual_quota: "2",
+    state: "", county_id: ""
   });
   const [editRates, setEditRates] = useState<Record<string, number>>({});
   const [quotaEditTarget, setQuotaEditTarget] = useState<{ type: string; id: string; name: string } | null>(null);
@@ -307,7 +425,7 @@ export default function SalesPage() {
   const getConfig = useCallback((key: string, type: "cents" | "int" = "cents"): number => {
     const c = config.find((cfg) => cfg.key === key);
     if (!c) {
-      const defaults: Record<string, number> = { basic_signup: 2500, premium_signup: 10000, advertising_per_100: 1000, individual_monthly: 60, bonus_eligibility: 30, team_monthly: 300 };
+      const defaults: Record<string, number> = { basic_signup: 2500, premium_signup: 10000, advertising_per_100: 1000, individual_monthly: 60, bonus_eligibility: 30, team_monthly: 300, rep_quota_daily: 200, rep_bonus_daily: 100, lead_quota_daily: 200, lead_bonus_daily: 100, training_quota_daily: 100, training_bonus_daily: 50, individual_daily: 200, team_daily: 1000, bonus_eligibility_daily: 100 };
       return defaults[key] || 0;
     }
     return type === "cents" ? (c.value_cents || 0) : (c.value_int || 0);
@@ -316,6 +434,20 @@ export default function SalesPage() {
   const commissionRates = useMemo(() => ({
     individual: { basic_signup: getConfig("basic_signup"), premium_signup: getConfig("premium_signup"), advertising_per_100: getConfig("advertising_per_100") },
     quotas: { individual_monthly: getConfig("individual_monthly", "int") || 60, bonus_eligibility: getConfig("bonus_eligibility", "int") || 30, team_monthly: getConfig("team_monthly", "int") || 300 },
+    daily: {
+      // Per-role daily quotas
+      sales_rep: (getConfig("rep_quota_daily") || getConfig("individual_daily") || 200) / 100,
+      team_lead: (getConfig("lead_quota_daily") || getConfig("individual_daily") || 200) / 100,
+      in_training: (getConfig("training_quota_daily") || 100) / 100,
+      // Per-role bonus eligibility daily thresholds
+      rep_bonus: (getConfig("rep_bonus_daily") || getConfig("bonus_eligibility_daily") || 100) / 100,
+      lead_bonus: (getConfig("lead_bonus_daily") || getConfig("bonus_eligibility_daily") || 100) / 100,
+      training_bonus: (getConfig("training_bonus_daily") || 50) / 100,
+      // Legacy keys (for backward compat)
+      individual: (getConfig("rep_quota_daily") || getConfig("individual_daily") || 200) / 100,
+      team: (getConfig("team_daily") || 1000) / 100,
+      bonus_eligibility: (getConfig("bonus_eligibility_daily") || 100) / 100,
+    },
   }), [getConfig]);
 
   const fetchData = useCallback(async () => {
@@ -342,6 +474,33 @@ export default function SalesPage() {
       if (historyRes.data) setPayoutHistory(historyRes.data);
       if (repeatRes.data) setRepeatCustomers(repeatRes.data);
       if (quotaRes.data) setQuotaOverrides(quotaRes.data);
+
+      // Fetch all counties in batches (Supabase default limit is 1000)
+      try {
+        const allCounties: SalesCounty[] = [];
+        let from = 0;
+        const batchSize = 1000;
+        let done = false;
+        while (!done) {
+          const { data: batch, error: batchErr } = await supabaseBrowser
+            .from("sales_counties")
+            .select("id,fips,name,state,zone_id,quota,created_at")
+            .order("state")
+            .order("name")
+            .range(from, from + batchSize - 1);
+          if (batchErr) { console.error("Counties batch error:", batchErr); break; }
+          if (batch && batch.length > 0) {
+            allCounties.push(...batch);
+            from += batchSize;
+            if (batch.length < batchSize) done = true;
+          } else {
+            done = true;
+          }
+        }
+        if (allCounties.length > 0) setCounties(allCounties);
+      } catch (e) {
+        console.error("Error fetching counties:", e);
+      }
 
       // Get bonus pools
       const currentQuarter = `Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`;
@@ -385,6 +544,67 @@ export default function SalesPage() {
   // Get only sales reps (not managers)
   const actualSalesReps = useMemo(() => salesReps.filter(r => r.role === "sales_rep"), [salesReps]);
 
+  // Quota rollup: rep → county → state → division (live computation)
+  const FIELD_ROLES = ["sales_rep", "team_lead", "in_training"];
+  // Effective daily quota: override if set, otherwise role-specific global
+  const getRepDailyQuota = useCallback((rep: SalesRep): number => {
+    if (!FIELD_ROLES.includes(rep.role)) return 0;
+    // Only team_lead and in_training can have individual overrides; sales_rep always uses global
+    if ((rep.role === "team_lead" || rep.role === "in_training") && rep.individual_quota != null) return rep.individual_quota;
+    if (rep.role === "team_lead") return commissionRates.daily.team_lead;
+    if (rep.role === "in_training") return commissionRates.daily.in_training;
+    return commissionRates.daily.sales_rep;
+  }, [commissionRates.daily]);
+  // Bonus eligibility daily threshold by role
+  const getRepBonusDaily = useCallback((role: string): number => {
+    if (role === "team_lead") return commissionRates.daily.lead_bonus;
+    if (role === "in_training") return commissionRates.daily.training_bonus;
+    return commissionRates.daily.rep_bonus;
+  }, [commissionRates.daily]);
+
+  const quotaRollup = useMemo(() => {
+    const activeReps = salesReps.filter(r => r.status === "active" && FIELD_ROLES.includes(r.role));
+    // County rollup: each rep contributes their effective daily quota
+    const byCounty: Record<string, { county: SalesCounty; repCount: number; totalQuota: number; reps: SalesRep[] }> = {};
+    activeReps.forEach(rep => {
+      if (rep.county_id) {
+        if (!byCounty[rep.county_id]) {
+          const county = counties.find(c => c.id === rep.county_id);
+          if (county) byCounty[rep.county_id] = { county, repCount: 0, totalQuota: 0, reps: [] };
+        }
+        if (byCounty[rep.county_id]) {
+          byCounty[rep.county_id].repCount++;
+          byCounty[rep.county_id].totalQuota += getRepDailyQuota(rep);
+          byCounty[rep.county_id].reps.push(rep);
+        }
+      }
+    });
+    // State rollup: sum of county quotas per state
+    const byState: Record<string, { state: string; countyCount: number; repCount: number; totalQuota: number }> = {};
+    Object.values(byCounty).forEach(({ county, repCount, totalQuota }) => {
+      if (!byState[county.state]) byState[county.state] = { state: county.state, countyCount: 0, repCount: 0, totalQuota: 0 };
+      byState[county.state].countyCount++;
+      byState[county.state].repCount += repCount;
+      byState[county.state].totalQuota += totalQuota;
+    });
+    // Division rollup: sum of state quotas per division
+    const byDivision: Record<string, { division: Division; stateCount: number; countyCount: number; repCount: number; totalQuota: number }> = {};
+    zones.forEach(zone => {
+      const div = divisions.find(d => d.id === zone.division_id);
+      if (!div) return;
+      if (!byDivision[div.id]) byDivision[div.id] = { division: div, stateCount: 0, countyCount: 0, repCount: 0, totalQuota: 0 };
+      zone.states.forEach(st => {
+        if (byState[st]) {
+          byDivision[div.id].stateCount++;
+          byDivision[div.id].countyCount += byState[st].countyCount;
+          byDivision[div.id].repCount += byState[st].repCount;
+          byDivision[div.id].totalQuota += byState[st].totalQuota;
+        }
+      });
+    });
+    return { byCounty, byState, byDivision };
+  }, [salesReps, counties, zones, divisions, getRepDailyQuota]);
+
   // Filter signups
   const filteredSignups = useMemo(() => {
     let filtered = [...signups];
@@ -422,8 +642,9 @@ export default function SalesPage() {
   const totalSignups = filteredSignups.length;
   const totalCommissions = filteredSignups.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
   const totalAdSpend = filteredSignups.reduce((sum, s) => sum + (s.ad_spend_cents || 0), 0);
-  const eligibleReps = actualSalesReps.filter((rep) => getRepPerformance(rep.id).total >= commissionRates.quotas.bonus_eligibility);
-  const notYetEligibleReps = actualSalesReps.filter((rep) => getRepPerformance(rep.id).total < commissionRates.quotas.bonus_eligibility);
+  const getRepBonusThreshold = useCallback((rep: SalesRep): number => Math.round(getRepBonusDaily(rep.role) * 30), [getRepBonusDaily]);
+  const eligibleReps = actualSalesReps.filter((rep) => getRepPerformance(rep.id).total >= getRepBonusThreshold(rep));
+  const notYetEligibleReps = actualSalesReps.filter((rep) => getRepPerformance(rep.id).total < getRepBonusThreshold(rep));
 
   // Filtered signups for Signups tab (uses signupFilters and signupSearchQuery)
   const filteredSignupsForTab = useMemo(() => {
@@ -506,6 +727,329 @@ export default function SalesPage() {
   const periodLabel = salesPeriod === "day" ? "Today" : salesPeriod === "week" ? "This Week" : salesPeriod === "year" ? "This Year" : "This Month";
   const hasActiveFilters = salesFilters.dateFrom || salesFilters.dateTo || salesFilters.zone !== "all" || salesFilters.state !== "all" || salesFilters.rep !== "all";
 
+  // Fetch sales rep applications
+  const fetchApplications = useCallback(async () => {
+    setAppLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const url = appStatusFilter === "all"
+        ? "/api/admin/applications?type=sales_rep"
+        : `/api/admin/applications?type=sales_rep&status=${appStatusFilter}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setApplications(json.applications || []);
+      }
+    } catch (err) {
+      console.error("Error fetching applications:", err);
+    } finally {
+      setAppLoading(false);
+    }
+  }, [appStatusFilter]);
+
+  useEffect(() => {
+    if (salesTab === "applications") fetchApplications();
+  }, [salesTab, fetchApplications]);
+
+  // Fetch 1099 records when tab opens or year changes
+  const fetch1099s = useCallback(async () => {
+    const { data } = await supabaseBrowser.from("sales_rep_1099s").select("*").eq("tax_year", nec1099Year);
+    if (data) setNec1099s(data);
+  }, [nec1099Year]);
+
+  useEffect(() => {
+    if (salesTab === "1099nec") fetch1099s();
+  }, [salesTab, fetch1099s]);
+
+  // Calculate annual earnings for a rep in a given calendar year (uses paid_at for IRS reporting)
+  const getRepAnnualEarnings = useCallback((repId: string, year: number): number => {
+    return payoutHistory
+      .filter(p => p.rep_id === repId && p.status === "paid" && p.paid_at &&
+        new Date(p.paid_at).getFullYear() === year)
+      .reduce((sum, p) => sum + p.amount_cents, 0);
+  }, [payoutHistory]);
+
+  // 1099-NEC: save tax info
+  const handleSaveTaxInfo = useCallback(async () => {
+    if (!taxInfoRep) return;
+    setTaxInfoSaving(true);
+    try {
+      const { error } = await supabaseBrowser.from("sales_reps").update({
+        legal_name: taxInfoForm.legal_name || null,
+        tax_id: taxInfoForm.tax_id || null,
+        address_street: taxInfoForm.address_street || null,
+        address_city: taxInfoForm.address_city || null,
+        address_state: taxInfoForm.address_state || null,
+        address_zip: taxInfoForm.address_zip || null,
+        w9_status: taxInfoForm.w9_status,
+      }).eq("id", taxInfoRep.id);
+      if (!error) {
+        logAudit({ action: "update_tax_info", tab: AUDIT_TABS.SALES, targetType: "sales_rep", targetId: taxInfoRep.id, entityName: taxInfoRep.name, details: `Tax info updated for ${taxInfoRep.name}` });
+        setShowTaxInfoModal(false);
+        fetchData();
+      }
+    } catch (err) {
+      console.error("Error saving tax info:", err);
+    } finally {
+      setTaxInfoSaving(false);
+    }
+  }, [taxInfoRep, taxInfoForm, fetchData]);
+
+  // 1099-NEC: generate XLSX for a single rep
+  const handleGenerate1099 = useCallback(async (rep: SalesRep) => {
+    const earnings = getRepAnnualEarnings(rep.id, nec1099Year);
+    if (!rep.legal_name || !rep.tax_id || !rep.address_street || !rep.address_city || !rep.address_state || !rep.address_zip) {
+      alert("Tax info is incomplete. Please edit tax info before generating.");
+      return;
+    }
+    if (rep.w9_status !== "received") {
+      alert("W-9 must be marked as received before generating a 1099-NEC.");
+      return;
+    }
+    setNecGenerating(true);
+    try {
+      const maskedTaxId = rep.tax_id ? `***-**-${rep.tax_id.slice(-4)}` : "";
+      const headers = ["Field", "Value"];
+      const rows = [
+        ["PAYER", ""],
+        ["Payer Name", "OlsonCreations, LLC DBA LETS GO OUT"],
+        ["", ""],
+        ["RECIPIENT", ""],
+        ["Recipient Name", rep.legal_name],
+        ["Tax ID (SSN/EIN)", maskedTaxId],
+        ["Street Address", rep.address_street],
+        ["City", rep.address_city],
+        ["State", rep.address_state],
+        ["ZIP Code", rep.address_zip],
+        ["", ""],
+        ["1099-NEC DETAILS", ""],
+        ["Tax Year", String(nec1099Year)],
+        ["Box 1 - Nonemployee Compensation", `$${(earnings / 100).toFixed(2)}`],
+      ];
+      await downloadXLSX(`1099-NEC_${nec1099Year}_${rep.name.replace(/\s+/g, "_")}.xlsx`, headers, rows);
+
+      // Upsert 1099 record
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const existing = nec1099s.find(n => n.rep_id === rep.id);
+      if (existing) {
+        await supabaseBrowser.from("sales_rep_1099s").update({
+          total_earnings_cents: earnings,
+          generated_at: new Date().toISOString(),
+          generated_by: session?.user?.email || null,
+        }).eq("id", existing.id);
+      } else {
+        await supabaseBrowser.from("sales_rep_1099s").insert({
+          rep_id: rep.id,
+          tax_year: nec1099Year,
+          total_earnings_cents: earnings,
+          generated_by: session?.user?.email || null,
+        });
+      }
+      logAudit({ action: "generate_1099", tab: AUDIT_TABS.SALES, targetType: "sales_rep", targetId: rep.id, entityName: rep.name, details: `1099-NEC generated for ${nec1099Year}: ${formatMoney(earnings)}` });
+      fetch1099s();
+    } catch (err) {
+      console.error("Error generating 1099:", err);
+    } finally {
+      setNecGenerating(false);
+    }
+  }, [nec1099Year, nec1099s, getRepAnnualEarnings, fetch1099s]);
+
+  // 1099-NEC: bulk generate XLSX (multi-sheet)
+  const handleBulkGenerate1099 = useCallback(async () => {
+    const eligible = salesReps.filter(r => r.status === "active" && getRepAnnualEarnings(r.id, nec1099Year) >= 60000 && r.legal_name && r.tax_id && r.address_street && r.w9_status === "received");
+    if (eligible.length === 0) {
+      alert("No eligible reps with complete tax info and W-9 received.");
+      return;
+    }
+    setNecGenerating(true);
+    try {
+      // Load SheetJS
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let XLSX = (window as any).XLSX;
+      if (!XLSX) {
+        await new Promise<void>((resolve) => {
+          const script = document.createElement("script");
+          script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+          script.onload = () => resolve();
+          document.head.appendChild(script);
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        XLSX = (window as any).XLSX;
+      }
+      if (!XLSX) return;
+      const wb = XLSX.utils.book_new();
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+
+      for (const rep of eligible) {
+        const earnings = getRepAnnualEarnings(rep.id, nec1099Year);
+        const maskedTaxId = rep.tax_id ? `***-**-${rep.tax_id.slice(-4)}` : "";
+        const sheetData = [
+          ["Field", "Value"],
+          ["PAYER", ""],
+          ["Payer Name", "OlsonCreations, LLC DBA LETS GO OUT"],
+          ["", ""],
+          ["RECIPIENT", ""],
+          ["Recipient Name", rep.legal_name],
+          ["Tax ID (SSN/EIN)", maskedTaxId],
+          ["Street Address", rep.address_street],
+          ["City", rep.address_city],
+          ["State", rep.address_state],
+          ["ZIP Code", rep.address_zip],
+          ["", ""],
+          ["1099-NEC DETAILS", ""],
+          ["Tax Year", String(nec1099Year)],
+          ["Box 1 - Nonemployee Compensation", `$${(earnings / 100).toFixed(2)}`],
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        const sheetName = rep.name.slice(0, 31).replace(/[\\/*?[\]:]/g, "");
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+        // Upsert record
+        const existing = nec1099s.find(n => n.rep_id === rep.id);
+        if (existing) {
+          await supabaseBrowser.from("sales_rep_1099s").update({
+            total_earnings_cents: earnings,
+            generated_at: new Date().toISOString(),
+            generated_by: session?.user?.email || null,
+          }).eq("id", existing.id);
+        } else {
+          await supabaseBrowser.from("sales_rep_1099s").insert({
+            rep_id: rep.id,
+            tax_year: nec1099Year,
+            total_earnings_cents: earnings,
+            generated_by: session?.user?.email || null,
+          });
+        }
+      }
+      XLSX.writeFile(wb, `1099-NEC_Bulk_${nec1099Year}.xlsx`);
+      logAudit({ action: "bulk_generate_1099", tab: AUDIT_TABS.SALES, targetType: "sales_rep", targetId: "bulk", entityName: `${eligible.length} reps`, details: `Bulk 1099-NEC generated for ${nec1099Year}` });
+      fetch1099s();
+    } catch (err) {
+      console.error("Error bulk generating 1099s:", err);
+    } finally {
+      setNecGenerating(false);
+    }
+  }, [salesReps, nec1099Year, nec1099s, getRepAnnualEarnings, fetch1099s]);
+
+  // 1099-NEC: mark as sent
+  const handleMarkSent = useCallback(async () => {
+    if (!sentRep) return;
+    const record = nec1099s.find(n => n.rep_id === sentRep.id);
+    if (!record) return;
+    try {
+      await supabaseBrowser.from("sales_rep_1099s").update({
+        sent_at: new Date().toISOString(),
+        sent_method: sentMethod,
+      }).eq("id", record.id);
+      logAudit({ action: "mark_1099_sent", tab: AUDIT_TABS.SALES, targetType: "sales_rep", targetId: sentRep.id, entityName: sentRep.name, details: `1099-NEC marked as sent via ${sentMethod}` });
+      setShowSentModal(false);
+      setSentRep(null);
+      fetch1099s();
+    } catch (err) {
+      console.error("Error marking 1099 sent:", err);
+    }
+  }, [sentRep, sentMethod, nec1099s, fetch1099s]);
+
+  const handleAppAction = useCallback(async (action: "approve" | "reject") => {
+    if (!selectedApp) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const body: Record<string, unknown> = { id: selectedApp.id, action };
+      if (action === "approve") {
+        body.assignmentData = {
+          role: approveData.role,
+          zone_id: approveData.zone_id || null,
+          division_id: approveData.division_id || null,
+          county_id: approveData.county_id || null,
+          state: approveData.state || null,
+          supervisor_id: approveData.supervisor_id || null,
+          individual_quota: null,
+        };
+      } else {
+        body.message = rejectReason;
+      }
+      const res = await fetch("/api/admin/applications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        logAudit({
+          action: action === "approve" ? "approve_application" : "reject_application",
+          tab: AUDIT_TABS.APPLICATIONS,
+          targetType: "role_application",
+          targetId: selectedApp.id,
+          entityName: selectedApp.full_name,
+          fieldName: "status",
+          oldValue: "submitted",
+          newValue: action === "approve" ? "approved" : "rejected",
+          details: `Sales rep application ${action}d`,
+        });
+        setShowApproveModal(false);
+        setShowRejectModal(false);
+        setSelectedApp(null);
+        setExpandedAppId(null);
+        setApproveData({ role: "sales_rep", zone_id: "", division_id: "", supervisor_id: "", individual_quota: "2", state: "", county_id: "" });
+        setRejectReason("");
+        fetchApplications();
+        if (action === "approve") fetchData();
+      }
+    } catch (err) {
+      console.error("Error processing application:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  }, [selectedApp, approveData, rejectReason, fetchApplications, fetchData]);
+
+  const handleEditApp = useCallback(async () => {
+    if (!selectedApp) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/applications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ id: selectedApp.id, ...editAppData }),
+      });
+      if (res.ok) {
+        logAudit({ action: "edit_application", tab: AUDIT_TABS.APPLICATIONS, targetType: "role_application", targetId: selectedApp.id, entityName: selectedApp.full_name, details: "Application edited by staff" });
+        setShowEditAppModal(false);
+        setSelectedApp(null);
+        fetchApplications();
+      }
+    } catch (err) {
+      console.error("Error editing application:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  }, [selectedApp, editAppData, fetchApplications]);
+
+  const handleDeleteApp = useCallback(async () => {
+    if (!selectedApp) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch(`/api/admin/applications?id=${selectedApp.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) {
+        logAudit({ action: "delete_application", tab: AUDIT_TABS.APPLICATIONS, targetType: "role_application", targetId: selectedApp.id, entityName: selectedApp.full_name, details: "Application deleted by staff" });
+        setShowDeleteAppModal(false);
+        setSelectedApp(null);
+        setExpandedAppId(null);
+        fetchApplications();
+      }
+    } catch (err) {
+      console.error("Error deleting application:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  }, [selectedApp, fetchApplications]);
+
   const tabs = [
     { key: "overview", label: "📊 Overview" },
     { key: "reps", label: "👥 Sales Reps" },
@@ -515,6 +1059,8 @@ export default function SalesPage() {
     { key: "history", label: "📜 History" },
     { key: "payouts", label: "💵 Payouts" },
     { key: "prospecting", label: "🔍 Prospecting" },
+    { key: "applications", label: "📋 Applications" },
+    { key: "1099nec", label: "📄 1099-NEC" },
   ];
 
   // Get supervisors (anyone above sales_rep)
@@ -524,17 +1070,11 @@ export default function SalesPage() {
     return salesReps.filter(r => ROLE_HIERARCHY.indexOf(r.role) < roleIdx && r.status === "active");
   }, [salesReps]);
 
-  const getZoneName = useCallback((zoneId: string | null) => {
+  const getDivisionName = useCallback((zoneId: string | null) => {
     if (!zoneId) return "—";
     const zone = zones.find(z => z.id === zoneId);
     return zone?.name || "—";
   }, [zones]);
-
-  const getDivisionName = useCallback((divId: string | null) => {
-    if (!divId) return "—";
-    const div = divisions.find(d => d.id === divId);
-    return div?.name || "—";
-  }, [divisions]);
 
   const getSupervisorName = useCallback((supId: string | null) => {
     if (!supId) return "—";
@@ -545,7 +1085,9 @@ export default function SalesPage() {
   // Handlers
   async function handleAddRep() {
     if (!newRep.name.trim() || !newRep.email.trim()) { alert("Please enter name and email."); return; }
-    if (!newRep.zone_id) { alert("Zone is required."); return; }
+    if (!newRep.zone_id) { alert("Division is required."); return; }
+    if (!newRep.county_id) { alert("County is required."); return; }
+    if (!newRep.state) { alert("State is required."); return; }
     if (!newRep.supervisor_id && newRep.role !== "vp_smb_sales") { alert("Supervisor is required."); return; }
 
     const zone = zones.find(z => z.id === newRep.zone_id);
@@ -558,12 +1100,14 @@ export default function SalesPage() {
       role: newRep.role,
       division_id: zone?.division_id || null,
       zone_id: newRep.zone_id,
+      county_id: newRep.county_id,
+      state: newRep.state,
       city: newRep.city || null,
       supervisor_id: newRep.supervisor_id || null,
       hire_date: newRep.hire_date,
       status: "active",
       avatar,
-      individual_quota: newRep.individual_quota,
+      individual_quota: null,
     });
 
     if (error) { alert("Error: " + error.message); return; }
@@ -574,11 +1118,45 @@ export default function SalesPage() {
       targetType: "sales_rep",
       targetId: newRep.email,
       entityName: newRep.name,
-      details: `Created sales rep "${newRep.name}" (${ROLE_LABELS[newRep.role] || newRep.role}) in zone ${zones.find(z => z.id === newRep.zone_id)?.name || newRep.zone_id}`,
+      details: `Created sales rep "${newRep.name}" (${ROLE_LABELS[newRep.role] || newRep.role}) in division ${zones.find(z => z.id === newRep.zone_id)?.name || newRep.zone_id}`,
     });
     alert(`Sales rep "${newRep.name}" added!`);
     setShowAddRepModal(false);
-    setNewRep({ name: "", email: "", phone: "", role: "sales_rep", division_id: "", zone_id: "", city: "", supervisor_id: "", hire_date: new Date().toISOString().slice(0, 10), individual_quota: 60 });
+    setNewRep({ name: "", email: "", phone: "", role: "sales_rep", division_id: "", zone_id: "", city: "", supervisor_id: "", hire_date: new Date().toISOString().slice(0, 10), individual_quota: "2", state: "", county_id: "" });
+    await fetchData();
+  }
+
+  async function handleSaveRepEdit(repId: string) {
+    const updates: Record<string, unknown> = {};
+    if (editRepData.state !== undefined) updates.state = editRepData.state || null;
+    if (editRepData.county_id !== undefined) updates.county_id = editRepData.county_id || null;
+    if (editRepData.individual_quota_str !== undefined) {
+      const trimmed = editRepData.individual_quota_str.trim();
+      updates.individual_quota = trimmed === "" ? null : (parseFloat(trimmed) || null);
+    }
+    if (editRepData.city !== undefined) updates.city = editRepData.city || null;
+    if (editRepData.phone !== undefined) updates.phone = editRepData.phone || null;
+    if (editRepData.role !== undefined) updates.role = editRepData.role;
+    if (editRepData.supervisor_id !== undefined) updates.supervisor_id = editRepData.supervisor_id || null;
+    if (editRepData.zone_id !== undefined) {
+      updates.zone_id = editRepData.zone_id || null;
+      const zone = zones.find(z => z.id === editRepData.zone_id);
+      updates.division_id = zone?.division_id || null;
+    }
+    if (editRepData.status !== undefined) updates.status = editRepData.status;
+
+    const { error } = await supabaseBrowser.from("sales_reps").update(updates).eq("id", repId);
+    if (error) { alert("Error saving: " + error.message); return; }
+    logAudit({
+      action: "update_sales_rep",
+      tab: AUDIT_TABS.SALES,
+      subTab: "Sales Reps",
+      targetType: "sales_rep",
+      targetId: repId,
+      entityName: salesReps.find(r => r.id === repId)?.name || "",
+      details: `Updated rep fields: ${Object.keys(updates).join(", ")}`,
+    });
+    setEditingRepId(null);
     await fetchData();
   }
 
@@ -964,22 +1542,6 @@ export default function SalesPage() {
           "Ad Spend": ((divSignups.reduce((sum, s) => sum + (s.ad_spend_cents || 0), 0)) / 100).toFixed(2),
         };
       });
-    } else if (geoSummaryView === "zone") {
-      data = zones.map(z => {
-        const zoneSignups = filteredSignups.filter(s => s.zone_id === z.id);
-        const divName = divisions.find(d => d.id === z.division_id)?.name || "—";
-        return {
-          "Zone": z.name,
-          "Division": divName,
-          "Active Reps": salesReps.filter(r => r.zone_id === z.id && r.status === "active").length,
-          "Total Signups": zoneSignups.length,
-          "Basic Signups": zoneSignups.filter(s => s.plan === "basic").length,
-          "Premium Signups": zoneSignups.filter(s => s.plan === "premium").length,
-          "Total Revenue": ((zoneSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0)) / 100).toFixed(2),
-          "Commission": ((zoneSignups.reduce((sum, s) => sum + (s.commission_cents || 0), 0)) / 100).toFixed(2),
-          "Ad Spend": ((zoneSignups.reduce((sum, s) => sum + (s.ad_spend_cents || 0), 0)) / 100).toFixed(2),
-        };
-      });
     } else if (geoSummaryView === "state") {
       const stateData: Record<string, { signupCount: number; basicCount: number; premiumCount: number; totalRevenue: number; totalCommission: number; totalAdSpend: number }> = {};
       filteredSignups.forEach(s => {
@@ -1071,7 +1633,7 @@ export default function SalesPage() {
         data.push({
           "Rep Name": rep.name,
           "Email": rep.email,
-          "Zone": getZoneName(rep.zone_id),
+          "Division": getDivisionName(rep.zone_id),
           "Period 1 Signups": repP1.length,
           "Period 1 Commission": (p1Total / 100).toFixed(2),
           "Period 1 Paid": p1Paid,
@@ -1118,8 +1680,7 @@ export default function SalesPage() {
         "Rep Name": rep.name,
         "Email": rep.email,
         "Role": ROLE_LABELS[rep.role] || rep.role,
-        "Zone": getZoneName(rep.zone_id),
-        "Division": getDivisionName(rep.division_id),
+        "Division": getDivisionName(rep.zone_id),
         "City": rep.city || "—",
         "Total Signups": perf.total,
         "Basic Signups": perf.basic,
@@ -1164,7 +1725,7 @@ export default function SalesPage() {
       "Type": "Outbound",
       "Business Name": s.business_name || "",
       "Sales Rep": salesReps.find(r => r.id === s.rep_id)?.name || "",
-      "Zone": getZoneName(s.zone_id),
+      "Division": getDivisionName(s.zone_id),
       "Plan": s.plan,
       "Commission": ((s.commission_cents || 0) / 100).toFixed(2),
       "Ad Spend": ((s.ad_spend_cents || 0) / 100).toFixed(2),
@@ -1178,7 +1739,7 @@ export default function SalesPage() {
       "Type": "Inbound",
       "Business Name": s.business_name || "",
       "Sales Rep": "",
-      "Zone": "",
+      "Division": "",
       "Plan": s.plan,
       "Commission": "0.00",
       "Ad Spend": ((s.ad_spend_cents || 0) / 100).toFixed(2),
@@ -1224,14 +1785,14 @@ export default function SalesPage() {
   const filteredRepsForSearch = actualSalesReps.filter(r => r.name.toLowerCase().includes(repSearchQuery.toLowerCase()) || r.email.toLowerCase().includes(repSearchQuery.toLowerCase()));
 
   // Export data for CSV/XLSX
-  const exportHeaders = ["Business", "Rep", "Plan", "Commission", "Ad Spend", "Zone", "State", "Date"];
+  const exportHeaders = ["Business", "Rep", "Plan", "Commission", "Ad Spend", "Division", "State", "Date"];
   const exportRows = filteredSignups.map((s) => [
     s.business_name || "",
     salesReps.find((r) => r.id === s.rep_id)?.name || "",
     s.plan,
     ((s.commission_cents || 0) / 100).toFixed(2),
     ((s.ad_spend_cents || 0) / 100).toFixed(2),
-    getZoneName(s.zone_id),
+    getDivisionName(s.zone_id),
     s.state || "",
     s.signed_at
   ]);
@@ -1257,7 +1818,7 @@ export default function SalesPage() {
                   <input type="text" placeholder="Search reps..." value={repSearchQuery} onChange={(e) => setRepSearchQuery(e.target.value)} style={{ width: "100%", padding: 12, marginBottom: 8, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
                   <select value={newSale.rep_id} onChange={(e) => setNewSale({ ...newSale, rep_id: e.target.value })} style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, fontSize: 14 }}>
                     <option value="">Select rep...</option>
-                    {filteredRepsForSearch.map((r) => <option key={r.id} value={r.id}>{r.name} ({getZoneName(r.zone_id)})</option>)}
+                    {filteredRepsForSearch.map((r) => <option key={r.id} value={r.id}>{r.name} ({getDivisionName(r.zone_id)})</option>)}
                   </select>
                 </div>
               )}
@@ -1339,7 +1900,22 @@ export default function SalesPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Phone</label>
-                  <input value={newRep.phone} onChange={(e) => setNewRep({ ...newRep, phone: e.target.value })} placeholder="555-555-5555" style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }} />
+                  <input
+                    type="tel"
+                    value={newRep.phone}
+                    onChange={(e) => {
+                      // Strip non-digits, format as (XXX) XXX-XXXX
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      let formatted = digits;
+                      if (digits.length > 6) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+                      else if (digits.length > 3) formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+                      else if (digits.length > 0) formatted = `(${digits}`;
+                      setNewRep({ ...newRep, phone: formatted });
+                    }}
+                    placeholder="(555) 555-5555"
+                    maxLength={14}
+                    style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }}
+                  />
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Hire Date</label>
@@ -1355,17 +1931,35 @@ export default function SalesPage() {
                 </select>
               </div>
 
-              {/* Zone (Required) */}
+              {/* Division (Required) */}
               <div>
-                <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Zone * (8 US Regions)</label>
+                <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Division * (5 US Regions)</label>
                 <select value={newRep.zone_id} onChange={(e) => { const z = zones.find(zn => zn.id === e.target.value); setNewRep({ ...newRep, zone_id: e.target.value, division_id: z?.division_id || "" }); }} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }}>
-                  <option value="">Select zone...</option>
-                  {divisions.map(d => (
-                    <optgroup key={d.id} label={`${d.name} Division`}>
-                      {zones.filter(z => z.division_id === d.id).map(z => <option key={z.id} value={z.id}>{z.name} ({z.states.join(", ")})</option>)}
-                    </optgroup>
-                  ))}
+                  <option value="">Select division...</option>
+                  {zones.map(z => <option key={z.id} value={z.id}>{z.name} ({z.states.join(", ")})</option>)}
                 </select>
+              </div>
+
+              {/* State & County (Required) */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>State *</label>
+                  <select value={newRep.state} onChange={(e) => setNewRep({ ...newRep, state: e.target.value, county_id: "" })} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }}>
+                    <option value="">Select state...</option>
+                    {(() => {
+                      const zone = zones.find(z => z.id === newRep.zone_id);
+                      const statesInZone = zone ? zone.states : [...new Set(counties.map(c => c.state))].sort();
+                      return statesInZone.map(s => <option key={s} value={s}>{s}</option>);
+                    })()}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>County *</label>
+                  <select value={newRep.county_id} onChange={(e) => setNewRep({ ...newRep, county_id: e.target.value })} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }} disabled={!newRep.state}>
+                    <option value="">Select county...</option>
+                    {counties.filter(c => c.state === newRep.state).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
               </div>
 
               {/* City */}
@@ -1385,12 +1979,6 @@ export default function SalesPage() {
                 </div>
               )}
 
-              {/* Individual Quota */}
-              <div>
-                <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Individual Monthly Quota</label>
-                <input type="number" value={newRep.individual_quota} onChange={(e) => setNewRep({ ...newRep, individual_quota: parseInt(e.target.value) || 60 })} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }} />
-                <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Default is {commissionRates.quotas.individual_monthly}</div>
-              </div>
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 24 }}>
@@ -1434,7 +2022,7 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* EDIT QUOTA MODAL - Individual/Team/Zone */}
+      {/* EDIT QUOTA MODAL - Individual/Team/Division */}
       {showEditQuotaModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setShowEditQuotaModal(false)}>
           <div style={{ background: COLORS.cardBg, borderRadius: 20, padding: 32, maxWidth: 500, width: "90%", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
@@ -1443,8 +2031,8 @@ export default function SalesPage() {
               {/* Target Type */}
               <div>
                 <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Target Type</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                  {["individual", "team", "zone", "division"].map(t => (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                  {["individual", "team", "division"].map(t => (
                     <button key={t} onClick={() => setQuotaEditTarget(null)} style={{ padding: 10, background: quotaEditTarget?.type === t ? COLORS.gradient1 : COLORS.darkBg, border: quotaEditTarget?.type === t ? "none" : "1px solid " + COLORS.cardBorder, borderRadius: 8, color: quotaEditTarget?.type === t ? "#fff" : COLORS.textSecondary, cursor: "pointer", fontSize: 11, textTransform: "capitalize" }}>{t}</button>
                   ))}
                 </div>
@@ -1456,13 +2044,10 @@ export default function SalesPage() {
                 <select value={quotaEditTarget?.id || ""} onChange={(e) => {
                   const val = e.target.value;
                   if (!val) { setQuotaEditTarget(null); return; }
-                  // Determine what was selected
                   const rep = salesReps.find(r => r.id === val);
                   const zone = zones.find(z => z.id === val);
-                  const div = divisions.find(d => d.id === val);
                   if (rep) setQuotaEditTarget({ type: rep.role === "team_lead" ? "team" : "individual", id: rep.id, name: rep.name });
-                  else if (zone) setQuotaEditTarget({ type: "zone", id: zone.id, name: zone.name });
-                  else if (div) setQuotaEditTarget({ type: "division", id: div.id, name: div.name });
+                  else if (zone) setQuotaEditTarget({ type: "division", id: zone.id, name: zone.name });
                 }} style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary }}>
                   <option value="">Select...</option>
                   <optgroup label="Sales Reps">
@@ -1471,11 +2056,8 @@ export default function SalesPage() {
                   <optgroup label="Team Leads">
                     {salesReps.filter(r => r.role === "team_lead").map(r => <option key={r.id} value={r.id}>{r.name} (Team)</option>)}
                   </optgroup>
-                  <optgroup label="Zones">
-                    {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                  </optgroup>
                   <optgroup label="Divisions">
-                    {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                   </optgroup>
                 </select>
               </div>
@@ -1613,8 +2195,7 @@ export default function SalesPage() {
               <button onClick={() => setSelectedRep(null)} style={{ background: "none", border: "none", color: COLORS.textSecondary, fontSize: 24, cursor: "pointer" }}>×</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 16 }}>
-              <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10 }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Zone</div><div style={{ fontWeight: 600 }}>{getZoneName(selectedRep.zone_id)}</div></div>
-              <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10 }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Division</div><div style={{ fontWeight: 600 }}>{getDivisionName(selectedRep.division_id)}</div></div>
+              <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10 }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Division</div><div style={{ fontWeight: 600 }}>{getDivisionName(selectedRep.zone_id)}</div></div>
               <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10 }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Supervisor</div><div style={{ fontWeight: 600 }}>{getSupervisorName(selectedRep.supervisor_id)}</div></div>
               <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10 }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>City</div><div style={{ fontWeight: 600 }}>{selectedRep.city || "—"}</div></div>
             </div>
@@ -1627,7 +2208,7 @@ export default function SalesPage() {
                     <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, textAlign: "center" }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Signups</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonBlue }}>{perf.total}</div></div>
                     <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, textAlign: "center" }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Commission</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(perf.commission)}</div></div>
                     <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, textAlign: "center" }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Ad Sales</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonOrange }}>{formatMoney(perf.adSpend)}</div></div>
-                    <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, textAlign: "center" }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Bonus</div><div style={{ fontSize: 18, fontWeight: 800, color: perf.total >= commissionRates.quotas.bonus_eligibility ? COLORS.neonGreen : COLORS.neonOrange }}>{perf.total >= commissionRates.quotas.bonus_eligibility ? "Eligible" : `Need ${commissionRates.quotas.bonus_eligibility - perf.total}`}</div></div>
+                    <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, textAlign: "center" }}><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Bonus</div><div style={{ fontSize: 18, fontWeight: 800, color: perf.total >= getRepBonusThreshold(selectedRep) ? COLORS.neonGreen : COLORS.neonOrange }}>{perf.total >= getRepBonusThreshold(selectedRep) ? "Eligible" : `Need ${getRepBonusThreshold(selectedRep) - perf.total}`}</div></div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Recent Signups</div>
                   {repSignups.length === 0 ? <div style={{ color: COLORS.textSecondary, padding: 20, textAlign: "center" }}>No signups yet</div> : repSignups.map((s) => (
@@ -1745,14 +2326,10 @@ export default function SalesPage() {
           <span style={{ color: COLORS.textSecondary }}>to</span>
           <input type="date" value={salesFilters.dateTo} onChange={(e) => setSalesFilters({ ...salesFilters, dateTo: e.target.value })} style={{ padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 12 }} />
         </div>
-        {/* Zone dropdown - correct 8 zones */}
+        {/* Division dropdown */}
         <select value={salesFilters.zone} onChange={(e) => setSalesFilters({ ...salesFilters, zone: e.target.value })} style={{ padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 12 }}>
-          <option value="all">All Zones</option>
-          {divisions.map(d => (
-            <optgroup key={d.id} label={d.name}>
-              {zones.filter(z => z.division_id === d.id).map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-            </optgroup>
-          ))}
+          <option value="all">All Divisions</option>
+          {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
         </select>
         <select value={salesFilters.state} onChange={(e) => setSalesFilters({ ...salesFilters, state: e.target.value })} style={{ padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 12 }}>
           <option value="all">All States</option>
@@ -1763,7 +2340,7 @@ export default function SalesPage() {
           <SearchableSelect
             value={salesFilters.rep}
             onChange={(val) => setSalesFilters({ ...salesFilters, rep: val })}
-            options={actualSalesReps.map(r => ({ value: r.id, label: r.name, sub: getZoneName(r.zone_id) }))}
+            options={actualSalesReps.map(r => ({ value: r.id, label: r.name, sub: getDivisionName(r.zone_id) }))}
             placeholder="All Reps"
             searchPlaceholder="Search reps..."
           />
@@ -1834,15 +2411,15 @@ export default function SalesPage() {
                     />
                   </div>
 
-                  {/* Zone Filter */}
+                  {/* Division Filter */}
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Zone</label>
+                    <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Division</label>
                     <select
                       value={salesFilters.zone}
                       onChange={(e) => setSalesFilters({ ...salesFilters, zone: e.target.value })}
                       style={{ padding: "6px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textPrimary, fontSize: 12 }}
                     >
-                      <option value="all">All Zones</option>
+                      <option value="all">All Divisions</option>
                       {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                     </select>
                   </div>
@@ -1932,7 +2509,7 @@ export default function SalesPage() {
                     <strong style={{ color: COLORS.neonBlue }}>Active Filters:</strong>{" "}
                     {salesFilters.dateFrom && <span>From {formatDate(salesFilters.dateFrom)} • </span>}
                     {salesFilters.dateTo && <span>To {formatDate(salesFilters.dateTo)} • </span>}
-                    {salesFilters.zone !== "all" && <span>Zone: {zones.find(z => z.id === salesFilters.zone)?.name} • </span>}
+                    {salesFilters.zone !== "all" && <span>Division: {zones.find(z => z.id === salesFilters.zone)?.name} • </span>}
                     {salesFilters.state !== "all" && <span>State: {salesFilters.state} • </span>}
                     {salesFilters.rep !== "all" && <span>Rep: {salesReps.find(r => r.id === salesFilters.rep)?.name}</span>}
                   </div>
@@ -1944,8 +2521,8 @@ export default function SalesPage() {
                 {[
                   { label: "Total Commissions", value: formatMoney(totalCommissions), sub: periodLabel, color: COLORS.neonGreen },
                   { label: "Bonus Pool", value: formatMoney(bonusPool?.total_pool_cents || 0), sub: bonusPool?.quarter || "Q1 2026", color: COLORS.neonPurple },
-                  { label: "Team Signups", value: totalSignups, sub: `vs ${commissionRates.quotas.team_monthly} quota`, color: COLORS.neonBlue },
-                  { label: "Eligible for Bonus", value: `${eligibleReps.length}/${actualSalesReps.length}`, sub: `Hit ${commissionRates.quotas.bonus_eligibility}+ signups`, color: COLORS.neonYellow },
+                  { label: "Team Signups", value: totalSignups, sub: `vs ${Math.round(commissionRates.daily.team * 30)} quota`, color: COLORS.neonBlue },
+                  { label: "Eligible for Bonus", value: `${eligibleReps.length}/${actualSalesReps.length}`, sub: `Role-based thresholds`, color: COLORS.neonYellow },
                   { label: "Ad Spend Sold", value: formatMoney(totalAdSpend), sub: periodLabel, color: COLORS.neonOrange },
                   { label: "Surge Revenue", value: formatMoney(adCampaignRevenue.surge), sub: `${adCampaignRevenue.count} paid campaigns`, color: COLORS.neonRed || "#ff3131" },
                 ].map((stat, i) => (
@@ -1956,8 +2533,7 @@ export default function SalesPage() {
               {/* TEAM QUOTA PROGRESS - Matching Original Color Scheme */}
               <Card title={`🎯 Team Quota Progress (${periodLabel})`} style={{ marginBottom: 24 }} actions={<button onClick={() => setSalesTab("quotas")} style={{ padding: "6px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textSecondary, cursor: "pointer", fontSize: 11 }}>Manage Quotas →</button>}>
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span>Team Progress: <strong>{totalSignups}</strong> / {commissionRates.quotas.team_monthly} businesses</span><span style={{ fontWeight: 700, color: COLORS.neonGreen }}>{((totalSignups / commissionRates.quotas.team_monthly) * 100).toFixed(1)}%</span></div>
-                  <ProgressBar value={totalSignups} max={commissionRates.quotas.team_monthly} height={12} />
+                  {(() => { const teamMonthly = Math.round(commissionRates.daily.team * 30); return (<><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span>Team Progress: <strong>{totalSignups}</strong> / {teamMonthly} businesses</span><span style={{ fontWeight: 700, color: COLORS.neonGreen }}>{((totalSignups / teamMonthly) * 100).toFixed(1)}%</span></div><ProgressBar value={totalSignups} max={teamMonthly} height={12} /></>); })()}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(actualSalesReps.length || 1, 6)}, 1fr)`, gap: 12 }}>
                   {(() => {
@@ -1965,24 +2541,202 @@ export default function SalesPage() {
                     const repColors = ["#FF6B9D", "#00D4FF", "#39FF14", "#FFFF00", "#FF6B35", "#BF5FFF"];
                     return (salesFilters.rep === "all" ? actualSalesReps : actualSalesReps.filter((r) => r.id === salesFilters.rep)).slice(0, 6).map((rep, idx) => {
                       const perf = getRepPerformance(rep.id);
-                      const isEligible = perf.total >= commissionRates.quotas.bonus_eligibility;
+                      const bonusThreshold = getRepBonusThreshold(rep);
+                      const monthlyQuota = Math.round(getRepDailyQuota(rep) * 30);
+                      const isEligible = perf.total >= bonusThreshold;
                       const repColor = repColors[idx % repColors.length];
                       return (
                         <div key={rep.id} style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                             <div style={{ width: 40, height: 40, borderRadius: "50%", background: repColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#000" }}>{rep.avatar || rep.name.split(" ").map(w => w[0]).join("").slice(0,2)}</div>
-                            <div><div style={{ fontWeight: 600, fontSize: 13 }}>{rep.name.split(" ")[0]}</div><div style={{ fontSize: 10, color: isEligible ? COLORS.neonGreen : COLORS.textSecondary }}>{isEligible ? "✓ Eligible" : `Need ${commissionRates.quotas.bonus_eligibility - perf.total}`}</div></div>
+                            <div><div style={{ fontWeight: 600, fontSize: 13 }}>{rep.name.split(" ")[0]}</div><div style={{ fontSize: 10, color: isEligible ? COLORS.neonGreen : COLORS.textSecondary }}>{isEligible ? "✓ Eligible" : `Need ${bonusThreshold - perf.total}`}</div></div>
                           </div>
                           <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4, color: repColor }}>{perf.total}</div>
                           <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${Math.min(100, (perf.total / (rep.individual_quota || commissionRates.quotas.individual_monthly)) * 100)}%`, background: repColor, borderRadius: 100, transition: "width 0.5s" }} />
+                            <div style={{ height: "100%", width: `${Math.min(100, (perf.total / monthlyQuota) * 100)}%`, background: repColor, borderRadius: 100, transition: "width 0.5s" }} />
                           </div>
-                          <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>{perf.total}/{rep.individual_quota || commissionRates.quotas.individual_monthly} quota</div>
+                          <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>{perf.total}/{monthlyQuota} quota</div>
                         </div>
                       );
                     });
                   })()}
                 </div>
+              </Card>
+
+              {/* QUOTA ROLLUP: Division → State → County → Rep */}
+              <Card title="📊 Quota Rollup (Rep → County → State → Division)" style={{ marginBottom: 24 }} actions={
+                <div style={{ display: "flex", gap: 4, background: COLORS.darkBg, padding: 4, borderRadius: 6 }}>
+                  {(["division", "state", "county"] as const).map(v => (
+                    <button key={v} onClick={() => { setQuotaRollupView(v); setQuotaRollupDrill(null); }} style={{ padding: "6px 12px", borderRadius: 4, border: "none", cursor: "pointer", background: quotaRollupView === v ? COLORS.gradient1 : "transparent", color: quotaRollupView === v ? "#fff" : COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{v}</button>
+                  ))}
+                </div>
+              }>
+                {/* Drill-down breadcrumb */}
+                {quotaRollupDrill && (
+                  <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                    <button onClick={() => setQuotaRollupDrill(null)} style={{ color: COLORS.neonBlue, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>← Back</button>
+                    <span style={{ color: COLORS.textSecondary }}>Showing {quotaRollupDrill.type}s in</span>
+                    <span style={{ color: COLORS.neonPink, fontWeight: 700 }}>{quotaRollupDrill.parentName}</span>
+                  </div>
+                )}
+
+                {(() => {
+                  // Division view OR drilled into a division showing states
+                  if (quotaRollupView === "division" && !quotaRollupDrill) {
+                    const divData = Object.values(quotaRollup.byDivision).sort((a, b) => b.totalQuota - a.totalQuota);
+                    const totalAll = divData.reduce((s, d) => s + d.totalQuota, 0);
+                    return (
+                      <div style={{ display: "grid", gap: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", background: COLORS.darkBg, borderRadius: 8, fontWeight: 700, fontSize: 13 }}>
+                          <span>Total Company Quota</span>
+                          <span style={{ color: COLORS.neonGreen }}>{totalAll} businesses/mo</span>
+                        </div>
+                        {divData.map(d => (
+                          <div key={d.division.id} style={{ padding: 14, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => setQuotaRollupDrill({ type: "state", parentId: d.division.id, parentName: d.division.name })}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <div>
+                                <span style={{ fontWeight: 700, fontSize: 14 }}>{d.division.name}</span>
+                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{d.stateCount} states · {d.countyCount} counties · {d.repCount} reps</span>
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: 18, color: COLORS.neonPurple }}>{d.totalQuota}</span>
+                            </div>
+                            <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: totalAll ? `${(d.totalQuota / totalAll) * 100}%` : "0%", background: COLORS.gradient1, borderRadius: 100 }} />
+                            </div>
+                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Click to drill into states →</div>
+                          </div>
+                        ))}
+                        {divData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet. Assign reps to counties to see rollup data.</div>}
+                      </div>
+                    );
+                  }
+
+                  // Drilled into a division → show states
+                  if (quotaRollupDrill?.type === "state") {
+                    const zone = zones.find(z => z.division_id === quotaRollupDrill.parentId);
+                    const statesInDiv = zone ? zone.states : [];
+                    const stateData = statesInDiv.map(st => quotaRollup.byState[st]).filter(Boolean).sort((a, b) => b.totalQuota - a.totalQuota);
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {stateData.map(st => (
+                          <div key={st.state} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => setQuotaRollupDrill({ type: "county", parentId: st.state, parentName: st.state })}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <span style={{ fontWeight: 700, fontSize: 14 }}>{st.state}</span>
+                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{st.countyCount} counties · {st.repCount} reps</span>
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonGreen }}>{st.totalQuota}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Click to drill into counties →</div>
+                          </div>
+                        ))}
+                        {stateData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned in this division yet.</div>}
+                      </div>
+                    );
+                  }
+
+                  // Drilled into a state → show counties
+                  if (quotaRollupDrill?.type === "county") {
+                    const countyData = Object.values(quotaRollup.byCounty).filter(c => c.county.state === quotaRollupDrill.parentId).sort((a, b) => b.totalQuota - a.totalQuota);
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {countyData.map(c => (
+                          <div key={c.county.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => setQuotaRollupDrill({ type: "rep", parentId: c.county.id, parentName: c.county.name + ", " + c.county.state })}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <span style={{ fontWeight: 700, fontSize: 14 }}>{c.county.name}</span>
+                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{c.repCount} reps</span>
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonBlue }}>{c.totalQuota}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Click to see reps →</div>
+                          </div>
+                        ))}
+                        {countyData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned in this state yet.</div>}
+                      </div>
+                    );
+                  }
+
+                  // Drilled into a county → show individual reps
+                  if (quotaRollupDrill?.type === "rep") {
+                    const countyEntry = quotaRollup.byCounty[quotaRollupDrill.parentId];
+                    const reps = countyEntry?.reps || [];
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {reps.map(rep => {
+                          const perf = filteredSignups.filter(s => s.rep_id === rep.id).length;
+                          const quota = Math.round(getRepDailyQuota(rep) * 30);
+                          const pct = quota > 0 ? (perf / quota) * 100 : 0;
+                          return (
+                            <div key={rep.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: COLORS.neonPink, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, color: "#000" }}>{rep.avatar || rep.name.split(" ").map(w => w[0]).join("").slice(0, 2)}</div>
+                                  <div>
+                                    <div style={{ fontWeight: 700, fontSize: 13 }}>{rep.name}</div>
+                                    <div style={{ fontSize: 10, color: COLORS.textSecondary }}>{rep.city || "—"}</div>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontWeight: 800, fontSize: 16, color: pct >= 100 ? COLORS.neonGreen : COLORS.neonOrange }}>{perf}/{quota}</div>
+                                  <div style={{ fontSize: 10, color: COLORS.textSecondary }}>{pct.toFixed(0)}% of quota</div>
+                                </div>
+                              </div>
+                              <div style={{ height: 5, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: pct >= 100 ? COLORS.neonGreen : COLORS.neonOrange, borderRadius: 100 }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {reps.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps in this county.</div>}
+                      </div>
+                    );
+                  }
+
+                  // State view (flat, no drill)
+                  if (quotaRollupView === "state") {
+                    const stateData = Object.values(quotaRollup.byState).sort((a, b) => b.totalQuota - a.totalQuota);
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {stateData.map(st => (
+                          <div key={st.state} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => { setQuotaRollupView("state"); setQuotaRollupDrill({ type: "county", parentId: st.state, parentName: st.state }); }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <span style={{ fontWeight: 700 }}>{st.state}</span>
+                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{st.countyCount} counties · {st.repCount} reps</span>
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonGreen }}>{st.totalQuota}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {stateData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet.</div>}
+                      </div>
+                    );
+                  }
+
+                  // County view (flat, no drill)
+                  if (quotaRollupView === "county") {
+                    const countyData = Object.values(quotaRollup.byCounty).sort((a, b) => b.totalQuota - a.totalQuota);
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {countyData.map(c => (
+                          <div key={c.county.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => { setQuotaRollupView("county"); setQuotaRollupDrill({ type: "rep", parentId: c.county.id, parentName: c.county.name + ", " + c.county.state }); }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div>
+                                <span style={{ fontWeight: 700 }}>{c.county.name}</span>
+                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{c.county.state} · {c.repCount} reps</span>
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonBlue }}>{c.totalQuota}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {countyData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet.</div>}
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
               </Card>
 
               {/* RECENT SIGNUPS + COMMISSION RATES & QUOTAS */}
@@ -2000,7 +2754,7 @@ export default function SalesPage() {
                 </Card>
 
                 {/* Commission Rates & Quotas */}
-                <Card title="💰 Commission Rates & Quotas" actions={<button onClick={() => setShowEditRatesModal(true)} style={{ padding: "6px 12px", background: COLORS.gradient1, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Edit Rates</button>}>
+                <Card title="💰 Commission Rates & Quotas">
                   <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, marginBottom: 12 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonGreen, marginBottom: 10, textTransform: "uppercase" }}>Individual Commissions</div>
                     {[{ label: "Basic Signup", value: formatMoney(commissionRates.individual.basic_signup) }, { label: "Premium Signup", value: formatMoney(commissionRates.individual.premium_signup) }, { label: "Ad Spend (per $100)", value: formatMoney(commissionRates.individual.advertising_per_100) }].map((item) => (
@@ -2008,9 +2762,23 @@ export default function SalesPage() {
                     ))}
                   </div>
                   <div style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonPurple, marginBottom: 10, textTransform: "uppercase" }}>Quotas</div>
-                    {[{ label: "Individual Monthly", value: commissionRates.quotas.individual_monthly }, { label: "Bonus Eligibility", value: `${commissionRates.quotas.bonus_eligibility}+` }, { label: "Team Monthly", value: commissionRates.quotas.team_monthly }].map((item) => (
-                      <div key={item.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ color: COLORS.textSecondary }}>{item.label}</span><span style={{ fontWeight: 700, color: COLORS.neonPurple }}>{item.value}</span></div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonPurple, marginBottom: 10, textTransform: "uppercase" }}>Quotas (Daily → Monthly)</div>
+                    {[
+                      { label: "Sales Rep", daily: commissionRates.daily.sales_rep },
+                      { label: "Team Lead", daily: commissionRates.daily.team_lead },
+                      { label: "In Training", daily: commissionRates.daily.in_training },
+                      { label: "Rep Bonus Min", daily: commissionRates.daily.rep_bonus },
+                      { label: "Lead Bonus Min", daily: commissionRates.daily.lead_bonus },
+                      { label: "Training Bonus Min", daily: commissionRates.daily.training_bonus },
+                      { label: "Team", daily: commissionRates.daily.team },
+                    ].map((item) => (
+                      <div key={item.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                        <span style={{ color: COLORS.textSecondary }}>{item.label}</span>
+                        <span>
+                          <span style={{ fontWeight: 700, color: COLORS.neonPurple }}>{item.daily % 1 === 0 ? item.daily : item.daily.toFixed(2)}/day</span>
+                          <span style={{ color: COLORS.textSecondary, marginLeft: 8, fontSize: 11 }}>({Math.round(item.daily * 30)}/mo)</span>
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </Card>
@@ -2154,7 +2922,7 @@ export default function SalesPage() {
               <Card title="🌎 Geographic Totals Summary" style={{ marginBottom: 24 }} actions={
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 4, background: COLORS.darkBg, padding: 4, borderRadius: 6 }}>
-                    {["division", "zone", "state", "city"].map(v => (
+                    {["division", "state", "city"].map(v => (
                       <button key={v} onClick={() => setGeoSummaryView(v)} style={{ padding: "6px 12px", borderRadius: 4, border: "none", cursor: "pointer", background: geoSummaryView === v ? COLORS.gradient1 : "transparent", color: geoSummaryView === v ? "#fff" : COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{v}</button>
                     ))}
                   </div>
@@ -2222,56 +2990,6 @@ export default function SalesPage() {
                               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "6px 0" }}>
                                 <span style={{ color: COLORS.textSecondary }}>Ad Spend</span>
                                 <span style={{ fontWeight: 600, color: COLORS.neonBlue }}>{formatMoney(div.totalAdSpend)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  } else if (geoSummaryView === "zone") {
-                    const zoneData = zones.map(z => {
-                      const zoneSignups = filteredSignups.filter(s => s.zone_id === z.id);
-                      const signupCount = zoneSignups.length;
-                      const basicCount = zoneSignups.filter(s => s.plan === "basic").length;
-                      const premiumCount = zoneSignups.filter(s => s.plan === "premium").length;
-                      const totalRevenue = zoneSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0);
-                      const totalCommission = zoneSignups.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
-                      const totalAdSpend = zoneSignups.reduce((sum, s) => sum + (s.ad_spend_cents || 0), 0);
-                      const repCount = salesReps.filter(r => r.zone_id === z.id && r.status === "active").length;
-                      const divName = divisions.find(d => d.id === z.division_id)?.name || "—";
-                      return { name: z.name, divName, signupCount, basicCount, premiumCount, totalRevenue, totalCommission, totalAdSpend, repCount };
-                    }).sort((a, b) => b.totalRevenue - a.totalRevenue)
-                    .filter(z => z.name.toLowerCase().includes(geoSearchQuery.toLowerCase()));
-
-                    return (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-                        {zoneData.length === 0 ? (
-                          <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No zones found matching "{geoSearchQuery}"</div>
-                        ) : zoneData.map((zone, i) => (
-                          <div key={i} style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                              <div>
-                                <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary }}>{zone.name}</div>
-                                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>{zone.divName} • {zone.repCount} Reps</div>
-                              </div>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.neonPurple }}>{formatMoney(zone.totalRevenue)}</div>
-                            </div>
-                            <div style={{ display: "grid", gap: 8 }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "6px 0", borderBottom: "1px solid " + COLORS.cardBorder }}>
-                                <span style={{ color: COLORS.textSecondary }}>Total Signups</span>
-                                <span style={{ fontWeight: 600 }}>{zone.signupCount}</span>
-                              </div>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "6px 0", borderBottom: "1px solid " + COLORS.cardBorder }}>
-                                <span style={{ color: COLORS.textSecondary }}>Basic / Premium</span>
-                                <span style={{ fontWeight: 600 }}>{zone.basicCount} / {zone.premiumCount}</span>
-                              </div>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "6px 0", borderBottom: "1px solid " + COLORS.cardBorder }}>
-                                <span style={{ color: COLORS.textSecondary }}>Commission</span>
-                                <span style={{ fontWeight: 600, color: COLORS.neonGreen }}>{formatMoney(zone.totalCommission)}</span>
-                              </div>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "6px 0" }}>
-                                <span style={{ color: COLORS.textSecondary }}>Ad Spend</span>
-                                <span style={{ fontWeight: 600, color: COLORS.neonBlue }}>{formatMoney(zone.totalAdSpend)}</span>
                               </div>
                             </div>
                           </div>
@@ -2391,25 +3109,18 @@ export default function SalesPage() {
                 })()}
               </Card>
 
-              {/* TOP LOCATIONS BY REVENUE - 4 Small Cards */}
+              {/* TOP LOCATIONS BY REVENUE - 3 Small Cards */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                   <span>💵</span> Top Locations by Revenue (Package + Ad Sales)
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {(() => {
                     // Calculate totals by division
                     const divTotals = divisions.map(d => {
                       const divSignups = filteredSignups.filter(s => s.division_id === d.id);
                       const revenue = divSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0);
                       return { name: d.name, revenue };
-                    }).sort((a, b) => b.revenue - a.revenue)[0] || { name: "—", revenue: 0 };
-                    
-                    // Calculate totals by zone
-                    const zoneTotals = zones.map(z => {
-                      const zoneSignups = filteredSignups.filter(s => s.zone_id === z.id);
-                      const revenue = zoneSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0);
-                      return { name: z.name, revenue };
                     }).sort((a, b) => b.revenue - a.revenue)[0] || { name: "—", revenue: 0 };
                     
                     // Calculate totals by state
@@ -2432,7 +3143,6 @@ export default function SalesPage() {
                     
                     return [
                       { label: "Top Division", name: divTotals.name, value: divTotals.revenue, color: COLORS.neonBlue },
-                      { label: "Top Zone", name: zoneTotals.name, value: zoneTotals.revenue, color: COLORS.neonGreen },
                       { label: "Top State", name: topState[0], value: topState[1] as number, color: COLORS.neonOrange },
                       { label: "Top City", name: topCity[0], value: topCity[1] as number, color: COLORS.neonPurple },
                     ].map((item, i) => (
@@ -2446,12 +3156,12 @@ export default function SalesPage() {
                 </div>
               </div>
 
-              {/* TOP LOCATIONS BY SALES SPEND - 4 Small Cards */}
+              {/* TOP LOCATIONS BY SALES SPEND - 3 Small Cards */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                   <span>💰</span> Top Locations by Sales Spend (Commission + Bonus)
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {(() => {
                     // For commission, use the commission_cents from signups
                     // For bonus, we'll estimate based on pool share
@@ -2461,13 +3171,6 @@ export default function SalesPage() {
                       const divSignups = filteredSignups.filter(s => s.division_id === d.id);
                       const commission = divSignups.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
                       return { name: d.name, spend: commission };
-                    }).sort((a, b) => b.spend - a.spend)[0] || { name: "—", spend: 0 };
-                    
-                    // Calculate by zone
-                    const zoneCommission = zones.map(z => {
-                      const zoneSignups = filteredSignups.filter(s => s.zone_id === z.id);
-                      const commission = zoneSignups.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
-                      return { name: z.name, spend: commission };
                     }).sort((a, b) => b.spend - a.spend)[0] || { name: "—", spend: 0 };
                     
                     // Calculate by state
@@ -2490,7 +3193,6 @@ export default function SalesPage() {
                     
                     return [
                       { label: "Top Division", name: divCommission.name, value: divCommission.spend, color: "#FF6B9D" },
-                      { label: "Top Zone", name: zoneCommission.name, value: zoneCommission.spend, color: "#4ECDC4" },
                       { label: "Top State", name: topStateComm[0], value: topStateComm[1] as number, color: COLORS.neonYellow },
                       { label: "Top City", name: topCityComm[0], value: topCityComm[1] as number, color: "#95E1D3" },
                     ].map((item, i) => (
@@ -2511,7 +3213,6 @@ export default function SalesPage() {
                     <thead>
                       <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
                         <th style={{ textAlign: "left", padding: "12px 8px", color: COLORS.neonBlue, fontWeight: 600 }}>Division</th>
-                        <th style={{ textAlign: "left", padding: "12px 8px", color: COLORS.neonGreen, fontWeight: 600 }}>Zone</th>
                         <th style={{ textAlign: "left", padding: "12px 8px", color: COLORS.neonOrange, fontWeight: 600 }}>State</th>
                         <th style={{ textAlign: "left", padding: "12px 8px", color: COLORS.neonPurple, fontWeight: 600 }}>City</th>
                         <th style={{ textAlign: "right", padding: "12px 8px", color: COLORS.textSecondary, fontWeight: 600 }}>Basic</th>
@@ -2524,13 +3225,12 @@ export default function SalesPage() {
                     <tbody>
                       {(() => {
                         // Group signups by city for the most granular view
-                        const rows: Array<{ division: string; zone: string; state: string; city: string; basic: number; premium: number; packageAmt: number; adSpend: number; total: number }> = [];
-                        
+                        const rows: Array<{ division: string; state: string; city: string; basic: number; premium: number; packageAmt: number; adSpend: number; total: number }> = [];
+
                         filteredSignups.forEach(s => {
-                          const division = divisions.find(d => d.id === s.division_id);
                           const zone = zones.find(z => z.id === s.zone_id);
-                          const key = `${s.division_id}-${s.zone_id}-${s.state}-${s.city}`;
-                          const existingIdx = rows.findIndex(r => `${divisions.find(d => d.name === r.division)?.id}-${zones.find(z => z.name === r.zone)?.id}-${r.state}-${r.city}` === key);
+                          const key = `${s.zone_id}-${s.state}-${s.city}`;
+                          const existingIdx = rows.findIndex(r => `${zones.find(z => z.name === r.division)?.id}-${r.state}-${r.city}` === key);
                           
                           const packageAmt = s.plan === "basic" ? 2500 : 10000; // Commission for package
                           
@@ -2542,8 +3242,7 @@ export default function SalesPage() {
                             rows[existingIdx].total += packageAmt + (s.ad_spend_cents || 0);
                           } else {
                             rows.push({
-                              division: division?.name || "—",
-                              zone: zone?.name || "—",
+                              division: zone?.name || "—",
                               state: s.state || "—",
                               city: s.city || "—",
                               basic: s.plan === "basic" ? 1 : 0,
@@ -2558,7 +3257,6 @@ export default function SalesPage() {
                         return rows.sort((a, b) => b.total - a.total).slice(0, 15).map((row, i) => (
                           <tr key={i} style={{ borderBottom: "1px solid " + COLORS.cardBorder, background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
                             <td style={{ padding: "10px 8px", fontWeight: 600, color: COLORS.neonBlue }}>{row.division}</td>
-                            <td style={{ padding: "10px 8px", color: COLORS.neonGreen }}>{row.zone}</td>
                             <td style={{ padding: "10px 8px", color: COLORS.neonOrange }}>{row.state}</td>
                             <td style={{ padding: "10px 8px", color: COLORS.neonPurple }}>{row.city}</td>
                             <td style={{ textAlign: "right", padding: "10px 8px" }}>{row.basic}</td>
@@ -2572,7 +3270,7 @@ export default function SalesPage() {
                     </tbody>
                     <tfoot>
                       <tr style={{ background: "rgba(138,43,226,0.1)", borderTop: "2px solid " + COLORS.cardBorder }}>
-                        <td colSpan={4} style={{ padding: "12px 8px", fontWeight: 700 }}>TOTALS</td>
+                        <td colSpan={3} style={{ padding: "12px 8px", fontWeight: 700 }}>TOTALS</td>
                         <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700 }}>{filteredSignups.filter(s => s.plan === "basic").length}</td>
                         <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700 }}>{filteredSignups.filter(s => s.plan === "premium").length}</td>
                         <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(filteredSignups.reduce((sum, s) => sum + (s.plan === "basic" ? 2500 : 10000), 0))}</td>
@@ -2640,17 +3338,139 @@ export default function SalesPage() {
               </div>
             }>
               {salesReps.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No sales team members</div> : (
-                <DataTable columns={[
-                  { key: "name", label: "Name", render: (v: unknown, row: Record<string, unknown>) => { const r = row as unknown as SalesRep; return <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Avatar name={String(v)} initials={r.avatar} /><div><div style={{ fontWeight: 600 }}>{String(v)}</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>{r.email}</div></div></div>; } },
-                  { key: "role", label: "Role", render: (v: unknown) => <span style={{ fontSize: 11 }}>{ROLE_LABELS[String(v)] || String(v)}</span> },
-                  { key: "zone_id", label: "Zone", render: (v: unknown) => getZoneName(String(v)) },
-                  { key: "city", label: "City", render: (v: unknown) => (v as string) || "—" },
-                  { key: "supervisor_id", label: "Supervisor", render: (v: unknown) => getSupervisorName(v as string | null) },
-                  { key: "id", label: "Signups", render: (v: unknown) => { const rep = salesReps.find(r => r.id === String(v)); return rep?.role === "sales_rep" ? getRepPerformance(String(v)).total : "—"; } },
-                  { key: "id", label: "Commission", render: (v: unknown) => { const rep = salesReps.find(r => r.id === String(v)); return rep?.role === "sales_rep" ? <span style={{ color: COLORS.neonGreen, fontWeight: 700 }}>{formatMoney(getRepPerformance(String(v)).commission)}</span> : "—"; } },
-                  { key: "status", label: "Status", render: (v: unknown) => <Badge status={String(v)} /> },
-                  { key: "id", label: "", render: (v: unknown) => { const rep = salesReps.find(r => r.id === String(v)); return rep ? <button onClick={() => setSelectedRep(rep)} style={{ padding: "6px 14px", background: COLORS.gradient1, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>View</button> : null; } },
-                ]} data={salesReps} />
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
+                        {["Name", "Role", "Division", "State", "County", "City", "Supervisor", "Daily Quota", "Signups", "Bonus", "Status", ""].map(h => (
+                          <th key={h} style={{ textAlign: "left", padding: "12px 8px", color: COLORS.textSecondary, fontWeight: 600, fontSize: 11, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salesReps.map(rep => {
+                        const isEditing = editingRepId === rep.id;
+                        const countyName = rep.county_id ? counties.find(c => c.id === rep.county_id)?.name || "—" : "—";
+                        return (
+                          <tr key={rep.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                            <td style={{ padding: "10px 8px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <Avatar name={rep.name} initials={rep.avatar} />
+                                <div><div style={{ fontWeight: 600 }}>{rep.name}</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>{rep.email}</div></div>
+                              </div>
+                            </td>
+                            <td style={{ padding: "10px 8px" }}>
+                              {isEditing ? (
+                                <select value={editRepData.role || rep.role} onChange={(e) => setEditRepData({ ...editRepData, role: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11 }}>
+                                  {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                </select>
+                              ) : <span style={{ fontSize: 11 }}>{ROLE_LABELS[rep.role] || rep.role}</span>}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {isEditing ? (
+                                <select value={editRepData.zone_id ?? rep.zone_id ?? ""} onChange={(e) => { const z = zones.find(zn => zn.id === e.target.value); setEditRepData({ ...editRepData, zone_id: e.target.value, division_id: z?.division_id || null, state: "", county_id: "" }); }} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, maxWidth: 120 }}>
+                                  <option value="">—</option>
+                                  {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                                </select>
+                              ) : getDivisionName(rep.zone_id)}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {isEditing ? (
+                                <select value={editRepData.state ?? rep.state ?? ""} onChange={(e) => setEditRepData({ ...editRepData, state: e.target.value, county_id: "" })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, maxWidth: 80 }}>
+                                  <option value="">—</option>
+                                  {(() => { const zId = editRepData.zone_id ?? rep.zone_id; const zone = zones.find(z => z.id === zId); return (zone ? zone.states : [...new Set(counties.map(c => c.state))].sort()).map(s => <option key={s} value={s}>{s}</option>); })()}
+                                </select>
+                              ) : (rep.state || "—")}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {isEditing ? (
+                                <select value={editRepData.county_id ?? rep.county_id ?? ""} onChange={(e) => setEditRepData({ ...editRepData, county_id: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, maxWidth: 130 }} disabled={!(editRepData.state ?? rep.state)}>
+                                  <option value="">—</option>
+                                  {counties.filter(c => c.state === (editRepData.state ?? rep.state)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                              ) : countyName}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {isEditing ? (
+                                <input value={editRepData.city ?? rep.city ?? ""} onChange={(e) => setEditRepData({ ...editRepData, city: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, width: 80 }} />
+                              ) : (rep.city || "—")}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {isEditing ? (
+                                <select value={editRepData.supervisor_id ?? rep.supervisor_id ?? ""} onChange={(e) => setEditRepData({ ...editRepData, supervisor_id: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, maxWidth: 120 }}>
+                                  <option value="">—</option>
+                                  {salesReps.filter(r => r.status === "active" && r.id !== rep.id).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                </select>
+                              ) : getSupervisorName(rep.supervisor_id)}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {FIELD_ROLES.includes(rep.role) ? (() => {
+                                const q = getRepDailyQuota(rep);
+                                const hasOverride = rep.individual_quota != null;
+                                if (isEditing && (rep.role === "team_lead" || rep.role === "in_training")) {
+                                  return (
+                                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={editRepData.individual_quota_str}
+                                        onChange={(e) => { const val = e.target.value; if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) setEditRepData({ ...editRepData, individual_quota_str: val }); }}
+                                        placeholder={String(rep.role === "team_lead" ? commissionRates.daily.team_lead : commissionRates.daily.in_training)}
+                                        style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, width: 50 }}
+                                      />
+                                      <span style={{ fontSize: 9, color: COLORS.textSecondary }}>blank = global</span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <span style={{ fontWeight: 700, color: COLORS.neonPurple }}>
+                                    {q % 1 === 0 ? q.toFixed(0) : q.toFixed(2)}
+                                    {hasOverride && rep.role !== "sales_rep" && <span style={{ fontSize: 9, color: COLORS.neonOrange, marginLeft: 4 }}>override</span>}
+                                  </span>
+                                );
+                              })() : "—"}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {rep.role === "sales_rep" ? getRepPerformance(rep.id).total : "—"}
+                            </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                              {(() => {
+                                if (!FIELD_ROLES.includes(rep.role)) return "—";
+                                const perf = getRepPerformance(rep.id);
+                                const bonusDaily = getRepBonusDaily(rep.role);
+                                const threshold = Math.round(bonusDaily * 30);
+                                const isEligible = perf.total >= threshold;
+                                return isEligible
+                                  ? <span style={{ color: COLORS.neonGreen, fontWeight: 700 }}>✓ Eligible</span>
+                                  : <span style={{ color: COLORS.textSecondary }}>Need {threshold - perf.total} more</span>;
+                              })()}
+                            </td>
+                            <td style={{ padding: "10px 8px" }}>
+                              {isEditing ? (
+                                <select value={editRepData.status ?? rep.status} onChange={(e) => setEditRepData({ ...editRepData, status: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11 }}>
+                                  {["active", "inactive", "terminated"].map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              ) : <Badge status={rep.status} />}
+                            </td>
+                            <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                              {isEditing ? (
+                                <div style={{ display: "flex", gap: 4 }}>
+                                  <button onClick={() => handleSaveRepEdit(rep.id)} style={{ padding: "5px 10px", background: COLORS.neonGreen, border: "none", borderRadius: 4, color: "#000", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>Save</button>
+                                  <button onClick={() => setEditingRepId(null)} style={{ padding: "5px 10px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textSecondary, cursor: "pointer", fontSize: 10 }}>Cancel</button>
+                                </div>
+                              ) : (
+                                <div style={{ display: "flex", gap: 4 }}>
+                                  <button onClick={() => { setEditingRepId(rep.id); setEditRepData({ role: rep.role, zone_id: rep.zone_id, state: rep.state, county_id: rep.county_id, city: rep.city, supervisor_id: rep.supervisor_id, individual_quota_str: rep.individual_quota != null ? String(rep.individual_quota) : "", status: rep.status } as Partial<SalesRep> & { individual_quota_str: string }); }} style={{ padding: "5px 10px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.neonBlue, cursor: "pointer", fontSize: 10, fontWeight: 600 }}>Edit</button>
+                                  <button onClick={() => setSelectedRep(rep)} style={{ padding: "5px 10px", background: COLORS.gradient1, border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>View</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </Card>
           )}
@@ -2708,15 +3528,15 @@ export default function SalesPage() {
                     />
                   </div>
 
-                  {/* Zone Filter */}
+                  {/* Division Filter */}
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Zone</label>
+                    <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Division</label>
                     <select
                       value={signupFilters.zone}
                       onChange={(e) => setSignupFilters({ ...signupFilters, zone: e.target.value })}
                       style={{ width: "100%", padding: "10px 14px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
                     >
-                      <option value="all">All Zones</option>
+                      <option value="all">All Divisions</option>
                       {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
                     </select>
                   </div>
@@ -2770,7 +3590,7 @@ export default function SalesPage() {
                     <DataTable columns={[
                       { key: "business_name", label: "Business", render: (v: unknown) => String(v) || "—" },
                       { key: "rep_id", label: "Sales Rep", render: (v: unknown) => salesReps.find((r) => r.id === String(v))?.name || "?" },
-                      { key: "zone_id", label: "Zone", render: (v: unknown) => getZoneName(String(v)) },
+                      { key: "zone_id", label: "Division", render: (v: unknown) => getDivisionName(String(v)) },
                       { key: "plan", label: "Plan", render: (v: unknown) => <Badge status={String(v)} /> },
                       { key: "commission_cents", label: "Commission", render: (v: unknown) => <span style={{ color: COLORS.neonGreen, fontWeight: 700 }}>+{formatMoney(Number(v))}</span> },
                       { key: "signed_at", label: "Date", render: (v: unknown) => formatDate(String(v)) },
@@ -2867,7 +3687,7 @@ export default function SalesPage() {
 
               {/* ELIGIBLE FOR BONUS SECTION */}
               <Card title="✓ Eligible for Bonus" style={{ marginBottom: 24 }}>
-                {eligibleReps.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No reps have reached the bonus eligibility threshold ({commissionRates.quotas.bonus_eligibility}+ signups) yet</div> : (
+                {eligibleReps.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No reps have reached the bonus eligibility threshold yet</div> : (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                     {eligibleReps.map((rep) => {
                       const perf = getRepPerformance(rep.id);
@@ -2888,8 +3708,9 @@ export default function SalesPage() {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
                       {notYetEligibleReps.map((rep) => {
                         const perf = getRepPerformance(rep.id);
-                        const need = commissionRates.quotas.bonus_eligibility - perf.total;
-                        return <span key={rep.id} style={{ fontSize: 13 }}><strong>{rep.name}:</strong> {perf.total}/{commissionRates.quotas.bonus_eligibility} (need {need} more)</span>;
+                        const threshold = getRepBonusThreshold(rep);
+                        const need = threshold - perf.total;
+                        return <span key={rep.id} style={{ fontSize: 13 }}><strong>{rep.name}:</strong> {perf.total}/{threshold} (need {need} more)</span>;
                       })}
                     </div>
                   </div>
@@ -3032,65 +3853,649 @@ export default function SalesPage() {
             </>
           )}
 
-          {/* QUOTAS TAB - with individual/team/zone controls */}
+          {/* QUOTAS TAB - Business Geography + State/City Breakdowns */}
           {salesTab === "quotas" && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
-                <Card title="🎯 Quota Settings" actions={<div style={{ display: "flex", gap: 8 }}><button onClick={() => setShowEditRatesModal(true)} style={{ padding: "6px 12px", background: COLORS.gradient1, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Edit Defaults</button><button onClick={() => setShowEditQuotaModal(true)} style={{ padding: "6px 12px", background: COLORS.gradient2, border: "none", borderRadius: 6, color: "#000", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>+ Override</button></div>}>
-                  {[{ label: "Default Individual Monthly", value: commissionRates.quotas.individual_monthly, color: COLORS.neonBlue }, { label: "Bonus Eligibility Threshold", value: `${commissionRates.quotas.bonus_eligibility}+`, color: COLORS.neonGreen }, { label: "Default Team Monthly", value: commissionRates.quotas.team_monthly, color: COLORS.neonPurple }].map((item) => (
-                    <div key={item.label} style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, marginBottom: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ fontSize: 14, fontWeight: 600 }}>{item.label}</span><span style={{ fontSize: 28, fontWeight: 800, color: item.color }}>{item.value}</span></div>
-                    </div>
-                  ))}
-                </Card>
-                <Card title="📊 Current Progress">
-                  {actualSalesReps.slice(0, 5).map((rep) => {
-                    const perf = getRepPerformance(rep.id);
-                    const quota = rep.individual_quota || commissionRates.quotas.individual_monthly;
-                    const pct = (perf.total / quota) * 100;
-                    const isEligible = perf.total >= commissionRates.quotas.bonus_eligibility;
-                    return (
-                      <div key={rep.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Avatar name={rep.name} initials={rep.avatar} /><span style={{ fontWeight: 600, fontSize: 13 }}>{rep.name}</span></div>
-                          <div><span style={{ fontSize: 16, fontWeight: 800, color: pct >= 100 ? COLORS.neonGreen : pct >= 50 ? COLORS.neonYellow : COLORS.neonOrange }}>{perf.total}</span><span style={{ color: COLORS.textSecondary, fontSize: 11 }}> / {quota}</span></div>
+              {/* Business Geography — Division cards + Summary wired from rep daily quotas */}
+              {(() => {
+                // Days elapsed this year (for YTD attainment)
+                const yearStart = new Date(new Date().getFullYear(), 0, 1);
+                const daysElapsedYTD = Math.max(1, Math.floor((Date.now() - yearStart.getTime()) / (1000 * 60 * 60 * 24)));
+                // YTD signups (all signups this year, not period-filtered)
+                const ytdSignups = signups.filter(s => new Date(s.signed_at) >= yearStart);
+
+                const divData = zones.map(z => {
+                  const divSignups = filteredSignups.filter(s => s.zone_id === z.id);
+                  const signupCount = divSignups.length;
+                  const ytdDivSignups = ytdSignups.filter(s => s.zone_id === z.id).length;
+                  const totalSales = divSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0);
+                  // Division daily quota from Settings (zone.goal), fallback to rep rollup
+                  const rollup = quotaRollup.byDivision[z.division_id];
+                  const dailyQuota = z.goal || rollup?.totalQuota || 0;
+                  const ytdTarget = dailyQuota * daysElapsedYTD;
+                  const ytdAttainment = ytdTarget > 0 ? (ytdDivSignups / ytdTarget) * 100 : 0;
+                  return { id: z.id, divisionId: z.division_id, name: z.name, states: z.states, dailyQuota, signupCount, ytdSignups: ytdDivSignups, ytdAttainment, totalSales, repCount: rollup?.repCount || 0, color: divisionColors[z.name] || COLORS.neonBlue };
+                });
+                const grandTotalDailyQuota = divData.reduce((sum, d) => sum + d.dailyQuota, 0);
+                const grandTotalSignups = divData.reduce((sum, d) => sum + d.signupCount, 0);
+                const grandTotalSales = divData.reduce((sum, d) => sum + d.totalSales, 0);
+
+                // State-level breakdown with quota from rollup
+                const stateRows = Object.values(quotaRollup.byState).map(st => {
+                  const zone = zones.find(z => z.states.includes(st.state));
+                  const divName = zone ? (divisions.find(d => d.id === zone.division_id)?.name || "—") : "—";
+                  const divColor = divisionColors[divName] || COLORS.neonBlue;
+                  const stSignups = filteredSignups.filter(s => s.state === st.state);
+                  return { state: st.state, division: divName, divColor, dailyQuota: st.totalQuota, repCount: st.repCount, countyCount: st.countyCount, signups: stSignups.length, sales: stSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0) };
+                }).sort((a, b) => b.dailyQuota - a.dailyQuota);
+                // Also include states with signups but no reps assigned
+                const statesWithReps = new Set(stateRows.map(r => r.state));
+                const signupOnlyStates: typeof stateRows = [];
+                filteredSignups.forEach(s => {
+                  if (s.state && !statesWithReps.has(s.state)) {
+                    const existing = signupOnlyStates.find(r => r.state === s.state);
+                    if (existing) { existing.signups++; existing.sales += (s.commission_cents || 0) + (s.ad_spend_cents || 0); }
+                    else {
+                      const zone = zones.find(z => z.states.includes(s.state!));
+                      const divName = zone ? (divisions.find(d => d.id === zone.division_id)?.name || "—") : "—";
+                      signupOnlyStates.push({ state: s.state, division: divName, divColor: divisionColors[divName] || COLORS.neonBlue, dailyQuota: 0, repCount: 0, countyCount: 0, signups: 1, sales: (s.commission_cents || 0) + (s.ad_spend_cents || 0) });
+                    }
+                  }
+                });
+                const allStateRows = [...stateRows, ...signupOnlyStates];
+
+                // County-level breakdown from rollup
+                const countyRows = Object.values(quotaRollup.byCounty).map(c => {
+                  const zone = zones.find(z => z.states.includes(c.county.state));
+                  const divName = zone ? (divisions.find(d => d.id === zone.division_id)?.name || "—") : "—";
+                  const divColor = divisionColors[divName] || COLORS.neonBlue;
+                  return { name: c.county.name, state: c.county.state, division: divName, divColor, dailyQuota: c.totalQuota, repCount: c.repCount };
+                }).sort((a, b) => b.dailyQuota - a.dailyQuota);
+
+                // City-level breakdown (from rep assignments + signups)
+                const cityMap: Record<string, { city: string; state: string; division: string; divColor: string; signups: number; sales: number; dailyQuota: number; repCount: number }> = {};
+                // Seed from rep assignments so cities appear even with 0 signups
+                salesReps.filter(r => r.city && r.status === "active").forEach(r => {
+                  const st = r.state || "";
+                  const key = `${r.city}|${st}`;
+                  if (!cityMap[key]) {
+                    const zone = zones.find(z => z.states.includes(st));
+                    const divName = zone ? (divisions.find(d => d.id === zone.division_id)?.name || "—") : "—";
+                    cityMap[key] = { city: r.city!, state: st, division: divName, divColor: divisionColors[divName] || COLORS.neonBlue, signups: 0, sales: 0, dailyQuota: 0, repCount: 0 };
+                  }
+                  cityMap[key].dailyQuota += getRepDailyQuota(r);
+                  cityMap[key].repCount++;
+                });
+                // Add signup data
+                filteredSignups.forEach(s => {
+                  const key = `${s.city || "Unknown"}|${s.state || ""}`;
+                  if (!cityMap[key]) {
+                    const zone = zones.find(z => z.id === s.zone_id);
+                    const divName = zone?.name || "Unknown";
+                    cityMap[key] = { city: s.city || "Unknown", state: s.state || "", division: divName, divColor: divisionColors[divName] || COLORS.neonBlue, signups: 0, sales: 0, dailyQuota: 0, repCount: 0 };
+                  }
+                  cityMap[key].signups++;
+                  cityMap[key].sales += (s.commission_cents || 0) + (s.ad_spend_cents || 0);
+                });
+                const cityRows = Object.values(cityMap).sort((a, b) => b.dailyQuota - a.dailyQuota || b.signups - a.signups);
+
+                return (
+                  <>
+                    {/* Division Cards + Summary Table */}
+                    <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 20, marginBottom: 24 }}>
+                      {/* Left: 3x2 Division Cards */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridTemplateRows: "repeat(2, 1fr)", gap: 14 }}>
+                        {divData.map((div, i) => {
+                          const fullNames = div.states.map(s => stateNames[s] || s);
+                          const half = Math.ceil(fullNames.length / 2);
+                          const col1 = fullNames.slice(0, half);
+                          const col2 = fullNames.slice(half);
+                          return (
+                            <div key={div.id} style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                              <div style={{ height: 3, background: div.color }} />
+                              <div style={{ padding: "16px 18px 14px", flex: 1, display: "flex", flexDirection: "column" }}>
+                                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+                                  <div style={{ fontSize: 20, fontWeight: 800, color: div.color, letterSpacing: "-0.02em" }}>{div.name}</div>
+                                  <div style={{ fontSize: 11, color: div.color, opacity: 0.5, fontWeight: 600 }}>#{i + 1}</div>
+                                </div>
+                                <div style={{ display: "flex", flex: 1, gap: 0 }}>
+                                  <div style={{ display: "flex", gap: 16, flex: 1, padding: "4px 0" }}>
+                                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>{col1.map((name, j) => <div key={j}>{name}</div>)}</div>
+                                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>{col2.map((name, j) => <div key={j}>{name}</div>)}</div>
+                                  </div>
+                                  <div style={{ width: 1, background: "rgba(255,255,255,0.08)", margin: "0 14px", alignSelf: "stretch" }} />
+                                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minWidth: 90, gap: 6 }}>
+                                    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "8px 12px", textAlign: "center", width: "100%" }}>
+                                      <div style={{ fontSize: 26, fontWeight: 900, color: COLORS.neonPurple, letterSpacing: "-0.03em" }}>{div.dailyQuota.toFixed(1)}</div>
+                                      <div style={{ fontSize: 9, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600 }}>daily quota</div>
+                                    </div>
+                                    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "8px 12px", textAlign: "center", width: "100%" }}>
+                                      <div style={{ fontSize: 26, fontWeight: 900, color: COLORS.neonBlue, letterSpacing: "-0.03em" }}>{div.repCount}</div>
+                                      <div style={{ fontSize: 9, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600 }}>reps</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* 6th slot: Total Quota card */}
+                        {divData.length < 6 && (() => {
+                          return (
+                            <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                              <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonPink + ", " + COLORS.neonBlue + ", " + COLORS.neonGreen + ")" }} />
+                              <div style={{ padding: "10px 18px 16px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 12 }}>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", textAlign: "center", letterSpacing: "-0.02em" }}>Company Totals</div>
+                                <div style={{ display: "flex", gap: 14, width: "100%" }}>
+                                <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "14px 18px", textAlign: "center", flex: 1 }}>
+                                  <div style={{ fontSize: 36, fontWeight: 900, color: COLORS.neonPurple, letterSpacing: "-0.03em" }}>{grandTotalDailyQuota.toFixed(1)}</div>
+                                  <div style={{ fontSize: 9, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginTop: 4 }}>daily quota</div>
+                                  <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }}>{(grandTotalDailyQuota * 30).toFixed(0)}/mo</div>
+                                </div>
+                                <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "14px 18px", textAlign: "center", flex: 1 }}>
+                                  <div style={{ fontSize: 36, fontWeight: 900, color: COLORS.neonBlue, letterSpacing: "-0.03em" }}>{divData.reduce((s, d) => s + d.repCount, 0)}</div>
+                                  <div style={{ fontSize: 9, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginTop: 4 }}>total reps</div>
+                                  <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }}>{divData.length} divisions</div>
+                                </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Right: Summary Table */}
+                      <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonPurple + ", " + COLORS.neonBlue + ")" }} />
+                        <div style={{ padding: "18px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, letterSpacing: "-0.01em" }}>Division Summary</div>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, flex: 1 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                <th style={{ textAlign: "left", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Division</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Signups</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Daily</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Wkly</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Mthly</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Qtrly</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>Yearly</th>
+                                <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>YTD %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {divData.map((div) => (
+                                <tr key={div.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                  <td style={{ padding: "10px 4px", fontWeight: 700, color: div.color, fontSize: 11 }}>{div.name}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", fontWeight: 700, color: "#fff" }}>{div.signupCount}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", color: COLORS.neonPurple, fontWeight: 700 }}>{div.dailyQuota.toFixed(1)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", color: "rgba(255,255,255,0.6)" }}>{(div.dailyQuota * 7).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", color: "rgba(255,255,255,0.6)" }}>{(div.dailyQuota * 30).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", color: "rgba(255,255,255,0.6)" }}>{(div.dailyQuota * 90).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", color: "rgba(255,255,255,0.6)" }}>{(div.dailyQuota * 365).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 4px", fontWeight: 800, fontSize: 12, color: div.ytdAttainment >= 100 ? COLORS.neonGreen : div.ytdAttainment >= 50 ? COLORS.neonYellow : div.dailyQuota > 0 ? "#ff6b6b" : "rgba(255,255,255,0.3)" }}>{div.dailyQuota > 0 ? div.ytdAttainment.toFixed(1) + "%" : "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              {(() => {
+                                const totalYtdTarget = grandTotalDailyQuota * daysElapsedYTD;
+                                const totalYtdSignups = divData.reduce((s, d) => s + d.ytdSignups, 0);
+                                const totalYtdPct = totalYtdTarget > 0 ? (totalYtdSignups / totalYtdTarget) * 100 : 0;
+                                return (
+                              <tr style={{ borderTop: "2px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>
+                                <td style={{ padding: "12px 4px", fontWeight: 800, fontSize: 12, color: "#fff" }}>Total</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 800, fontSize: 12, color: "#fff" }}>{grandTotalSignups}</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 800, fontSize: 12, color: COLORS.neonPurple }}>{grandTotalDailyQuota.toFixed(1)}</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 800, fontSize: 12, color: "#fff" }}>{(grandTotalDailyQuota * 7).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 800, fontSize: 12, color: "#fff" }}>{(grandTotalDailyQuota * 30).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 800, fontSize: 12, color: "#fff" }}>{(grandTotalDailyQuota * 90).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 800, fontSize: 12, color: "#fff" }}>{(grandTotalDailyQuota * 365).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "12px 4px", fontWeight: 900, fontSize: 12, color: totalYtdPct >= 100 ? COLORS.neonGreen : totalYtdPct >= 50 ? COLORS.neonYellow : grandTotalDailyQuota > 0 ? "#ff6b6b" : "rgba(255,255,255,0.3)" }}>{grandTotalDailyQuota > 0 ? totalYtdPct.toFixed(1) + "%" : "—"}</td>
+                              </tr>
+                                );
+                              })()}
+                            </tfoot>
+                          </table>
                         </div>
-                        <ProgressBar value={perf.total} max={quota} color={pct >= 100 ? COLORS.neonGreen : pct >= 50 ? COLORS.neonYellow : COLORS.neonOrange} height={6} />
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 10 }}><span style={{ color: isEligible ? COLORS.neonGreen : COLORS.textSecondary }}>{isEligible ? "✓ Bonus eligible" : `Need ${commissionRates.quotas.bonus_eligibility - perf.total} for bonus`}</span><span style={{ color: COLORS.textSecondary }}>{pct.toFixed(0)}%</span></div>
                       </div>
-                    );
-                  })}
-                </Card>
-              </div>
+                    </div>
 
-              {/* Zone Quotas */}
-              <Card title="📍 Zone Quotas" style={{ marginBottom: 24 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-                  {zones.map((zone) => {
-                    const zoneSignups = filteredSignups.filter(s => s.zone_id === zone.id).length;
-                    const pct = (zoneSignups / zone.goal) * 100;
-                    return (
-                      <div key={zone.id} style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span style={{ fontWeight: 600 }}>{zone.name}</span><span style={{ fontSize: 20, fontWeight: 800, color: pct >= 100 ? COLORS.neonGreen : pct >= 50 ? COLORS.neonYellow : COLORS.neonOrange }}>{zoneSignups}</span></div>
-                        <ProgressBar value={zoneSignups} max={zone.goal} color={pct >= 100 ? COLORS.neonGreen : pct >= 50 ? COLORS.neonYellow : COLORS.neonOrange} height={6} />
-                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 10, color: COLORS.textSecondary }}><span>{pct.toFixed(0)}% of target</span><span>Goal: {zone.goal}</span></div>
+                    {/* State-Level Breakdown */}
+                    {(() => {
+                      const filteredStateRows = allStateRows.filter(r => {
+                        if (stateFilterDiv !== "all" && r.division !== stateFilterDiv) return false;
+                        if (stateFilterSearch && !(stateNames[r.state] || r.state).toLowerCase().includes(stateFilterSearch.toLowerCase())) return false;
+                        return true;
+                      });
+                      return (
+                    <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", marginBottom: 24 }}>
+                      <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonPurple + ", " + COLORS.neonPink + ")" }} />
+                      <div style={{ padding: "18px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>State Breakdown</div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <input placeholder="Search states..." value={stateFilterSearch} onChange={e => setStateFilterSearch(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12, width: 140 }} />
+                            <select value={stateFilterDiv} onChange={e => setStateFilterDiv(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12 }}>
+                              <option value="all">All Divisions</option>
+                              {divData.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {filteredStateRows.length === 0 ? (
+                          <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No quota data yet — assign reps to counties</div>
+                        ) : (
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>State</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Division</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Signups</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Daily</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Wkly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Mthly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Qtrly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Yearly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Reps</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Counties</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>YTD %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredStateRows.map((row, i) => {
+                                const stYtdSignups = ytdSignups.filter(s => s.state === row.state).length;
+                                const stYtdTarget = row.dailyQuota * daysElapsedYTD;
+                                const stYtdPct = stYtdTarget > 0 ? (stYtdSignups / stYtdTarget) * 100 : 0;
+                                return (
+                                <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                  <td style={{ padding: "10px 8px", fontWeight: 600 }}>{stateNames[row.state] || row.state}</td>
+                                  <td style={{ padding: "10px 8px", color: row.divColor, fontWeight: 600, fontSize: 12 }}>{row.division}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: "#fff" }}>{row.signups}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: COLORS.neonPurple }}>{row.dailyQuota % 1 === 0 ? row.dailyQuota.toFixed(0) : row.dailyQuota.toFixed(2)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 7).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 30).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 90).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 365).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{row.repCount}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{row.countyCount}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 800, fontSize: 12, color: stYtdPct >= 100 ? COLORS.neonGreen : stYtdPct >= 50 ? COLORS.neonYellow : row.dailyQuota > 0 ? "#ff6b6b" : "rgba(255,255,255,0.3)" }}>{row.dailyQuota > 0 ? stYtdPct.toFixed(1) + "%" : "—"}</td>
+                                </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              {(() => {
+                                const tq = filteredStateRows.reduce((s, r) => s + r.dailyQuota, 0);
+                                const tSu = filteredStateRows.reduce((s, r) => s + r.signups, 0);
+                                const tYtdSu = filteredStateRows.reduce((s, r) => s + ytdSignups.filter(sg => sg.state === r.state).length, 0);
+                                const tYtdTarget = tq * daysElapsedYTD;
+                                const tYtdPct = tYtdTarget > 0 ? (tYtdSu / tYtdTarget) * 100 : 0;
+                                return (
+                              <tr style={{ borderTop: "2px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>Total</td>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.textSecondary }}>{filteredStateRows.length} states</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{tSu}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.neonPurple }}>{tq % 1 === 0 ? tq.toFixed(0) : tq.toFixed(2)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 7).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 30).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 90).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 365).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{filteredStateRows.reduce((s, r) => s + r.repCount, 0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{filteredStateRows.reduce((s, r) => s + r.countyCount, 0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 900, fontSize: 12, color: tYtdPct >= 100 ? COLORS.neonGreen : tYtdPct >= 50 ? COLORS.neonYellow : tq > 0 ? "#ff6b6b" : "rgba(255,255,255,0.3)" }}>{tq > 0 ? tYtdPct.toFixed(1) + "%" : "—"}</td>
+                              </tr>
+                                );
+                              })()}
+                            </tfoot>
+                          </table>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </Card>
+                    </div>
+                      );
+                    })()}
 
-              {/* Quota Overrides */}
-              {quotaOverrides.length > 0 && (
-                <Card title="📝 Active Quota Overrides">
-                  <DataTable columns={[
-                    { key: "target_type", label: "Type", render: (v: unknown) => <span style={{ textTransform: "capitalize" }}>{String(v)}</span> },
-                    { key: "target_id", label: "Target", render: (v: unknown, row: Record<string, unknown>) => { const o = row as unknown as QuotaOverride; if (o.target_type === "individual" || o.target_type === "team") return salesReps.find(r => r.id === String(v))?.name || String(v); if (o.target_type === "zone") return zones.find(z => z.id === String(v))?.name || String(v); if (o.target_type === "division") return divisions.find(d => d.id === String(v))?.name || String(v); return String(v); } },
-                    { key: "quota", label: "Quota", render: (v: unknown) => <span style={{ fontWeight: 700 }}>{String(v)}</span> },
-                    { key: "period", label: "Period" },
-                  ]} data={quotaOverrides} />
-                </Card>
-              )}
+                    {/* County-Level Breakdown */}
+                    {(() => {
+                      const countyStates = [...new Set(countyRows.map(r => r.state))].sort();
+                      const filteredCountyRows = countyRows.filter(r => {
+                        if (countyFilterDiv !== "all" && r.division !== countyFilterDiv) return false;
+                        if (countyFilterState !== "all" && r.state !== countyFilterState) return false;
+                        if (countyFilterSearch && !r.name.toLowerCase().includes(countyFilterSearch.toLowerCase())) return false;
+                        return true;
+                      });
+                      return (
+                    <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", marginBottom: 24 }}>
+                      <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonOrange + ", " + COLORS.neonYellow + ")" }} />
+                      <div style={{ padding: "18px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>County Breakdown</div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <input placeholder="Search counties..." value={countyFilterSearch} onChange={e => setCountyFilterSearch(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12, width: 140 }} />
+                            <select value={countyFilterDiv} onChange={e => { setCountyFilterDiv(e.target.value); setCountyFilterState("all"); }} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12 }}>
+                              <option value="all">All Divisions</option>
+                              {divData.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                            </select>
+                            <select value={countyFilterState} onChange={e => setCountyFilterState(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12 }}>
+                              <option value="all">All States</option>
+                              {countyStates.filter(st => countyFilterDiv === "all" || countyRows.some(r => r.state === st && r.division === countyFilterDiv)).map(st => <option key={st} value={st}>{stateNames[st] || st}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {filteredCountyRows.length === 0 ? (
+                          <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet</div>
+                        ) : (
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>County</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>State</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Division</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Daily</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Wkly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Mthly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Qtrly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Yearly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Reps</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredCountyRows.map((row, i) => (
+                                <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                  <td style={{ padding: "10px 8px", fontWeight: 600 }}>{row.name}</td>
+                                  <td style={{ padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{stateNames[row.state] || row.state}</td>
+                                  <td style={{ padding: "10px 8px", color: row.divColor, fontWeight: 600, fontSize: 12 }}>{row.division}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: COLORS.neonPurple }}>{row.dailyQuota % 1 === 0 ? row.dailyQuota.toFixed(0) : row.dailyQuota.toFixed(2)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 7).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 30).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 90).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 365).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{row.repCount}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              {(() => {
+                                const tq = filteredCountyRows.reduce((s, r) => s + r.dailyQuota, 0);
+                                return (
+                              <tr style={{ borderTop: "2px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>Total</td>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.textSecondary }}>{[...new Set(filteredCountyRows.map(r => r.state))].length} states</td>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.textSecondary }}>{filteredCountyRows.length} counties</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.neonPurple }}>{tq % 1 === 0 ? tq.toFixed(0) : tq.toFixed(2)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 7).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 30).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 90).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 365).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{filteredCountyRows.reduce((s, r) => s + r.repCount, 0)}</td>
+                              </tr>
+                                );
+                              })()}
+                            </tfoot>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                      );
+                    })()}
+
+                    {/* City-Level Breakdown */}
+                    {(() => {
+                      const cityStates = [...new Set(cityRows.map(r => r.state))].sort();
+                      const filteredCityRows = cityRows.filter(r => {
+                        if (cityFilterDiv !== "all" && r.division !== cityFilterDiv) return false;
+                        if (cityFilterState !== "all" && r.state !== cityFilterState) return false;
+                        if (cityFilterSearch && !r.city.toLowerCase().includes(cityFilterSearch.toLowerCase())) return false;
+                        return true;
+                      });
+                      return (
+                    <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", marginBottom: 24 }}>
+                      <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonBlue + ", " + COLORS.neonGreen + ")" }} />
+                      <div style={{ padding: "18px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>City Breakdown</div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <input placeholder="Search cities..." value={cityFilterSearch} onChange={e => setCityFilterSearch(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12, width: 140 }} />
+                            <select value={cityFilterDiv} onChange={e => { setCityFilterDiv(e.target.value); setCityFilterState("all"); }} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12 }}>
+                              <option value="all">All Divisions</option>
+                              {divData.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                            </select>
+                            <select value={cityFilterState} onChange={e => setCityFilterState(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12 }}>
+                              <option value="all">All States</option>
+                              {cityStates.filter(st => cityFilterDiv === "all" || cityRows.some(r => r.state === st && r.division === cityFilterDiv)).map(st => <option key={st} value={st}>{stateNames[st] || st}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {filteredCityRows.length === 0 ? (
+                          <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No city data yet</div>
+                        ) : (
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>City</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>State</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Division</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Daily</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Wkly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Mthly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Qtrly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Yearly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Reps</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Signups</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Sales</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredCityRows.map((row, i) => (
+                                <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                  <td style={{ padding: "10px 8px", fontWeight: 600 }}>{row.city}</td>
+                                  <td style={{ padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{stateNames[row.state] || row.state}</td>
+                                  <td style={{ padding: "10px 8px", color: row.divColor, fontWeight: 600, fontSize: 12 }}>{row.division}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: COLORS.neonPurple }}>{row.dailyQuota % 1 === 0 ? row.dailyQuota.toFixed(0) : row.dailyQuota.toFixed(2)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 7).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 30).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 90).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(row.dailyQuota * 365).toFixed(0)}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{row.repCount}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: "#fff" }}>{row.signups}</td>
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(row.sales)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              {(() => {
+                                const tq = filteredCityRows.reduce((s, r) => s + r.dailyQuota, 0);
+                                return (
+                              <tr style={{ borderTop: "2px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>Total</td>
+                                <td style={{ padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.textSecondary }}>{filteredCityRows.length} cities</td>
+                                <td style={{ padding: "14px 8px" }} />
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.neonPurple }}>{tq % 1 === 0 ? tq.toFixed(0) : tq.toFixed(2)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 7).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 30).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 90).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{(tq * 365).toFixed(0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{filteredCityRows.reduce((s, r) => s + r.repCount, 0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: "#fff" }}>{filteredCityRows.reduce((s, r) => s + r.signups, 0)}</td>
+                                <td style={{ textAlign: "right", padding: "14px 8px", fontWeight: 800, fontSize: 13, color: COLORS.neonGreen }}>{formatMoney(filteredCityRows.reduce((s, r) => s + r.sales, 0))}</td>
+                              </tr>
+                                );
+                              })()}
+                            </tfoot>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                      );
+                    })()}
+
+                    {/* Supervisor Breakdown */}
+                    {(() => {
+                      // Build supervisor hierarchy: top-level = reps with no supervisor or whose supervisor doesn't exist
+                      const activeReps = salesReps.filter(r => r.status === "active");
+                      const repById = new Map(activeReps.map(r => [r.id, r]));
+                      // Get direct reports for a given supervisor
+                      const getDirectReports = (supId: string) => activeReps.filter(r => r.supervisor_id === supId);
+                      // Compute total daily quota for a supervisor (their own + all reports recursively)
+                      const getTeamQuota = (repId: string): number => {
+                        const rep = repById.get(repId);
+                        const own = rep ? getRepDailyQuota(rep) : 0;
+                        return own + getDirectReports(repId).reduce((s, r) => s + getTeamQuota(r.id), 0);
+                      };
+                      const getTeamCount = (repId: string): number => {
+                        const reports = getDirectReports(repId);
+                        return reports.length + reports.reduce((s, r) => s + getTeamCount(r.id), 0);
+                      };
+                      const getTeamSignups = (repId: string): number => {
+                        const own = filteredSignups.filter(s => s.rep_id === repId).length;
+                        return own + getDirectReports(repId).reduce((s, r) => s + getTeamSignups(r.id), 0);
+                      };
+                      // Top-level supervisors: those with no supervisor_id, or whose supervisor is not in activeReps
+                      const topLevel = activeReps.filter(r => !r.supervisor_id || !repById.has(r.supervisor_id));
+                      // Sort by role hierarchy then name
+                      const roleOrder = Object.fromEntries(ROLE_HIERARCHY.map((r, i) => [r, i]));
+                      const sortReps = (a: SalesRep, b: SalesRep) => (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99) || a.name.localeCompare(b.name);
+                      topLevel.sort(sortReps);
+
+                      // Filter by division
+                      const filteredTopLevel = supFilterDiv === "all" ? topLevel : topLevel.filter(r => {
+                        const zone = zones.find(z => z.id === r.zone_id);
+                        const divName = zone ? (divisions.find(d => d.id === zone.division_id)?.name || "") : "";
+                        return divName === supFilterDiv;
+                      });
+
+                      // Search filter: build set of matching rep IDs + all their ancestors
+                      const searchTerm = supFilterSearch.toLowerCase().trim();
+                      const matchedIds = new Set<string>();
+                      if (searchTerm) {
+                        // Find all reps matching the search
+                        const directMatches = activeReps.filter(r => r.name.toLowerCase().includes(searchTerm));
+                        // For each match, walk up the supervisor chain to include ancestors
+                        const addWithAncestors = (rep: SalesRep) => {
+                          matchedIds.add(rep.id);
+                          if (rep.supervisor_id && repById.has(rep.supervisor_id) && !matchedIds.has(rep.supervisor_id)) {
+                            addWithAncestors(repById.get(rep.supervisor_id)!);
+                          }
+                        };
+                        // Also include all descendants of matches so their teams stay visible
+                        const addDescendants = (id: string) => {
+                          matchedIds.add(id);
+                          getDirectReports(id).forEach(r => addDescendants(r.id));
+                        };
+                        directMatches.forEach(r => {
+                          addWithAncestors(r);
+                          addDescendants(r.id);
+                        });
+                      }
+
+                      // Recursive row renderer
+                      const renderSupRow = (rep: SalesRep, depth: number): React.ReactNode => {
+                        if (searchTerm && !matchedIds.has(rep.id)) return null;
+                        const reports = getDirectReports(rep.id).sort(sortReps);
+                        const teamQuota = getTeamQuota(rep.id);
+                        const teamCount = getTeamCount(rep.id);
+                        const teamSignups = getTeamSignups(rep.id);
+                        const zone = zones.find(z => z.id === rep.zone_id);
+                        const divName = zone ? (divisions.find(d => d.id === zone.division_id)?.name || "—") : "—";
+                        const divColor = divisionColors[divName] || COLORS.neonBlue;
+                        const hasReports = reports.length > 0;
+                        const isCollapsed = supCollapsed.has(rep.id);
+                        const isDirectMatch = searchTerm && rep.name.toLowerCase().includes(searchTerm);
+                        return (
+                          <React.Fragment key={rep.id}>
+                            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", background: isDirectMatch ? "rgba(191,95,255,0.08)" : depth === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                              <td style={{ padding: "10px 8px", paddingLeft: 8 + depth * 24, fontWeight: depth === 0 ? 700 : 600 }}>
+                                {hasReports && <span onClick={() => setSupCollapsed(prev => { const next = new Set(prev); if (next.has(rep.id)) next.delete(rep.id); else next.add(rep.id); return next; })} style={{ color: COLORS.neonPurple, marginRight: 6, fontSize: 13, cursor: "pointer", display: "inline-block", transition: "transform 0.15s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▼</span>}
+                                {rep.name}
+                              </td>
+                              <td style={{ padding: "10px 8px", fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{ROLE_LABELS[rep.role] || rep.role}</td>
+                              <td style={{ padding: "10px 8px", color: divColor, fontWeight: 600, fontSize: 12 }}>{divName}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{teamCount}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: COLORS.neonPurple }}>{teamQuota % 1 === 0 ? teamQuota.toFixed(0) : teamQuota.toFixed(2)}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(teamQuota * 7).toFixed(0)}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(teamQuota * 30).toFixed(0)}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(teamQuota * 90).toFixed(0)}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", color: "rgba(255,255,255,0.6)" }}>{(teamQuota * 365).toFixed(0)}</td>
+                              <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 700, color: "#fff" }}>{teamSignups}</td>
+                              {(() => {
+                                const ytdTarget = teamQuota * daysElapsedYTD;
+                                const teamYtdSignups = (() => {
+                                  const getYtdTeam = (id: string): number => {
+                                    const own = ytdSignups.filter(s => s.rep_id === id).length;
+                                    return own + getDirectReports(id).reduce((s2, r2) => s2 + getYtdTeam(r2.id), 0);
+                                  };
+                                  return getYtdTeam(rep.id);
+                                })();
+                                const pct = ytdTarget > 0 ? (teamYtdSignups / ytdTarget) * 100 : 0;
+                                return (
+                                  <td style={{ textAlign: "right", padding: "10px 8px", fontWeight: 800, fontSize: 12, color: pct >= 100 ? COLORS.neonGreen : pct >= 50 ? COLORS.neonYellow : teamQuota > 0 ? "#ff6b6b" : "rgba(255,255,255,0.3)" }}>{teamQuota > 0 ? pct.toFixed(1) + "%" : "—"}</td>
+                                );
+                              })()}
+                            </tr>
+                            {!isCollapsed && reports.map(r => renderSupRow(r, depth + 1))}
+                          </React.Fragment>
+                        );
+                      };
+
+                      return (
+                    <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden", marginBottom: 24 }}>
+                      <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonPink + ", " + COLORS.neonPurple + ")" }} />
+                      <div style={{ padding: "18px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>Supervisor Breakdown</div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <input placeholder="Search name..." value={supFilterSearch} onChange={e => setSupFilterSearch(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12, width: 160 }} />
+                            <select value={supFilterDiv} onChange={e => setSupFilterDiv(e.target.value)} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", fontSize: 12 }}>
+                              <option value="all">All Divisions</option>
+                              {divData.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {filteredTopLevel.length === 0 ? (
+                          <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No supervisors found</div>
+                        ) : (
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Name</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Role</th>
+                                <th style={{ textAlign: "left", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Division</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Team</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Daily</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Wkly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Mthly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Qtrly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Yearly</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>Signups</th>
+                                <th style={{ textAlign: "right", padding: "10px 8px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase" }}>YTD %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredTopLevel.map(rep => renderSupRow(rep, 0))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    </div>
+                      );
+                    })()}
+
+                    {/* Quota Overrides */}
+                    {quotaOverrides.length > 0 && (
+                      <div style={{ background: "linear-gradient(135deg, " + COLORS.darkBg + " 0%, rgba(45,45,68,0.6) 100%)", borderRadius: 14, border: "1px solid " + COLORS.cardBorder, overflow: "hidden" }}>
+                        <div style={{ height: 3, background: "linear-gradient(90deg, " + COLORS.neonYellow + ", " + COLORS.neonOrange + ")" }} />
+                        <div style={{ padding: "18px 20px" }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, letterSpacing: "-0.01em" }}>Active Quota Overrides</div>
+                          <DataTable columns={[
+                            { key: "target_type", label: "Type", render: (v: unknown) => <span style={{ textTransform: "capitalize" }}>{String(v)}</span> },
+                            { key: "target_id", label: "Target", render: (v: unknown, row: Record<string, unknown>) => { const o = row as unknown as QuotaOverride; if (o.target_type === "individual" || o.target_type === "team") return salesReps.find(r => r.id === String(v))?.name || String(v); if (o.target_type === "zone") return zones.find(z => z.id === String(v))?.name || String(v); if (o.target_type === "division") return divisions.find(d => d.id === String(v))?.name || String(v); return String(v); } },
+                            { key: "quota", label: "Quota", render: (v: unknown) => <span style={{ fontWeight: 700 }}>{String(v)}</span> },
+                            { key: "period", label: "Period" },
+                          ]} data={quotaOverrides} />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
 
@@ -3112,6 +4517,16 @@ export default function SalesPage() {
                     />
                   </div>
                 )}
+                <div style={{ marginLeft: "auto" }}>
+                  <select
+                    value={historyDivisionFilter}
+                    onChange={(e) => setHistoryDivisionFilter(e.target.value)}
+                    style={{ padding: "8px 16px", borderRadius: 8, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, color: COLORS.textPrimary, fontSize: 12 }}
+                  >
+                    <option value="all">All Divisions</option>
+                    {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                  </select>
+                </div>
               </div>
               <Card title="📜 Payout History">
                 {payoutHistory.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No payout history yet</div> : (
@@ -3133,7 +4548,10 @@ export default function SalesPage() {
                     // Rep filter (only when "By Sales Rep" is selected)
                     const repMatch = historyFilter !== "rep" || historyRepFilter === "all" || h.rep_id === historyRepFilter;
 
-                    return typeMatch && repMatch;
+                    // Division filter
+                    const divMatch = historyDivisionFilter === "all" || salesReps.find(r => r.id === h.rep_id)?.zone_id === historyDivisionFilter;
+
+                    return typeMatch && repMatch && divMatch;
                   })} />
                 )}
               </Card>
@@ -3144,7 +4562,7 @@ export default function SalesPage() {
                   { key: "totalBonuses", label: "Total Bonuses", render: (v: unknown) => <span style={{ color: COLORS.neonPurple, fontWeight: 700 }}>{formatMoney(Number(v))}</span> },
                   { key: "adjustments", label: "Adjustments", render: (v: unknown) => <span style={{ color: Number(v) >= 0 ? COLORS.neonGreen : COLORS.neonRed }}>{Number(v) >= 0 ? "+" : ""}{formatMoney(Number(v))}</span> },
                   { key: "totalPaid", label: "Total Paid", render: (v: unknown) => <span style={{ fontWeight: 800 }}>{formatMoney(Number(v))}</span> },
-                ]} data={actualSalesReps.map((rep) => { const paid = payoutHistory.filter((p) => p.rep_id === rep.id && p.status === "paid"); return { name: rep.name, totalCommissions: paid.filter((p) => p.type === "commission").reduce((a, p) => a + p.amount_cents, 0), totalBonuses: paid.filter((p) => p.type === "bonus").reduce((a, p) => a + p.amount_cents, 0), adjustments: paid.filter((p) => p.type === "adjustment").reduce((a, p) => a + p.amount_cents, 0), totalPaid: paid.reduce((a, p) => a + p.amount_cents, 0) }; })} />
+                ]} data={actualSalesReps.filter(rep => historyDivisionFilter === "all" || rep.zone_id === historyDivisionFilter).map((rep) => { const paid = payoutHistory.filter((p) => p.rep_id === rep.id && p.status === "paid"); return { name: rep.name, totalCommissions: paid.filter((p) => p.type === "commission").reduce((a, p) => a + p.amount_cents, 0), totalBonuses: paid.filter((p) => p.type === "bonus").reduce((a, p) => a + p.amount_cents, 0), adjustments: paid.filter((p) => p.type === "adjustment").reduce((a, p) => a + p.amount_cents, 0), totalPaid: paid.reduce((a, p) => a + p.amount_cents, 0) }; })} />
               </Card>
             </>
           )}
@@ -3384,6 +4802,706 @@ export default function SalesPage() {
               }))}
             />
           )}
+
+          {/* ==================== APPLICATIONS TAB ==================== */}
+          {salesTab === "applications" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Status filter buttons */}
+              <Card title="Sales Rep Applications">
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "submitted", label: "Submitted" },
+                    { key: "approved", label: "Approved" },
+                    { key: "rejected", label: "Rejected" },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setAppStatusFilter(f.key)}
+                      style={{
+                        padding: "6px 16px",
+                        borderRadius: 8,
+                        border: "1px solid " + (appStatusFilter === f.key ? COLORS.neonBlue : COLORS.cardBorder),
+                        background: appStatusFilter === f.key ? COLORS.neonBlue + "22" : "transparent",
+                        color: appStatusFilter === f.key ? COLORS.neonBlue : COLORS.textSecondary,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                {appLoading ? (
+                  <div style={{ textAlign: "center", padding: 40, color: COLORS.textSecondary }}>Loading applications...</div>
+                ) : applications.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 40, color: COLORS.textSecondary }}>No applications found</div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                          {["Name", "Email", "City / State", "Experience", "Status", "Applied"].map((h) => (
+                            <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: COLORS.textSecondary, fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applications.map((app) => (
+                          <React.Fragment key={app.id}>
+                            <tr
+                              onClick={() => setExpandedAppId(expandedAppId === app.id ? null : app.id)}
+                              style={{ borderBottom: "1px solid " + COLORS.cardBorder, cursor: "pointer", background: expandedAppId === app.id ? COLORS.darkBg : "transparent" }}
+                            >
+                              <td style={{ padding: "10px 12px", color: COLORS.textPrimary, fontWeight: 600 }}>{app.full_name}</td>
+                              <td style={{ padding: "10px 12px", color: COLORS.textSecondary }}>{app.email}</td>
+                              <td style={{ padding: "10px 12px", color: COLORS.textSecondary }}>{[app.city, app.state].filter(Boolean).join(", ") || "—"}</td>
+                              <td style={{ padding: "10px 12px", color: COLORS.textSecondary, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.payload?.experience || "—"}</td>
+                              <td style={{ padding: "10px 12px" }}><Badge status={app.status} /></td>
+                              <td style={{ padding: "10px 12px", color: COLORS.textSecondary }}>{formatDate(app.created_at)}</td>
+                            </tr>
+
+                            {/* Expanded detail panel */}
+                            {expandedAppId === app.id && (
+                              <tr>
+                                <td colSpan={6} style={{ padding: 0 }}>
+                                  <div style={{ padding: "20px 24px", background: COLORS.darkBg, borderBottom: "2px solid " + COLORS.cardBorder }}>
+                                    {/* ── Contact Info ── */}
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonBlue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Contact Information</div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Full Name</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 600 }}>{app.full_name}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Email</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.email}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Phone</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.phone ? formatPhone(app.phone) : "—"}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>City / State</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{[app.city, app.state].filter(Boolean).join(", ") || "—"}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>LinkedIn</div>
+                                        <div style={{ fontSize: 13 }}>
+                                          {app.payload?.linkedin ? (
+                                            <a href={String(app.payload.linkedin)} target="_blank" rel="noopener noreferrer" style={{ color: COLORS.neonBlue, textDecoration: "none" }}>{String(app.payload.linkedin)}</a>
+                                          ) : "—"}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* ── Sales Background ── */}
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonPink, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Sales Background</div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                      <div style={{ gridColumn: "1 / -1" }}>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Sales Experience</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>{app.payload?.experience || "—"}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Industries Sold To</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.payload?.industries || "—"}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Desired Territory</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.payload?.territory || "—"}</div>
+                                      </div>
+                                      <div style={{ gridColumn: "1 / -1" }}>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Sales Strategy</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>{app.payload?.salesStrategy || "—"}</div>
+                                      </div>
+                                      <div style={{ gridColumn: "1 / -1" }}>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Personality</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>{app.payload?.personality || "—"}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Travel Distance</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.payload?.travelDistance || "—"}</div>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>How They Heard About Us</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.payload?.referredBy || "—"}</div>
+                                      </div>
+                                      <div style={{ gridColumn: "1 / -1" }}>
+                                        <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Why They Want to Sell for LetsGo</div>
+                                        <div style={{ fontSize: 13, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>{app.payload?.coverNote || "—"}</div>
+                                      </div>
+                                    </div>
+
+                                    {/* ── Disclosures & Agreements ── */}
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonYellow, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Disclosures & Agreements</div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 20 }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.felonyDisclosure === "no" ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.felonyDisclosure === "no" ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Felony conviction: <strong style={{ color: COLORS.textPrimary }}>{app.payload?.felonyDisclosure === "no" ? "No" : app.payload?.felonyDisclosure === "yes" ? "Yes" : "—"}</strong></span>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.hasReliableTransportation ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.hasReliableTransportation ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Reliable transportation</span>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.agreedAge18 ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.agreedAge18 ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Confirmed 18+</span>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.agreedWorkAuthorization ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.agreedWorkAuthorization ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Work authorization</span>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.agreed1099 ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.agreed1099 ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>1099 independent contractor</span>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.agreedBackgroundCheck ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.agreedBackgroundCheck ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Background check consent</span>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <span style={{ color: app.payload?.agreedInterview ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{app.payload?.agreedInterview ? "✓" : "✗"}</span>
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Interview agreement</span>
+                                      </div>
+                                    </div>
+
+                                    {/* ── Documents ── */}
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonPurple, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Documents</div>
+                                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+                                      {app.payload?.driversLicensePath ? (
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const { data } = await supabaseBrowser.storage.from("documents").createSignedUrl(String(app.payload.driversLicensePath), 300);
+                                            if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                                            else alert("Failed to load document. Make sure the 'documents' storage bucket exists.");
+                                          }}
+                                          style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid " + COLORS.neonPurple, background: "rgba(191,95,255,0.08)", color: COLORS.neonPurple, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                                        >
+                                          📄 View Driver&apos;s License
+                                        </button>
+                                      ) : (
+                                        <span style={{ fontSize: 12, color: COLORS.neonRed }}>⚠ No driver&apos;s license uploaded</span>
+                                      )}
+                                      {app.payload?.resumePath ? (
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            const { data } = await supabaseBrowser.storage.from("documents").createSignedUrl(String(app.payload.resumePath), 300);
+                                            if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                                            else alert("Failed to load document. Make sure the 'documents' storage bucket exists.");
+                                          }}
+                                          style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid " + COLORS.neonBlue, background: "rgba(0,212,255,0.08)", color: COLORS.neonBlue, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                                        >
+                                          📎 View Resume
+                                        </button>
+                                      ) : (
+                                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>No resume uploaded</span>
+                                      )}
+                                    </div>
+
+                                    {/* ── Review Status ── */}
+                                    {(app.review_message || app.reviewed_by) && (
+                                      <>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonOrange, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Review</div>
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                          {app.review_message && (
+                                            <div style={{ gridColumn: "1 / -1" }}>
+                                              <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Review Message</div>
+                                              <div style={{ fontSize: 13, color: COLORS.neonYellow }}>{app.review_message}</div>
+                                            </div>
+                                          )}
+                                          {app.reviewed_by && (
+                                            <div>
+                                              <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Reviewed By</div>
+                                              <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{app.reviewed_by} on {formatDate(app.reviewed_at)}</div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+
+                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                      {app.status === "submitted" && (<>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setSelectedApp(app); setShowApproveModal(true); }}
+                                          style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonGreen, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setSelectedApp(app); setShowRejectModal(true); }}
+                                          style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonRed, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                                        >
+                                          Reject
+                                        </button>
+                                      </>)}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedApp(app);
+                                          setEditAppData({ full_name: app.full_name, email: app.email, phone: app.phone ? formatPhone(app.phone) : "", city: app.city || "", state: app.state || "" });
+                                          setShowEditAppModal(true);
+                                        }}
+                                        style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.neonBlue, background: "rgba(0,212,255,0.08)", color: COLORS.neonBlue, fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setSelectedApp(app); setShowDeleteAppModal(true); }}
+                                        style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+
+              {/* ── Approve Modal ── */}
+              {showApproveModal && selectedApp && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }} onClick={() => setShowApproveModal(false)}>
+                  <div style={{ background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 16, padding: 28, maxWidth: 480, width: "90%", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ color: COLORS.textPrimary, margin: "0 0 8px", fontSize: 18 }}>Approve Application</h3>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>Approving <strong style={{ color: COLORS.neonGreen }}>{selectedApp.full_name}</strong> as a sales rep.</p>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Role</label>
+                        <select
+                          value={approveData.role}
+                          onChange={(e) => setApproveData({ ...approveData, role: e.target.value })}
+                          style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
+                        >
+                          {Object.entries(ROLE_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Division</label>
+                        <select
+                          value={approveData.zone_id}
+                          onChange={(e) => {
+                            const z = zones.find(z => z.id === e.target.value);
+                            setApproveData({ ...approveData, zone_id: e.target.value, division_id: z?.division_id || "", state: "", county_id: "" });
+                          }}
+                          style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
+                        >
+                          <option value="">— Select Division —</option>
+                          {zones.map((z) => (
+                            <option key={z.id} value={z.id}>{z.name} ({z.states.join(", ")})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>State *</label>
+                          <select
+                            value={approveData.state}
+                            onChange={(e) => setApproveData({ ...approveData, state: e.target.value, county_id: "" })}
+                            style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
+                          >
+                            <option value="">— Select State —</option>
+                            {(() => {
+                              const zone = zones.find(z => z.id === approveData.zone_id);
+                              const statesInZone = zone ? zone.states : [...new Set(counties.map(c => c.state))].sort();
+                              return statesInZone.map(s => <option key={s} value={s}>{s}</option>);
+                            })()}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>County *</label>
+                          <select
+                            value={approveData.county_id}
+                            onChange={(e) => setApproveData({ ...approveData, county_id: e.target.value })}
+                            style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
+                            disabled={!approveData.state}
+                          >
+                            <option value="">— Select County —</option>
+                            {counties.filter(c => c.state === approveData.state).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Supervisor</label>
+                        <select
+                          value={approveData.supervisor_id}
+                          onChange={(e) => setApproveData({ ...approveData, supervisor_id: e.target.value })}
+                          style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
+                        >
+                          <option value="">— No Supervisor —</option>
+                          {salesReps.filter(r => r.status === "active" && r.role !== "sales_rep").map((r) => (
+                            <option key={r.id} value={r.id}>{r.name} ({ROLE_LABELS[r.role] || r.role})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowApproveModal(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                      <button
+                        onClick={() => handleAppAction("approve")}
+                        disabled={appActionLoading}
+                        style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonGreen, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: appActionLoading ? 0.5 : 1 }}
+                      >
+                        {appActionLoading ? "Approving..." : "Confirm Approve"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Reject Modal ── */}
+              {showRejectModal && selectedApp && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }} onClick={() => setShowRejectModal(false)}>
+                  <div style={{ background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 16, padding: 28, maxWidth: 480, width: "90%", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ color: COLORS.textPrimary, margin: "0 0 8px", fontSize: 18 }}>Reject Application</h3>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>Rejecting application from <strong style={{ color: COLORS.neonRed }}>{selectedApp.full_name}</strong>.</p>
+
+                    <div>
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Reason (sent to applicant)</label>
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        rows={4}
+                        placeholder="Your application was not approved at this time..."
+                        style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13, resize: "vertical" }}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowRejectModal(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                      <button
+                        onClick={() => handleAppAction("reject")}
+                        disabled={appActionLoading}
+                        style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonRed, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: appActionLoading ? 0.5 : 1 }}
+                      >
+                        {appActionLoading ? "Rejecting..." : "Confirm Reject"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Edit Application Modal ── */}
+              {showEditAppModal && selectedApp && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }} onClick={() => setShowEditAppModal(false)}>
+                  <div style={{ background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 16, padding: 28, maxWidth: 480, width: "90%", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ color: COLORS.textPrimary, margin: "0 0 8px", fontSize: 18 }}>Edit Application</h3>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>Editing <strong style={{ color: COLORS.neonBlue }}>{selectedApp.full_name}</strong></p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {(["full_name", "email", "phone", "city", "state"] as const).map((field) => (
+                        <div key={field}>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>{field.replace("_", " ")}</label>
+                          <input
+                            value={editAppData[field]}
+                            onChange={(e) => setEditAppData({ ...editAppData, [field]: field === "phone" ? formatPhone(e.target.value) : e.target.value })}
+                            maxLength={field === "phone" ? 14 : undefined}
+                            style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13, boxSizing: "border-box" }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowEditAppModal(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                      <button
+                        onClick={handleEditApp}
+                        disabled={appActionLoading}
+                        style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonBlue, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: appActionLoading ? 0.5 : 1 }}
+                      >
+                        {appActionLoading ? "Saving..." : "Save Changes"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Delete Application Modal ── */}
+              {showDeleteAppModal && selectedApp && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }} onClick={() => setShowDeleteAppModal(false)}>
+                  <div style={{ background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 16, padding: 28, maxWidth: 420, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ color: COLORS.textPrimary, margin: "0 0 8px", fontSize: 18 }}>Delete Application</h3>
+                    <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>
+                      Are you sure you want to permanently delete the application from <strong style={{ color: COLORS.neonRed }}>{selectedApp.full_name}</strong>? This will also delete any uploaded documents. This cannot be undone.
+                    </p>
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowDeleteAppModal(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                      <button
+                        onClick={handleDeleteApp}
+                        disabled={appActionLoading}
+                        style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonRed, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: appActionLoading ? 0.5 : 1 }}
+                      >
+                        {appActionLoading ? "Deleting..." : "Delete Permanently"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {salesTab === "1099nec" && (() => {
+            const activeReps = salesReps.filter(r => r.status === "active");
+            const repsWithEarnings = activeReps.map(r => ({
+              ...r,
+              annualEarnings: getRepAnnualEarnings(r.id, nec1099Year),
+              record1099: nec1099s.find(n => n.rep_id === r.id) || null,
+            })).filter(r => r.annualEarnings > 0 || r.record1099);
+
+            const aboveThreshold = repsWithEarnings.filter(r => r.annualEarnings >= 60000);
+            const taxInfoComplete = repsWithEarnings.filter(r => r.legal_name && r.tax_id && r.address_street && r.address_city && r.address_state && r.address_zip);
+            const generated1099s = repsWithEarnings.filter(r => r.record1099);
+            const sent1099s = repsWithEarnings.filter(r => r.record1099?.sent_at);
+
+            return (
+              <>
+                {/* Year Selector */}
+                <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
+                  <label style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: 600 }}>Tax Year:</label>
+                  <select
+                    value={nec1099Year}
+                    onChange={(e) => setNec1099Year(parseInt(e.target.value))}
+                    style={{ padding: "8px 16px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}
+                  >
+                    {Array.from({ length: 5 }, (_, i) => currentYear - i).map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleBulkGenerate1099}
+                    disabled={necGenerating}
+                    style={{ marginLeft: "auto", padding: "8px 20px", background: COLORS.gradient1, border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 700, opacity: necGenerating ? 0.5 : 1 }}
+                  >
+                    {necGenerating ? "Generating..." : `📄 Bulk Generate 1099s (${aboveThreshold.filter(r => r.legal_name && r.tax_id && r.address_street && r.w9_status === "received").length})`}
+                  </button>
+                </div>
+
+                {/* Summary Cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+                  <Card>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Reps with Earnings</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonBlue }}>{repsWithEarnings.length}</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>In {nec1099Year}</div>
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Above $600 Threshold</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonRed }}>{aboveThreshold.length}</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>1099-NEC required</div>
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Tax Info Complete</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{taxInfoComplete.length}</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>of {repsWithEarnings.length} reps</div>
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>1099s Generated / Sent</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonPurple }}>{generated1099s.length} / {sent1099s.length}</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>of {aboveThreshold.length} required</div>
+                  </Card>
+                </div>
+
+                {/* Reps Table */}
+                <Card title={`📄 1099-NEC — ${nec1099Year}`}>
+                  {repsWithEarnings.length === 0 ? (
+                    <div style={{ padding: 60, textAlign: "center", color: COLORS.textSecondary }}>No reps with earnings in {nec1099Year}</div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
+                            {["Rep Name", "Role", "Annual Earnings", "Threshold", "Tax Info", "W-9", "1099 Status", "Actions"].map(h => (
+                              <th key={h} style={{ padding: "12px 10px", textAlign: "left", color: COLORS.textSecondary, fontSize: 11, textTransform: "uppercase", fontWeight: 600 }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {repsWithEarnings
+                            .sort((a, b) => b.annualEarnings - a.annualEarnings)
+                            .map(rep => {
+                              const hasTaxInfo = !!(rep.legal_name && rep.tax_id && rep.address_street && rep.address_city && rep.address_state && rep.address_zip);
+                              const partialTaxInfo = !!(rep.legal_name || rep.tax_id || rep.address_street);
+                              const isAbove = rep.annualEarnings >= 60000;
+                              return (
+                                <tr key={rep.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                      <Avatar name={rep.name} initials={rep.avatar} />
+                                      <div>
+                                        <div style={{ fontWeight: 600 }}>{rep.name}</div>
+                                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{rep.email}</div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "12px 10px", color: COLORS.textSecondary }}>{ROLE_LABELS[rep.role] || rep.role}</td>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    <span style={{ fontWeight: 700, color: isAbove ? COLORS.neonGreen : COLORS.textPrimary }}>{formatMoney(rep.annualEarnings)}</span>
+                                  </td>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: isAbove ? "rgba(255,49,49,0.15)" : "rgba(57,255,20,0.15)", color: isAbove ? COLORS.neonRed : COLORS.neonGreen }}>
+                                      {isAbove ? "Required" : "Below"}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: hasTaxInfo ? "rgba(57,255,20,0.15)" : partialTaxInfo ? "rgba(255,255,0,0.15)" : "rgba(255,49,49,0.15)", color: hasTaxInfo ? COLORS.neonGreen : partialTaxInfo ? COLORS.neonYellow : COLORS.neonRed }}>
+                                      {hasTaxInfo ? "Complete" : partialTaxInfo ? "Partial" : "Missing"}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: rep.w9_status === "received" ? "rgba(57,255,20,0.15)" : rep.w9_status === "requested" ? "rgba(255,255,0,0.15)" : "rgba(160,160,176,0.15)", color: rep.w9_status === "received" ? COLORS.neonGreen : rep.w9_status === "requested" ? COLORS.neonYellow : COLORS.textSecondary }}>
+                                      {rep.w9_status === "received" ? "Received" : rep.w9_status === "requested" ? "Requested" : "Not Requested"}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    {rep.record1099?.sent_at ? (
+                                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "rgba(57,255,20,0.15)", color: COLORS.neonGreen }}>Sent ({rep.record1099.sent_method})</span>
+                                    ) : rep.record1099 ? (
+                                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "rgba(0,212,255,0.15)", color: COLORS.neonBlue }}>Generated</span>
+                                    ) : (
+                                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "rgba(160,160,176,0.15)", color: COLORS.textSecondary }}>Not Generated</span>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: "12px 10px" }}>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                      <button
+                                        onClick={() => {
+                                          setTaxInfoRep(rep);
+                                          setTaxInfoForm({
+                                            legal_name: rep.legal_name || "",
+                                            tax_id: rep.tax_id || "",
+                                            address_street: rep.address_street || "",
+                                            address_city: rep.address_city || "",
+                                            address_state: rep.address_state || "",
+                                            address_zip: rep.address_zip || "",
+                                            w9_status: rep.w9_status || "not_requested",
+                                          });
+                                          setShowTaxInfoModal(true);
+                                        }}
+                                        style={{ padding: "5px 10px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.neonBlue, cursor: "pointer", fontSize: 11 }}
+                                      >
+                                        Edit Tax Info
+                                      </button>
+                                      {isAbove && (
+                                        <button
+                                          onClick={() => handleGenerate1099(rep)}
+                                          disabled={necGenerating}
+                                          style={{ padding: "5px 10px", background: COLORS.gradient1, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600, opacity: necGenerating ? 0.5 : 1 }}
+                                        >
+                                          Generate
+                                        </button>
+                                      )}
+                                      {rep.record1099 && !rep.record1099.sent_at && (
+                                        <button
+                                          onClick={() => { setSentRep(rep); setSentMethod("email"); setShowSentModal(true); }}
+                                          style={{ padding: "5px 10px", background: COLORS.neonGreen, border: "none", borderRadius: 6, color: "#000", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                                        >
+                                          Mark Sent
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Tax Info Edit Modal */}
+                {showTaxInfoModal && taxInfoRep && (
+                  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }} onClick={() => setShowTaxInfoModal(false)}>
+                    <div style={{ background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 16, padding: 28, maxWidth: 520, width: "90%", maxHeight: "90vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+                      <h3 style={{ color: COLORS.textPrimary, margin: "0 0 4px", fontSize: 18 }}>Edit Tax Info</h3>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>{taxInfoRep.name}</p>
+
+                      <div style={{ display: "grid", gap: 14 }}>
+                        <div>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Legal Name (as on W-9)</label>
+                          <input type="text" value={taxInfoForm.legal_name} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, legal_name: e.target.value })} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Tax ID (SSN or EIN)</label>
+                          <input type="text" value={taxInfoForm.tax_id} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, tax_id: e.target.value })} placeholder="XXX-XX-XXXX" maxLength={11} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Street Address</label>
+                          <input type="text" value={taxInfoForm.address_street} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, address_street: e.target.value })} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px", gap: 10 }}>
+                          <div>
+                            <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>City</label>
+                            <input type="text" value={taxInfoForm.address_city} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, address_city: e.target.value })} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>State</label>
+                            <input type="text" value={taxInfoForm.address_state} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, address_state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>ZIP</label>
+                            <input type="text" value={taxInfoForm.address_zip} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, address_zip: e.target.value.replace(/\D/g, "").slice(0, 5) })} maxLength={5} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }} />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>W-9 Status</label>
+                          <select value={taxInfoForm.w9_status} onChange={(e) => setTaxInfoForm({ ...taxInfoForm, w9_status: e.target.value })} style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13 }}>
+                            <option value="not_requested">Not Requested</option>
+                            <option value="requested">Requested</option>
+                            <option value="received">Received</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+                        <button onClick={() => setShowTaxInfoModal(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={handleSaveTaxInfo} disabled={taxInfoSaving} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonGreen, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: taxInfoSaving ? 0.5 : 1 }}>
+                          {taxInfoSaving ? "Saving..." : "Save Tax Info"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mark as Sent Modal */}
+                {showSentModal && sentRep && (
+                  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }} onClick={() => setShowSentModal(false)}>
+                    <div style={{ background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 16, padding: 28, maxWidth: 420, width: "90%" }} onClick={(e) => e.stopPropagation()}>
+                      <h3 style={{ color: COLORS.textPrimary, margin: "0 0 8px", fontSize: 18 }}>Mark 1099-NEC as Sent</h3>
+                      <p style={{ color: COLORS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>
+                        How was the 1099-NEC for <strong style={{ color: COLORS.neonGreen }}>{sentRep.name}</strong> delivered?
+                      </p>
+                      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                        {(["email", "mail", "portal"] as const).map(m => (
+                          <button key={m} onClick={() => setSentMethod(m)} style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: sentMethod === m ? "2px solid " + COLORS.neonGreen : "1px solid " + COLORS.cardBorder, background: sentMethod === m ? "rgba(57,255,20,0.1)" : COLORS.darkBg, color: sentMethod === m ? COLORS.neonGreen : COLORS.textSecondary, cursor: "pointer", fontSize: 13, fontWeight: 600, textTransform: "capitalize" }}>
+                            {m === "email" ? "📧 Email" : m === "mail" ? "📬 Mail" : "🌐 Portal"}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                        <button onClick={() => setShowSentModal(false)} style={{ padding: "8px 20px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+                        <button onClick={handleMarkSent} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: COLORS.neonGreen, color: "#000", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Confirm Sent</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
     </div>

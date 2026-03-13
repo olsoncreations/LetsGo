@@ -358,7 +358,7 @@ export default function FindFriendsPage() {
       <div style={{ maxWidth: 480, width: "100%", animation: "fadeIn 0.6s ease both" }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <Image src="/lg-logo.png" alt="Let's Go" width={180} height={54} style={{ margin: "0 auto 16px" }} priority />
+          <Image src="/lg-logo.png" alt="LetsGo" width={180} height={54} style={{ margin: "0 auto 16px" }} priority />
           <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8, letterSpacing: "-0.02em" }}>
             Find Your Friends
           </h1>
@@ -653,7 +653,7 @@ export default function FindFriendsPage() {
               onClick={() => router.push("/")}
               style={{ ...btnPrimary, width: "100%" }}
             >
-              Let&apos;s Go!
+              LetsGo!
             </button>
           </div>
         )}

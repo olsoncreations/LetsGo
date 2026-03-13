@@ -9,6 +9,7 @@ import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { ModeDiscoveryAnim, ModeDateNightAnim, Mode531Anim, ModeGroupVoteAnim, ModeEventsAnim, ModeExperiencesAnim, SpotlightAnim, BellAnim, ProfileAnim } from "@/components/TourIllustrations";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import OpportunityCTA from "@/components/OpportunityCTA";
 
 // ============================================================================
 // Mode definitions
@@ -1261,6 +1262,9 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+          {/* Opportunity CTAs */}
+          <OpportunityCTA />
 
           {/* Footer */}
           <div

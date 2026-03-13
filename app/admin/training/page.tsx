@@ -267,8 +267,8 @@ const trainingModules: TrainingModule[] = [
         detail: "To pay commissions: review the unpaid commission list for accuracy. Verify each signup is legitimate — the business should be active and have completed onboarding. Mark commissions as paid when payment is processed, which records the paid_at timestamp. If a business cancels shortly after signup, you may need to claw back the commission — discuss with management before doing this. Never promise commissions on businesses that haven't completed the full onboarding process.",
       },
       {
-        title: "Manage Sales Reps and Zones",
-        detail: "To add a new rep: use the 'Add Rep' form with their name, email, phone, zone assignment, and commission rate. Zones correspond to the geographic regions shown on the Executive dashboard (Midwest, Mountain, Southwest, Southeast, Northeast, Pacific, Great Plains, New England). Each rep should focus on their assigned zone. To deactivate a rep, toggle their is_active status — this doesn't delete their data, so their historical commissions are preserved. If reassigning a zone, make sure existing leads are properly handed off.",
+        title: "Manage Sales Reps and Divisions",
+        detail: "To add a new rep: use the 'Add Rep' form with their name, email, phone, division assignment, and commission rate. Divisions correspond to the 5 geographic regions shown on the Executive dashboard (Northeast, Southeast, Mideast, Midwest, West). Each rep should focus on their assigned division. To deactivate a rep, toggle their is_active status — this doesn't delete their data, so their historical commissions are preserved. If reassigning a division, make sure existing leads are properly handed off.",
       },
     ],
   },

@@ -19,6 +19,8 @@ export const NOTIFICATION_TYPES = {
   MEDIA_REJECTED: "media_rejected",
   RECEIPT_SUBMITTED: "receipt_submitted",
   FRIEND_INVITE: "friend_invite",
+  APPLICATION_APPROVED: "application_approved",
+  APPLICATION_REJECTED: "application_rejected",
 } as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];
@@ -34,6 +36,8 @@ export const REQUIRED_NOTIFICATION_TYPES: Set<NotificationType> = new Set([
   NOTIFICATION_TYPES.MEDIA_APPROVED,
   NOTIFICATION_TYPES.MEDIA_REJECTED,
   NOTIFICATION_TYPES.RECEIPT_SUBMITTED,
+  NOTIFICATION_TYPES.APPLICATION_APPROVED,
+  NOTIFICATION_TYPES.APPLICATION_REJECTED,
 ]);
 
 // Category groupings for the preferences UI (optional types only)
@@ -69,6 +73,8 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   media_rejected: "Your photo/video was not approved",
   receipt_submitted: "New receipt submitted",
   friend_invite: "Friend invite sent",
+  application_approved: "Application approved",
+  application_rejected: "Application not approved",
 };
 
 // Deep-link routes for each notification type
@@ -90,6 +96,8 @@ export const NOTIFICATION_HREFS: Record<NotificationType, string> = {
   media_rejected: "/experiences",
   receipt_submitted: "/businessprofile-v2",
   friend_invite: "/welcome/find-friends",
+  application_approved: "/profile",
+  application_rejected: "/profile",
 };
 
 // Client-side notification row type

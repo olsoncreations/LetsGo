@@ -53,6 +53,7 @@ export const AUDIT_TABS = {
   BILLING: "Billing",
   UGC: "UGC",
   TRAINING: "Training",
+  APPLICATIONS: "Applications",
 } as const;
 
 // Cache the current user so we don't re-fetch on every call

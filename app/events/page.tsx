@@ -723,7 +723,7 @@ const EventDetail = ({
               Earn up to {event.payoutRange} back
             </div>
             <div style={{ fontFamily: FONT_BODY, fontSize: 10, color: TEXT_DIM, marginTop: 2 }}>
-              Visit {event.business.name} through Let&apos;s Go and earn cash back
+              Visit {event.business.name} through LetsGo and earn cash back
             </div>
           </div>
         </div>

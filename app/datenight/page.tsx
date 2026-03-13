@@ -444,7 +444,7 @@ function DateHub({ onNewDate }: { onNewDate: () => void }) {
               fontFamily: FONT_BODY, fontSize: 11, fontWeight: 600, letterSpacing: "0.15em",
               color: NEON, textTransform: "uppercase", boxShadow: `0 0 20px rgba(${NEON_RGB}, 0.15)`,
             }}>
-              Let&apos;s Go
+              LetsGo
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke={NEON} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>

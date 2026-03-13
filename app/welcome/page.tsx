@@ -1023,8 +1023,8 @@ function ApplyButton({ type, onClick }: { type: "sales_rep" | "influencer"; onCl
         display: "inline-flex", flexDirection: "column", alignItems: "center",
         position: "relative",
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(90deg, #fff, ${c.solid})`; e.currentTarget.style.WebkitBackgroundClip = "text"; e.currentTarget.style.WebkitTextFillColor = "transparent"; }}
-      onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(90deg, rgba(255,255,255,0.7), ${c.solid})`; e.currentTarget.style.WebkitBackgroundClip = "text"; e.currentTarget.style.WebkitTextFillColor = "transparent"; }}
+      onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(90deg, #fff, ${c.solid})`; e.currentTarget.style.webkitBackgroundClip = "text"; e.currentTarget.style.webkitTextFillColor = "transparent"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(90deg, rgba(255,255,255,0.7), ${c.solid})`; e.currentTarget.style.webkitBackgroundClip = "text"; e.currentTarget.style.webkitTextFillColor = "transparent"; }}
     >
       <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", paddingBottom: "5px" }}>
         <span>{icon}</span> {label} &rarr;

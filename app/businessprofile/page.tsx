@@ -463,7 +463,7 @@ export default function BusinessProfilePage() {
       <div className="relative z-10 max-w-5xl mx-auto p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.35em] text-white/60">Let&apos;sGo</div>
+            <div className="text-[10px] uppercase tracking-[0.35em] text-white/60">LetsGo</div>
             <div className="text-lg font-semibold">Business Profile</div>
             <div className="text-[12px] text-white/55 mt-1">Signed in as {signedInEmail}</div>
           </div>

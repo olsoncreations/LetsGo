@@ -376,7 +376,7 @@ export default function ReferralsPage() {
   const [newBonus, setNewBonus] = useState({ label: "", type: "user", amount_cents: 10000, description: "", expires_at: "" });
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<"influencers" | "referrals">("influencers");
+  const [activeTab, setActiveTab] = useState<"influencers" | "referrals" | "applications">("influencers");
 
   // Referrals date range filter
   const [referralDateRange, setReferralDateRange] = useState("30");
@@ -447,6 +447,193 @@ export default function ReferralsPage() {
   const [newContract, setNewContract] = useState({ label: "", contract_start: "", contract_end: "", notes: "" });
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [contractUploading, setContractUploading] = useState(false);
+
+  // Applications tab state
+  interface Application {
+    id: string;
+    user_id: string;
+    application_type: string;
+    full_name: string;
+    email: string;
+    phone: string | null;
+    city: string | null;
+    state: string | null;
+    payload: Record<string, unknown> | null;
+    status: string;
+    review_message: string | null;
+    reviewed_at: string | null;
+    reviewed_by: string | null;
+    created_at: string;
+  }
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [appStatusFilter, setAppStatusFilter] = useState<"all" | "submitted" | "approved" | "rejected">("all");
+  const [appLoading, setAppLoading] = useState(false);
+  const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [approveTarget, setApproveTarget] = useState<Application | null>(null);
+  const [approveCode, setApproveCode] = useState("");
+  const [rejectTarget, setRejectTarget] = useState<Application | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [appActionLoading, setAppActionLoading] = useState(false);
+  const [showEditAppModal, setShowEditAppModal] = useState(false);
+  const [editAppTarget, setEditAppTarget] = useState<Application | null>(null);
+  const [editAppData, setEditAppData] = useState<{ full_name: string; email: string; phone: string; city: string; state: string }>({ full_name: "", email: "", phone: "", city: "", state: "" });
+  const [showDeleteAppModal, setShowDeleteAppModal] = useState(false);
+  const [deleteAppTarget, setDeleteAppTarget] = useState<Application | null>(null);
+
+  const formatPhone = (raw: string): string => {
+    const digits = raw.replace(/\D/g, "").slice(0, 10);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  };
+
+  const generateCode = (name: string) => {
+    const namePart = name.replace(/\s+/g, "").toUpperCase().slice(0, 10);
+    return `${namePart}${new Date().getFullYear()}`;
+  };
+
+  const fetchApplications = useCallback(async () => {
+    setAppLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const params = new URLSearchParams({ type: "influencer" });
+      if (appStatusFilter !== "all") params.set("status", appStatusFilter);
+      const res = await fetch(`/api/admin/applications?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setApplications(json.applications || []);
+      }
+    } catch (err) {
+      console.error("[Applications] Fetch error:", err);
+    } finally {
+      setAppLoading(false);
+    }
+  }, [appStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === "applications") {
+      fetchApplications();
+    }
+  }, [activeTab, fetchApplications]);
+
+  const handleApproveApp = async () => {
+    if (!approveTarget) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/applications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ id: approveTarget.id, action: "approve", assignmentData: { code: approveCode } }),
+      });
+      if (res.ok) {
+        logAudit({
+          action: "approve_application",
+          tab: AUDIT_TABS.APPLICATIONS,
+          targetType: "role_application",
+          targetId: approveTarget.id,
+          entityName: approveTarget.full_name,
+          fieldName: "status",
+          oldValue: "submitted",
+          newValue: "approved",
+          details: `Influencer application approved`,
+        });
+        setShowApproveModal(false);
+        setApproveTarget(null);
+        setApproveCode("");
+        fetchApplications();
+        fetchData();
+      }
+    } catch (err) {
+      console.error("[Applications] Approve error:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  };
+
+  const handleRejectApp = async () => {
+    if (!rejectTarget) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/applications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ id: rejectTarget.id, action: "reject", message: rejectReason }),
+      });
+      if (res.ok) {
+        logAudit({
+          action: "reject_application",
+          tab: AUDIT_TABS.APPLICATIONS,
+          targetType: "role_application",
+          targetId: rejectTarget.id,
+          entityName: rejectTarget.full_name,
+          fieldName: "status",
+          oldValue: "submitted",
+          newValue: "rejected",
+          details: `Influencer application rejected`,
+        });
+        setShowRejectModal(false);
+        setRejectTarget(null);
+        setRejectReason("");
+        fetchApplications();
+      }
+    } catch (err) {
+      console.error("[Applications] Reject error:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  };
+
+  const handleEditApp = async () => {
+    if (!editAppTarget) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/applications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ id: editAppTarget.id, ...editAppData }),
+      });
+      if (res.ok) {
+        logAudit({ action: "edit_application", tab: AUDIT_TABS.APPLICATIONS, targetType: "role_application", targetId: editAppTarget.id, entityName: editAppTarget.full_name, details: "Influencer application edited by staff" });
+        setShowEditAppModal(false);
+        setEditAppTarget(null);
+        fetchApplications();
+      }
+    } catch (err) {
+      console.error("Error editing application:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  };
+
+  const handleDeleteApp = async () => {
+    if (!deleteAppTarget) return;
+    setAppActionLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch(`/api/admin/applications?id=${deleteAppTarget.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) {
+        logAudit({ action: "delete_application", tab: AUDIT_TABS.APPLICATIONS, targetType: "role_application", targetId: deleteAppTarget.id, entityName: deleteAppTarget.full_name, details: "Influencer application deleted by staff" });
+        setShowDeleteAppModal(false);
+        setDeleteAppTarget(null);
+        setExpandedAppId(null);
+        fetchApplications();
+      }
+    } catch (err) {
+      console.error("Error deleting application:", err);
+    } finally {
+      setAppActionLoading(false);
+    }
+  };
 
   /* ==================== DATA FETCHING ==================== */
 
@@ -2828,6 +3015,22 @@ export default function ReferralsPage() {
           >
             🤝 Referrals
           </button>
+          <button
+            onClick={() => setActiveTab("applications")}
+            style={{
+              padding: "12px 32px",
+              borderRadius: 10,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 700,
+              background: activeTab === "applications" ? COLORS.gradient3 : "transparent",
+              color: activeTab === "applications" ? "#000" : COLORS.textSecondary,
+              transition: "all 0.3s",
+            }}
+          >
+            📋 Applications
+          </button>
         </div>
       </div>
 
@@ -3221,6 +3424,489 @@ export default function ReferralsPage() {
               </Card>
             </>
           )}
+            </>
+          )}
+
+          {/* ==================== APPLICATIONS TAB ==================== */}
+          {activeTab === "applications" && (
+            <>
+              {/* Status Filter Buttons */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                {(["all", "submitted", "approved", "rejected"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setAppStatusFilter(s)}
+                    style={{
+                      padding: "8px 20px",
+                      borderRadius: 8,
+                      border: "1px solid " + (appStatusFilter === s ? COLORS.neonPurple : COLORS.cardBorder),
+                      background: appStatusFilter === s ? "rgba(191,95,255,0.15)" : "transparent",
+                      color: appStatusFilter === s ? COLORS.neonPurple : COLORS.textSecondary,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontWeight: appStatusFilter === s ? 700 : 400,
+                      transition: "all 0.2s",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {appLoading ? (
+                <div style={{ textAlign: "center", padding: 60, color: COLORS.textSecondary }}>Loading applications...</div>
+              ) : applications.length === 0 ? (
+                <Card>
+                  <div style={{ textAlign: "center", padding: 40, color: COLORS.textSecondary }}>
+                    No {appStatusFilter === "all" ? "" : appStatusFilter + " "}applications found.
+                  </div>
+                </Card>
+              ) : (
+                <Card>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
+                          {["Name", "Email", "Social Handles", "Followers", "Niche", "Status", "Applied"].map((h, i) => (
+                            <th key={h} style={{ padding: "12px 14px", textAlign: i === 3 || i === 5 ? "center" : "left", fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {applications.map((app) => {
+                          const p = app.payload || {};
+                          const handles: string[] = [];
+                          if (p.instagramHandle) handles.push(`IG: ${p.instagramHandle}`);
+                          if (p.tiktokHandle) handles.push(`TT: ${p.tiktokHandle}`);
+                          if (p.youtubeHandle) handles.push(`YT: ${p.youtubeHandle}`);
+                          if (p.twitterHandle) handles.push(`X: ${p.twitterHandle}`);
+                          const isExpanded = expandedAppId === app.id;
+
+                          return (
+                            <React.Fragment key={app.id}>
+                              <tr
+                                onClick={() => setExpandedAppId(isExpanded ? null : app.id)}
+                                style={{ borderBottom: isExpanded ? "none" : "1px solid " + COLORS.cardBorder, cursor: "pointer", transition: "background 0.2s" }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                <td style={{ padding: "12px 14px", fontWeight: 600 }}>{app.full_name}</td>
+                                <td style={{ padding: "12px 14px", fontSize: 12, color: COLORS.textSecondary }}>{app.email || "—"}</td>
+                                <td style={{ padding: "12px 14px", fontSize: 11 }}>{handles.length > 0 ? handles.join(", ") : "—"}</td>
+                                <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 600, color: COLORS.neonBlue }}>{p.followerCount ? String(p.followerCount) : "—"}</td>
+                                <td style={{ padding: "12px 14px", fontSize: 12 }}>{p.contentNiche ? String(p.contentNiche) : "—"}</td>
+                                <td style={{ padding: "12px 14px", textAlign: "center" }}><Badge status={app.status} /></td>
+                                <td style={{ padding: "12px 14px", fontSize: 12 }}>{formatDate(app.created_at)}</td>
+                              </tr>
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={7} style={{ padding: 0 }}>
+                                    <div style={{ background: "rgba(191,95,255,0.06)", padding: 20, borderTop: "1px solid " + COLORS.cardBorder, borderBottom: "1px solid " + COLORS.cardBorder }}>
+                                      {/* ── Contact Info ── */}
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonBlue, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Contact Information</div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Full Name</div>
+                                          <div style={{ fontSize: 13, fontWeight: 600 }}>{app.full_name}</div>
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Email</div>
+                                          <div style={{ fontSize: 13 }}>{app.email}</div>
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Phone</div>
+                                          <div style={{ fontSize: 13 }}>{app.phone ? formatPhone(app.phone) : "—"}</div>
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>City / State</div>
+                                          <div style={{ fontSize: 13 }}>{[app.city, app.state].filter(Boolean).join(", ") || "—"}</div>
+                                        </div>
+                                        {!!p.linkedin && (
+                                          <div>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>LinkedIn</div>
+                                            <a href={String(p.linkedin)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: COLORS.neonBlue, textDecoration: "none" }}>{String(p.linkedin)}</a>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* ── Social & Content ── */}
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonPink, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Social & Content</div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Social Handles</div>
+                                          <div style={{ fontSize: 13 }}>
+                                            {Boolean(p.instagramHandle) && <div>Instagram: {String(p.instagramHandle)}</div>}
+                                            {Boolean(p.tiktokHandle) && <div>TikTok: {String(p.tiktokHandle)}</div>}
+                                            {Boolean(p.youtubeHandle) && <div>YouTube: {String(p.youtubeHandle)}</div>}
+                                            {Boolean(p.twitterHandle) && <div>X/Twitter: {String(p.twitterHandle)}</div>}
+                                            {Boolean(p.facebookHandle) && <div>Facebook: {String(p.facebookHandle)}</div>}
+                                            {!p.instagramHandle && !p.tiktokHandle && !p.youtubeHandle && !p.twitterHandle && !p.facebookHandle && <span style={{ color: COLORS.textSecondary }}>None provided</span>}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Follower Count</div>
+                                          <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.neonBlue }}>{p.followerCount ? String(p.followerCount) : "—"}</div>
+                                        </div>
+                                        {!!p.engagementRate && (
+                                          <div>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Engagement Rate</div>
+                                            <div style={{ fontSize: 13 }}>{String(p.engagementRate)}</div>
+                                          </div>
+                                        )}
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Content Niche</div>
+                                          <div style={{ fontSize: 13 }}>{p.contentNiche ? String(p.contentNiche) : "—"}</div>
+                                        </div>
+                                        {!!p.sampleContentUrl && (
+                                          <div>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Sample Content</div>
+                                            <a href={String(p.sampleContentUrl)} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: COLORS.neonBlue, textDecoration: "underline" }}>
+                                              {String(p.sampleContentUrl).slice(0, 60)}{String(p.sampleContentUrl).length > 60 ? "..." : ""}
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* ── Background ── */}
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonGreen, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Background</div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginBottom: 20 }}>
+                                        {!!p.experience && (
+                                          <div style={{ gridColumn: "1 / -1" }}>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Experience</div>
+                                            <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{String(p.experience)}</div>
+                                          </div>
+                                        )}
+                                        {!!p.personality && (
+                                          <div style={{ gridColumn: "1 / -1" }}>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Personality</div>
+                                            <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{String(p.personality)}</div>
+                                          </div>
+                                        )}
+                                        {!!p.territory && (
+                                          <div>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Desired Territory</div>
+                                            <div style={{ fontSize: 13 }}>{String(p.territory)}</div>
+                                          </div>
+                                        )}
+                                        {!!p.travelDistance && (
+                                          <div>
+                                            <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Travel Distance</div>
+                                            <div style={{ fontSize: 13 }}>{String(p.travelDistance)}</div>
+                                          </div>
+                                        )}
+                                        <div>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>How They Heard About Us</div>
+                                          <div style={{ fontSize: 13 }}>{p.referredBy ? String(p.referredBy) : "—"}</div>
+                                        </div>
+                                        <div style={{ gridColumn: "1 / -1" }}>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Why They Want to Be an Influencer</div>
+                                          <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{p.coverNote ? String(p.coverNote) : "—"}</div>
+                                        </div>
+                                      </div>
+
+                                      {/* ── Disclosures & Agreements ── */}
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonYellow, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Disclosures & Agreements</div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10, marginBottom: 20 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.felonyDisclosure === "no" ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.felonyDisclosure === "no" ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Felony conviction: <strong>{p.felonyDisclosure === "no" ? "No" : p.felonyDisclosure === "yes" ? "Yes" : "—"}</strong></span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.hasReliableTransportation ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.hasReliableTransportation ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Reliable transportation</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.agreedAge18 ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.agreedAge18 ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Confirmed 18+</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.agreedWorkAuthorization ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.agreedWorkAuthorization ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Work authorization</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.agreed1099 ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.agreed1099 ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>1099 independent contractor</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.agreedBackgroundCheck ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.agreedBackgroundCheck ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Background check consent</span>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <span style={{ color: p.agreedInterview ? COLORS.neonGreen : COLORS.neonRed, fontSize: 14 }}>{p.agreedInterview ? "✓" : "✗"}</span>
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Interview agreement</span>
+                                        </div>
+                                      </div>
+
+                                      {/* ── Documents ── */}
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonPurple, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Documents</div>
+                                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+                                        {p.driversLicensePath ? (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const { data } = await supabaseBrowser.storage.from("documents").createSignedUrl(String(p.driversLicensePath), 300);
+                                              if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                                              else alert("Failed to load document. Make sure the 'documents' storage bucket exists.");
+                                            }}
+                                            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid " + COLORS.neonPurple, background: "rgba(191,95,255,0.08)", color: COLORS.neonPurple, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                                          >
+                                            📄 View Driver&apos;s License
+                                          </button>
+                                        ) : (
+                                          <span style={{ fontSize: 12, color: COLORS.neonRed }}>⚠ No driver&apos;s license uploaded</span>
+                                        )}
+                                        {p.resumePath ? (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              const { data } = await supabaseBrowser.storage.from("documents").createSignedUrl(String(p.resumePath), 300);
+                                              if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+                                              else alert("Failed to load document. Make sure the 'documents' storage bucket exists.");
+                                            }}
+                                            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid " + COLORS.neonBlue, background: "rgba(0,212,255,0.08)", color: COLORS.neonBlue, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                                          >
+                                            📎 View Resume
+                                          </button>
+                                        ) : (
+                                          <span style={{ fontSize: 12, color: COLORS.textSecondary }}>No resume uploaded</span>
+                                        )}
+                                      </div>
+
+                                      {/* ── Review Status ── */}
+                                      {app.review_message && (
+                                        <div style={{ marginBottom: 16 }}>
+                                          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonOrange, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Review Message</div>
+                                          <div style={{ fontSize: 13, background: COLORS.darkBg, padding: 12, borderRadius: 8 }}>{app.review_message}</div>
+                                        </div>
+                                      )}
+                                      {app.reviewed_by && (
+                                        <div style={{ marginBottom: 16 }}>
+                                          <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 3 }}>Reviewed By</div>
+                                          <div style={{ fontSize: 13 }}>{app.reviewed_by} on {formatDate(app.reviewed_at)}</div>
+                                        </div>
+                                      )}
+                                      <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                                        {app.status === "submitted" && (<>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setApproveTarget(app);
+                                              setApproveCode(generateCode(app.full_name));
+                                              setShowApproveModal(true);
+                                            }}
+                                            style={{ padding: "10px 24px", background: COLORS.neonGreen, border: "none", borderRadius: 8, color: "#000", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                                          >
+                                            Approve
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setRejectTarget(app);
+                                              setRejectReason("");
+                                              setShowRejectModal(true);
+                                            }}
+                                            style={{ padding: "10px 24px", background: COLORS.neonRed, border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                                          >
+                                            Reject
+                                          </button>
+                                        </>)}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditAppTarget(app);
+                                            setEditAppData({ full_name: app.full_name, email: app.email, phone: app.phone ? formatPhone(app.phone) : "", city: app.city || "", state: app.state || "" });
+                                            setShowEditAppModal(true);
+                                          }}
+                                          style={{ padding: "10px 24px", border: "1px solid " + COLORS.neonBlue, background: "rgba(0,212,255,0.08)", borderRadius: 8, color: COLORS.neonBlue, cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                                        >
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setDeleteAppTarget(app); setShowDeleteAppModal(true); }}
+                                          style={{ padding: "10px 24px", border: "1px solid " + COLORS.cardBorder, background: "transparent", borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {/* Approve Modal */}
+              {showApproveModal && approveTarget && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setShowApproveModal(false)}>
+                  <div style={{ background: COLORS.cardBg, borderRadius: 16, padding: 32, width: 460, maxWidth: "90vw", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Approve Application</h3>
+                    <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>
+                      Approve <strong style={{ color: COLORS.neonGreen }}>{approveTarget.full_name}</strong> as an influencer.
+                    </p>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: COLORS.textSecondary }}>Influencer Code</label>
+                    <input
+                      value={approveCode}
+                      onChange={(e) => setApproveCode(e.target.value.toUpperCase().replace(/\s/g, ""))}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: 8,
+                        border: "1px solid " + COLORS.cardBorder,
+                        background: COLORS.darkBg,
+                        color: COLORS.textPrimary,
+                        fontSize: 16,
+                        fontFamily: "monospace",
+                        fontWeight: 700,
+                        letterSpacing: 1,
+                        marginBottom: 20,
+                        boxSizing: "border-box",
+                      }}
+                      placeholder="e.g. SARAH2026"
+                    />
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                      <button
+                        onClick={() => setShowApproveModal(false)}
+                        style={{ padding: "10px 24px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleApproveApp}
+                        disabled={appActionLoading || !approveCode.trim()}
+                        style={{
+                          padding: "10px 24px",
+                          background: appActionLoading || !approveCode.trim() ? COLORS.cardBorder : COLORS.neonGreen,
+                          border: "none",
+                          borderRadius: 8,
+                          color: "#000",
+                          cursor: appActionLoading || !approveCode.trim() ? "not-allowed" : "pointer",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }}
+                      >
+                        {appActionLoading ? "Approving..." : "Confirm Approve"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reject Modal */}
+              {showRejectModal && rejectTarget && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setShowRejectModal(false)}>
+                  <div style={{ background: COLORS.cardBg, borderRadius: 16, padding: 32, width: 460, maxWidth: "90vw", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Reject Application</h3>
+                    <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>
+                      Reject <strong style={{ color: COLORS.neonRed }}>{rejectTarget.full_name}</strong>&apos;s application.
+                    </p>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: COLORS.textSecondary }}>Reason (sent to applicant)</label>
+                    <textarea
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      rows={4}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: 8,
+                        border: "1px solid " + COLORS.cardBorder,
+                        background: COLORS.darkBg,
+                        color: COLORS.textPrimary,
+                        fontSize: 13,
+                        resize: "vertical",
+                        marginBottom: 20,
+                        boxSizing: "border-box",
+                      }}
+                      placeholder="Optional reason for rejection..."
+                    />
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                      <button
+                        onClick={() => setShowRejectModal(false)}
+                        style={{ padding: "10px 24px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleRejectApp}
+                        disabled={appActionLoading}
+                        style={{
+                          padding: "10px 24px",
+                          background: appActionLoading ? COLORS.cardBorder : COLORS.neonRed,
+                          border: "none",
+                          borderRadius: 8,
+                          color: "#fff",
+                          cursor: appActionLoading ? "not-allowed" : "pointer",
+                          fontWeight: 700,
+                          fontSize: 13,
+                        }}
+                      >
+                        {appActionLoading ? "Rejecting..." : "Confirm Reject"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Edit Application Modal ── */}
+              {showEditAppModal && editAppTarget && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setShowEditAppModal(false)}>
+                  <div style={{ background: COLORS.cardBg, borderRadius: 16, padding: 32, width: 460, maxWidth: "90vw", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Edit Application</h3>
+                    <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>Editing <strong style={{ color: COLORS.neonBlue }}>{editAppTarget.full_name}</strong></p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {(["full_name", "email", "phone", "city", "state"] as const).map((field) => (
+                        <div key={field}>
+                          <label style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", display: "block", marginBottom: 4 }}>{field.replace("_", " ")}</label>
+                          <input
+                            value={editAppData[field]}
+                            onChange={(e) => setEditAppData({ ...editAppData, [field]: field === "phone" ? formatPhone(e.target.value) : e.target.value })}
+                            maxLength={field === "phone" ? 14 : undefined}
+                            style={{ width: "100%", padding: "8px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 13, boxSizing: "border-box" }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowEditAppModal(false)} style={{ padding: "10px 24px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Cancel</button>
+                      <button
+                        onClick={handleEditApp}
+                        disabled={appActionLoading}
+                        style={{ padding: "10px 24px", background: appActionLoading ? COLORS.cardBorder : COLORS.neonBlue, border: "none", borderRadius: 8, color: "#000", cursor: appActionLoading ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 13 }}
+                      >
+                        {appActionLoading ? "Saving..." : "Save Changes"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Delete Application Modal ── */}
+              {showDeleteAppModal && deleteAppTarget && (
+                <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }} onClick={() => setShowDeleteAppModal(false)}>
+                  <div style={{ background: COLORS.cardBg, borderRadius: 16, padding: 32, width: 420, maxWidth: "90vw", border: "1px solid " + COLORS.cardBorder }} onClick={(e) => e.stopPropagation()}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Delete Application</h3>
+                    <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 }}>
+                      Are you sure you want to permanently delete the application from <strong style={{ color: COLORS.neonRed }}>{deleteAppTarget.full_name}</strong>? This will also delete any uploaded documents. This cannot be undone.
+                    </p>
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                      <button onClick={() => setShowDeleteAppModal(false)} style={{ padding: "10px 24px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Cancel</button>
+                      <button
+                        onClick={handleDeleteApp}
+                        disabled={appActionLoading}
+                        style={{ padding: "10px 24px", background: appActionLoading ? COLORS.cardBorder : COLORS.neonRed, border: "none", borderRadius: 8, color: "#fff", cursor: appActionLoading ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 13 }}
+                      >
+                        {appActionLoading ? "Deleting..." : "Delete Permanently"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

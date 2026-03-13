@@ -33,7 +33,7 @@ function TotalRevenueCard({ data }: { data: Record<string, number> }) {
   );
 }
 
-interface ZoneData { zone: string; count: number; target: number; color: string; states: { name: string; abbr: string; count: number }[] }
+interface ZoneData { zone: string; count: number; target: number; color: string; salesCents: number; states: { name: string; abbr: string; count: number }[] }
 
 function ZoneCard({ zone }: { zone: ZoneData }) {
   const [hovered, setHovered] = useState(false);
@@ -167,23 +167,22 @@ export default function ExecutivePage() {
   const [adjustmentPeriod, setAdjustmentPeriod] = useState<"day" | "week" | "month" | "year">("month");
   const [referralPeriod, setReferralPeriod] = useState<"day" | "week" | "month" | "year">("month");
 
-  const stateToZone: Record<string, string> = {
-    NE: "Midwest", IA: "Midwest", KS: "Midwest", MO: "Midwest", MN: "Midwest", WI: "Midwest", IL: "Midwest", IN: "Midwest", OH: "Midwest", MI: "Midwest",
-    CO: "Mountain", WY: "Mountain", UT: "Mountain", MT: "Mountain", ID: "Mountain",
-    TX: "Southwest", AZ: "Southwest", NM: "Southwest", OK: "Southwest",
-    FL: "Southeast", GA: "Southeast", AL: "Southeast", SC: "Southeast", NC: "Southeast", TN: "Southeast", MS: "Southeast", LA: "Southeast", AR: "Southeast", VA: "Southeast",
-    NY: "Northeast", PA: "Northeast", NJ: "Northeast", CT: "Northeast", MA: "Northeast", MD: "Northeast", DE: "Northeast", RI: "Northeast",
-    CA: "Pacific", WA: "Pacific", OR: "Pacific", HI: "Pacific", AK: "Pacific",
-    ND: "Great Plains", SD: "Great Plains", NV: "Great Plains", WV: "Great Plains",
-    ME: "New England", NH: "New England", VT: "New England",
-  };
+  const divisionDefs: { name: string; states: string[]; goal: number; color: string }[] = [
+    { name: "Northeast", states: ["CT","DC","DE","MA","MD","ME","NH","NJ","NY","PA","RI","VT"], goal: 50, color: "#cc0000" },
+    { name: "Southeast", states: ["AL","FL","GA","KY","NC","SC","TN","VA","WV"], goal: 45, color: "#8b2fc9" },
+    { name: "Mideast", states: ["IA","IL","IN","MI","MN","MO","MS","OH","WI"], goal: 40, color: COLORS.neonBlue },
+    { name: "Midwest", states: ["AR","AZ","CO","KS","LA","MT","ND","NE","NM","OK","SD","TX","WY"], goal: 40, color: COLORS.neonOrange },
+    { name: "West", states: ["AK","CA","HI","ID","NV","OR","UT","WA"], goal: 35, color: COLORS.neonGreen },
+  ];
+  const stateToDivision: Record<string, string> = {};
+  divisionDefs.forEach(d => d.states.forEach(s => { stateToDivision[s] = d.name; }));
   const stateNames: Record<string, string> = {
     NE: "Nebraska", IA: "Iowa", KS: "Kansas", MO: "Missouri", CO: "Colorado", WY: "Wyoming", UT: "Utah", TX: "Texas", AZ: "Arizona", NM: "New Mexico",
     FL: "Florida", GA: "Georgia", AL: "Alabama", NY: "New York", PA: "Pennsylvania", NJ: "New Jersey", CA: "California", WA: "Washington", OR: "Oregon",
     ND: "North Dakota", SD: "South Dakota", CT: "Connecticut", MA: "Massachusetts", OH: "Ohio", MN: "Minnesota", WI: "Wisconsin", IL: "Illinois",
     IN: "Indiana", MI: "Michigan", MT: "Montana", ID: "Idaho", OK: "Oklahoma", SC: "South Carolina", NC: "North Carolina", TN: "Tennessee",
     MS: "Mississippi", LA: "Louisiana", AR: "Arkansas", VA: "Virginia", MD: "Maryland", DE: "Delaware", RI: "Rhode Island", HI: "Hawaii", AK: "Alaska",
-    ME: "Maine", NH: "New Hampshire", VT: "Vermont", NV: "Nevada", WV: "West Virginia",
+    ME: "Maine", NH: "New Hampshire", VT: "Vermont", NV: "Nevada", WV: "West Virginia", KY: "Kentucky", DC: "Washington D.C.",
   };
 
   const fetchData = useCallback(async () => {
@@ -248,15 +247,26 @@ export default function ExecutivePage() {
         setForecastAnnual(lv > 0 ? Math.round(lv*12*(1+gr)) : 0);
       }
 
-      // ---- BUSINESSES BY ZONE ----
+      // ---- BUSINESSES BY DIVISION ----
       const { data: businesses } = await supabaseBrowser.from("business").select("id, state, created_at");
+      // Fetch sales $ per division: sales_signups → zone_id → sales_zones.name → divisionDef
+      const { data: salesZones } = await supabaseBrowser.from("sales_zones").select("id, name, goal");
+      const { data: salesSignups } = await supabaseBrowser.from("sales_signups").select("zone_id, commission_cents, ad_spend_cents");
+      const salesByDivision: Record<string, number> = {};
+      const goalByDivision: Record<string, number> = {};
+      if (salesSignups && salesZones) {
+        const zoneNameMap: Record<string, string> = {};
+        salesZones.forEach((sz: { id: string; name: string; goal: number | null }) => { zoneNameMap[sz.id] = sz.name; if (sz.goal) goalByDivision[sz.name] = sz.goal; });
+        salesSignups.forEach((s: { zone_id: string | null; commission_cents: number | null; ad_spend_cents: number | null }) => {
+          const divName = s.zone_id ? zoneNameMap[s.zone_id] || divisionDefs[0].name : divisionDefs[0].name;
+          salesByDivision[divName] = (salesByDivision[divName] || 0) + (s.commission_cents || 0) + (s.ad_spend_cents || 0);
+        });
+      }
       if (businesses && businesses.length > 0) {
-        const zm: Record<string,{count:number;states:Record<string,number>}> = {};
-        ["Midwest","Mountain","Southwest","Southeast","Northeast","Pacific","Great Plains","New England"].forEach(z => { zm[z] = {count:0,states:{}}; });
-        businesses.forEach(b => { const z = stateToZone[b.state]||"Midwest"; if(!zm[z]) zm[z]={count:0,states:{}}; zm[z].count++; if(b.state) zm[z].states[b.state]=(zm[z].states[b.state]||0)+1; });
-        const zc: Record<string,string> = {Midwest:COLORS.neonPink,Mountain:COLORS.neonBlue,Southwest:COLORS.neonGreen,Southeast:COLORS.neonYellow,Northeast:COLORS.neonPurple,Pacific:COLORS.neonOrange,"Great Plains":COLORS.neonRed||"#ff3131","New England":"#00ff88"};
-        const zt: Record<string,number> = {Midwest:60,Mountain:35,Southwest:40,Southeast:30,Northeast:25,Pacific:20,"Great Plains":15,"New England":10};
-        setBusinessesByZone(Object.entries(zm).map(([z,d])=>({zone:z,count:d.count,target:zt[z]||20,color:zc[z]||COLORS.neonPink,states:Object.entries(d.states).map(([a,c])=>({abbr:a,name:stateNames[a]||a,count:c}))})));
+        const dm: Record<string,{count:number;states:Record<string,number>}> = {};
+        divisionDefs.forEach(d => { dm[d.name] = {count:0,states:{}}; });
+        businesses.forEach(b => { const d = stateToDivision[b.state]||divisionDefs[0].name; if(!dm[d]) dm[d]={count:0,states:{}}; dm[d].count++; if(b.state) dm[d].states[b.state]=(dm[d].states[b.state]||0)+1; });
+        setBusinessesByZone(divisionDefs.map(def=>({zone:def.name,count:dm[def.name]?.count||0,target:goalByDivision[def.name]||def.goal,color:def.color,salesCents:salesByDivision[def.name]||0,states:Object.entries(dm[def.name]?.states||{}).map(([a,c])=>({abbr:a,name:stateNames[a]||a,count:c}))})));
         const bm: Record<string,number> = {};
         businesses.forEach(b => { const m = new Date(b.created_at).toLocaleDateString("en-US",{month:"short"}); bm[m]=(bm[m]||0)+1; });
         setNewBusinessesByPeriod(p => ({...p, month: Object.entries(bm).slice(-6).map(([l,c])=>({label:l,count:c}))}));
@@ -516,7 +526,102 @@ export default function ExecutivePage() {
 
       {/* BUSINESS GEOGRAPHY */}
       <SectionTitle icon="🗺️">Business Geography</SectionTitle>
-      {businessesByZone.length===0?<div style={{padding:24,textAlign:"center",color:COLORS.textSecondary,marginBottom:24}}>No business data yet</div>:<div style={{display:"grid",gridTemplateColumns:"repeat(4, 1fr)",gap:16,marginBottom:24}}>{businessesByZone.map((z,i)=><ZoneCard key={i} zone={z}/>)}</div>}
+      {businessesByZone.length===0?<div style={{padding:24,textAlign:"center",color:COLORS.textSecondary,marginBottom:24}}>No business data yet</div>:(
+        <div style={{display:"grid",gridTemplateColumns:"3fr 1fr",gap:20,marginBottom:24}}>
+          {/* Left: 3x2 Division Cards */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gridTemplateRows:"repeat(2, 1fr)",gap:14}}>
+            {businessesByZone.map((z,i)=>{
+              const def = divisionDefs[i];
+              const fullStateNames = def?.states.map(s => stateNames[s] || s) || [];
+              const half=Math.ceil(fullStateNames.length/2);
+              const col1=fullStateNames.slice(0,half);
+              const col2=fullStateNames.slice(half);
+              const sales = ((z.salesCents||0)/100);
+              return (
+                <div key={i} style={{background:"linear-gradient(135deg, "+COLORS.darkBg+" 0%, rgba(45,45,68,0.6) 100%)",borderRadius:14,border:"1px solid "+COLORS.cardBorder,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  {/* Colored top accent bar */}
+                  <div style={{height:3,background:z.color}}/>
+                  <div style={{padding:"16px 18px 14px",flex:1,display:"flex",flexDirection:"column"}}>
+                    {/* Title row with division number */}
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:12}}>
+                      <div style={{fontSize:20,fontWeight:800,color:z.color,letterSpacing:"-0.02em"}}>{z.zone}</div>
+                      <div style={{fontSize:11,color:z.color,opacity:0.5,fontWeight:600}}>#{i+1}</div>
+                    </div>
+                    {/* States + Dollar */}
+                    <div style={{display:"flex",flex:1,gap:0}}>
+                      {/* States section */}
+                      <div style={{display:"flex",gap:16,flex:1,padding:"4px 0"}}>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",lineHeight:1.7}}>{col1.map((name,j)=><div key={j}>{name}</div>)}</div>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",lineHeight:1.7}}>{col2.map((name,j)=><div key={j}>{name}</div>)}</div>
+                      </div>
+                      {/* Divider */}
+                      <div style={{width:1,background:"rgba(255,255,255,0.08)",margin:"0 14px",alignSelf:"stretch"}}/>
+                      {/* Sales section */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"center",minWidth:90,background:"rgba(255,255,255,0.02)",borderRadius:10,padding:"8px 12px"}}>
+                        <div style={{fontSize:sales >= 1000 ? 30 : 36,fontWeight:900,color:"#fff",letterSpacing:"-0.03em",textShadow:"0 2px 12px rgba(255,255,255,0.1)"}}>${sales.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {/* 6th slot: Total Sales card */}
+            {businessesByZone.length<6&&(()=>{
+              const totalSales = businessesByZone.reduce((s,z)=>s+(z.salesCents||0),0)/100;
+              return (
+                <div style={{background:"linear-gradient(135deg, "+COLORS.darkBg+" 0%, rgba(45,45,68,0.6) 100%)",borderRadius:14,border:"1px solid "+COLORS.cardBorder,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  <div style={{height:3,background:"linear-gradient(90deg, "+COLORS.neonPink+", "+COLORS.neonBlue+", "+COLORS.neonGreen+")"}}/>
+                  <div style={{padding:"16px 18px",flex:1,display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:COLORS.textSecondary,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Total Sales</div>
+                    <div style={{fontSize:42,fontWeight:900,color:"#fff",letterSpacing:"-0.03em",textShadow:"0 2px 16px rgba(255,255,255,0.15)"}}>${totalSales.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+                    <div style={{fontSize:11,color:COLORS.textSecondary,marginTop:6}}>{businessesByZone.length} divisions</div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          {/* Right: Summary Table */}
+          <div style={{background:"linear-gradient(135deg, "+COLORS.darkBg+" 0%, rgba(45,45,68,0.6) 100%)",borderRadius:14,border:"1px solid "+COLORS.cardBorder,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{height:3,background:"linear-gradient(90deg, "+COLORS.neonPurple+", "+COLORS.neonBlue+")"}}/>
+            <div style={{padding:"18px 16px",flex:1,display:"flex",flexDirection:"column"}}>
+              <div style={{fontSize:15,fontWeight:700,marginBottom:16,letterSpacing:"-0.01em"}}>Division Summary</div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,flex:1}}>
+                <thead>
+                  <tr style={{borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+                    <th style={{textAlign:"left",padding:"8px 6px",color:COLORS.textSecondary,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Division</th>
+                    <th style={{textAlign:"right",padding:"8px 6px",color:COLORS.textSecondary,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Quota</th>
+                    <th style={{textAlign:"right",padding:"8px 6px",color:COLORS.textSecondary,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>Signups</th>
+                    <th style={{textAlign:"right",padding:"8px 6px",color:COLORS.textSecondary,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {businessesByZone.map((z,i)=>{
+                    const pct=z.target>0?(z.count/z.target)*100:0;
+                    return (
+                      <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                        <td style={{padding:"10px 6px",fontWeight:700,color:z.color,fontSize:12}}>{z.zone}</td>
+                        <td style={{textAlign:"right",padding:"10px 6px",color:"rgba(255,255,255,0.6)"}}>{z.target}</td>
+                        <td style={{textAlign:"right",padding:"10px 6px",fontWeight:700,color:"#fff"}}>{z.count}</td>
+                        <td style={{textAlign:"right",padding:"10px 6px",fontWeight:800,fontSize:12,color:pct>=100?COLORS.neonGreen:pct>=50?COLORS.neonYellow:pct>0?"#ff6b6b":"rgba(255,255,255,0.3)"}}>{pct.toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  {(()=>{const tq=businessesByZone.reduce((s,z)=>s+z.target,0);const tc=businessesByZone.reduce((s,z)=>s+z.count,0);const tp=tq>0?(tc/tq)*100:0;return(
+                    <tr style={{borderTop:"2px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",borderRadius:8}}>
+                      <td style={{padding:"14px 6px",fontWeight:800,fontSize:13,color:"#fff",borderBottomLeftRadius:8}}>Total</td>
+                      <td style={{textAlign:"right",padding:"14px 6px",fontWeight:800,fontSize:13,color:"#fff"}}>{tq}</td>
+                      <td style={{textAlign:"right",padding:"14px 6px",fontWeight:800,fontSize:13,color:"#fff"}}>{tc}</td>
+                      <td style={{textAlign:"right",padding:"14px 6px",fontWeight:900,fontSize:14,color:tp>=100?COLORS.neonGreen:tp>=50?COLORS.neonYellow:tp>0?"#ff6b6b":"rgba(255,255,255,0.3)",borderBottomRightRadius:8}}>{tp.toFixed(1)}%</td>
+                    </tr>
+                  );})()}
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* OPERATIONS ROW */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>

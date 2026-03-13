@@ -1,4 +1,4 @@
-# Let's Go - Project Documentation
+# LetsGo - Project Documentation
 
 ## Rules
 
@@ -58,9 +58,9 @@
 
 ## Project Overview
 
-**Let's Go**: Discovery + rewards platform. Users find restaurants/activities, earn progressive cash-back (5% → 20%) for repeat visits.
+**LetsGo**: Discovery + rewards platform. Users find restaurants/activities, earn progressive cash-back (5% → 20%) for repeat visits.
 
-**Tagline**: "Go. Play. Eat. Get paid to live life."
+**Tagline**: "Go. Play. Eat. Get paid to live your best life."
 
 **Core Model**:
 - Users swipe/discover → visit → upload receipts → earn progressive payouts
@@ -218,7 +218,7 @@ import Image from 'next/image'
 
 <Image
   src="/lg-logo.png"
-  alt="Let's Go"
+  alt="LetsGo"
   width={200}
   height={60}
 />

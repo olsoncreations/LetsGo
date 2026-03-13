@@ -233,6 +233,95 @@ export default function SettingsPage() {
   const [editCatScope, setEditCatScope] = useState<string[]>(["business"]);
   const [editCatRequiresFood, setEditCatRequiresFood] = useState(false);
 
+  // Quotas tab state
+  interface QuotaZone { id: string; name: string; goal: number; states: string[] }
+  interface QuotaSalesConfig { id: string; category: string; key: string; value_cents: number | null; value_int: number | null }
+  interface QuotaOverrideRow { id: string; target_type: string; target_id: string; quota: number; period: string }
+  const [quotaZones, setQuotaZones] = useState<QuotaZone[]>([]);
+  const [quotaSalesConfig, setQuotaSalesConfig] = useState<QuotaSalesConfig[]>([]);
+  const [quotaOverrides, setQuotaOverrides] = useState<QuotaOverrideRow[]>([]);
+  const [quotaEditing, setQuotaEditing] = useState(false);
+  const [quotaSaving, setQuotaSaving] = useState(false);
+  const [quotaZoneEdits, setQuotaZoneEdits] = useState<Record<string, number>>({});
+  const [quotaConfigEdits, setQuotaConfigEdits] = useState<Record<string, number>>({});
+  const [quotaRateEdits, setQuotaRateEdits] = useState<Record<string, number>>({});
+  const [quotaRepNames, setQuotaRepNames] = useState<Record<string, string>>({});
+  const [quotaZoneNames, setQuotaZoneNames] = useState<Record<string, string>>({});
+
+  const fetchQuotaData = useCallback(async () => {
+    const [zonesRes, configRes, overridesRes, repsRes] = await Promise.all([
+      supabaseBrowser.from("sales_zones").select("id, name, goal, states").order("name"),
+      supabaseBrowser.from("sales_config").select("*"),
+      supabaseBrowser.from("sales_quota_overrides").select("*").order("period", { ascending: false }),
+      supabaseBrowser.from("sales_reps").select("id, name"),
+    ]);
+    if (zonesRes.data) setQuotaZones(zonesRes.data);
+    if (configRes.data) setQuotaSalesConfig(configRes.data);
+    if (overridesRes.data) setQuotaOverrides(overridesRes.data);
+    // Build name lookups for overrides table
+    const rn: Record<string, string> = {};
+    if (repsRes.data) repsRes.data.forEach((r: { id: string; name: string }) => { rn[r.id] = r.name; });
+    setQuotaRepNames(rn);
+    const zn: Record<string, string> = {};
+    if (zonesRes.data) zonesRes.data.forEach((z: QuotaZone) => { zn[z.id] = z.name; });
+    setQuotaZoneNames(zn);
+  }, []);
+
+  const getQuotaConfig = useCallback((key: string, type: "cents" | "int" = "cents"): number => {
+    const c = quotaSalesConfig.find(cfg => cfg.key === key);
+    const defaults: Record<string, number> = { basic_signup: 2500, premium_signup: 10000, advertising_per_100: 1000, individual_monthly: 60, bonus_eligibility: 30, team_monthly: 300, individual_daily: 200, team_daily: 1000, bonus_eligibility_daily: 100, rep_quota_daily: 200, rep_bonus_daily: 100, lead_quota_daily: 200, lead_bonus_daily: 100, training_quota_daily: 100, training_bonus_daily: 50 };
+    if (!c) return defaults[key] || 0;
+    return type === "cents" ? (c.value_cents || 0) : (c.value_int || 0);
+  }, [quotaSalesConfig]);
+
+  const handleSaveQuotas = useCallback(async () => {
+    setQuotaSaving(true);
+    try {
+      // Save zone goals
+      for (const [zoneId, goal] of Object.entries(quotaZoneEdits)) {
+        await supabaseBrowser.from("sales_zones").update({ goal }).eq("id", zoneId);
+      }
+      // Save config (daily quotas stored as hundredths in value_cents, others as value_int)
+      const dailyKeys = ["individual_daily", "team_daily", "bonus_eligibility_daily", "rep_quota_daily", "rep_bonus_daily", "lead_quota_daily", "lead_bonus_daily", "training_quota_daily", "training_bonus_daily"];
+      for (const [key, value] of Object.entries(quotaConfigEdits)) {
+        const existing = quotaSalesConfig.find(c => c.key === key);
+        const isDaily = dailyKeys.includes(key);
+        const updateData = isDaily ? { value_cents: value, value_int: null } : { value_int: value, value_cents: null };
+        if (existing) {
+          await supabaseBrowser.from("sales_config").update(updateData).eq("id", existing.id);
+        } else {
+          await supabaseBrowser.from("sales_config").insert({ category: "quota", key, ...updateData });
+        }
+      }
+      // Save config cents (rates)
+      for (const [key, value] of Object.entries(quotaRateEdits)) {
+        const existing = quotaSalesConfig.find(c => c.key === key);
+        if (existing) {
+          await supabaseBrowser.from("sales_config").update({ value_cents: value }).eq("id", existing.id);
+        } else {
+          await supabaseBrowser.from("sales_config").insert({ category: "commission", key, value_cents: value, value_int: null });
+        }
+      }
+      await logAudit({ tab: AUDIT_TABS.SETTINGS, targetType: "quota", action: "Updated quota settings", details: JSON.stringify({ zones: quotaZoneEdits, quotas: quotaConfigEdits, rates: quotaRateEdits }), staffId: currentStaffId });
+      setQuotaEditing(false);
+      setQuotaZoneEdits({});
+      setQuotaConfigEdits({});
+      setQuotaRateEdits({});
+      await fetchQuotaData();
+    } catch (e) {
+      alert("Error saving quotas: " + (e instanceof Error ? e.message : "Unknown error"));
+    } finally {
+      setQuotaSaving(false);
+    }
+  }, [quotaZoneEdits, quotaConfigEdits, quotaRateEdits, quotaSalesConfig, currentStaffId, fetchQuotaData]);
+
+  const handleDeleteOverride = useCallback(async (id: string) => {
+    if (!confirm("Delete this quota override?")) return;
+    await supabaseBrowser.from("sales_quota_overrides").delete().eq("id", id);
+    await logAudit({ tab: AUDIT_TABS.SETTINGS, targetType: "quota_override", action: "Deleted quota override", details: id, staffId: currentStaffId });
+    await fetchQuotaData();
+  }, [currentStaffId, fetchQuotaData]);
+
   // ==================== DATA FETCHING ====================
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -275,7 +364,7 @@ export default function SettingsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); fetchQuotaData(); }, [fetchData, fetchQuotaData]);
 
   // ==================== TAG MANAGEMENT ====================
   const fetchTags = useCallback(async () => {
@@ -637,6 +726,7 @@ export default function SettingsPage() {
           { key: "roles", label: "Staff Roles" },
           { key: "security", label: "Security" },
           { key: "tags", label: "Tag Management" },
+          { key: "quotas", label: "Quotas" },
           { key: "influencer_tiers", label: "Influencer Tiers" },
           { key: "maintenance", label: "Maintenance" },
         ].map(section => (
@@ -2275,6 +2365,241 @@ export default function SettingsPage() {
                   })()}
                 </div>
               </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ==================== QUOTAS ==================== */}
+      {settingsSection === "quotas" && (
+        <div style={{ display: "grid", gap: 24 }}>
+          {/* Edit/Save bar */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            {quotaEditing ? (
+              <>
+                <button onClick={() => { setQuotaEditing(false); setQuotaZoneEdits({}); setQuotaConfigEdits({}); setQuotaRateEdits({}); }} style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                <button onClick={handleSaveQuotas} disabled={quotaSaving} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: COLORS.neonGreen, color: "#000", cursor: "pointer", fontSize: 13, fontWeight: 700, opacity: quotaSaving ? 0.6 : 1 }}>{quotaSaving ? "Saving..." : "Save All Changes"}</button>
+              </>
+            ) : (
+              <button onClick={() => setQuotaEditing(true)} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: COLORS.gradient1, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Edit Quotas</button>
+            )}
+          </div>
+
+          {/* Card 1: Division Signup Quotas */}
+          <Card title="DIVISION SIGNUP QUOTAS">
+            <div style={{ padding: 16, background: "rgba(0,212,255,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(0,212,255,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <span style={{ fontSize: 20 }}>🗺️</span>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.5 }}>
+                  Set <strong>daily</strong> signup quotas per division. Weekly, monthly, quarterly, and yearly are automatically calculated. These goals appear on the Executive dashboard and Sales page.
+                </div>
+              </div>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Division</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>States</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Daily</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Weekly</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Quarterly</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Yearly</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quotaZones.map(z => {
+                  const daily = quotaZoneEdits[z.id] !== undefined ? quotaZoneEdits[z.id] : z.goal;
+                  return (
+                    <tr key={z.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                      <td style={{ padding: "12px 12px", fontWeight: 700, fontSize: 14 }}>{z.name}</td>
+                      <td style={{ padding: "12px 12px", color: COLORS.textSecondary, fontSize: 11 }}>{(z.states || []).join(", ")}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px" }}>
+                        {quotaEditing ? (
+                          <input type="number" value={daily} onChange={e => setQuotaZoneEdits(prev => ({ ...prev, [z.id]: parseInt(e.target.value) || 0 }))} style={{ width: 70, padding: "6px 10px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", textAlign: "right", fontSize: 14, fontWeight: 700 }} />
+                        ) : (
+                          <span style={{ fontSize: 16, fontWeight: 800, color: COLORS.neonBlue }}>{daily}</span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 7).toLocaleString()}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 30).toLocaleString()}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 90).toLocaleString()}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 365).toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                {(() => {
+                  const totalDaily = quotaZones.reduce((s, z) => s + (quotaZoneEdits[z.id] !== undefined ? quotaZoneEdits[z.id] : z.goal), 0);
+                  return (
+                    <tr style={{ borderTop: "2px solid " + COLORS.cardBorder, background: "rgba(255,255,255,0.03)" }}>
+                      <td style={{ padding: "12px 12px", fontWeight: 800 }}>Total</td>
+                      <td style={{ padding: "12px 12px", color: COLORS.textSecondary, fontSize: 11 }}>{quotaZones.reduce((s, z) => s + (z.states || []).length, 0)} states</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 800, fontSize: 16, color: COLORS.neonBlue }}>{totalDaily}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 7).toLocaleString()}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 30).toLocaleString()}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 90).toLocaleString()}</td>
+                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 365).toLocaleString()}</td>
+                    </tr>
+                  );
+                })()}
+              </tfoot>
+            </table>
+          </Card>
+
+          {/* Card 2: Sales Rep Quotas */}
+          <Card title="SALES REP QUOTAS (DEFAULTS)">
+            <div style={{ padding: 16, background: "rgba(57,255,20,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(57,255,20,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <span style={{ fontSize: 20 }}>🎯</span>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.5 }}>
+                  Set <strong>daily</strong> targets. Weekly, monthly, quarterly, and yearly are automatically calculated. Individual overrides can be set per rep in the Overrides section below.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              {[
+                { quotaKey: "rep_quota_daily", bonusKey: "rep_bonus_daily", label: "Sales Rep", desc: "Ground-floor reps", icon: "👤", color: COLORS.neonGreen, fallbackQuota: "individual_daily", fallbackBonus: "bonus_eligibility_daily", defaultQuota: 200, defaultBonus: 100 },
+                { quotaKey: "lead_quota_daily", bonusKey: "lead_bonus_daily", label: "Team Lead", desc: "Leads on the ground + training", icon: "👥", color: COLORS.neonBlue, fallbackQuota: "individual_daily", fallbackBonus: "bonus_eligibility_daily", defaultQuota: 200, defaultBonus: 100 },
+                { quotaKey: "training_quota_daily", bonusKey: "training_bonus_daily", label: "In Training", desc: "New reps in training", icon: "🎓", color: COLORS.neonPurple, fallbackQuota: null, fallbackBonus: null, defaultQuota: 100, defaultBonus: 50 },
+              ].map(item => {
+                const rawQuota = quotaConfigEdits[item.quotaKey] !== undefined ? quotaConfigEdits[item.quotaKey] : (getQuotaConfig(item.quotaKey, "cents") || (item.fallbackQuota ? getQuotaConfig(item.fallbackQuota, "cents") : 0) || item.defaultQuota);
+                const rawBonus = quotaConfigEdits[item.bonusKey] !== undefined ? quotaConfigEdits[item.bonusKey] : (getQuotaConfig(item.bonusKey, "cents") || (item.fallbackBonus ? getQuotaConfig(item.fallbackBonus, "cents") : 0) || item.defaultBonus);
+                const quotaVal = rawQuota / 100;
+                const bonusVal = rawBonus / 100;
+                return (
+                  <div key={item.quotaKey} style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                      <span style={{ fontSize: 18 }}>{item.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{item.desc}</div>
+                      </div>
+                    </div>
+
+                    {/* Daily Quota */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Daily Signup Quota</div>
+                      {quotaEditing ? (
+                        <input type="number" step="0.1" value={quotaVal} onChange={e => setQuotaConfigEdits(prev => ({ ...prev, [item.quotaKey]: Math.round(parseFloat(e.target.value || "0") * 100) }))} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 22, fontWeight: 800, textAlign: "center" }} />
+                      ) : (
+                        <div style={{ fontSize: 28, fontWeight: 900, color: item.color, textAlign: "center" }}>{quotaVal % 1 === 0 ? quotaVal : parseFloat(quotaVal.toFixed(2))}</div>
+                      )}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        {[{ label: "Weekly", mult: 7 }, { label: "Monthly", mult: 30 }, { label: "Quarterly", mult: 90 }, { label: "Yearly", mult: 365 }].map(p => (
+                          <div key={p.label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 9, color: COLORS.textSecondary, marginBottom: 1 }}>{p.label}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>{Math.round(quotaVal * p.mult).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bonus Eligibility */}
+                    <div style={{ padding: "12px 0 0", borderTop: "1px solid " + COLORS.cardBorder }}>
+                      <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Bonus Eligibility (daily min)</div>
+                      {quotaEditing ? (
+                        <input type="number" step="0.1" value={bonusVal} onChange={e => setQuotaConfigEdits(prev => ({ ...prev, [item.bonusKey]: Math.round(parseFloat(e.target.value || "0") * 100) }))} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 22, fontWeight: 800, textAlign: "center" }} />
+                      ) : (
+                        <div style={{ fontSize: 28, fontWeight: 900, color: COLORS.neonYellow, textAlign: "center" }}>{bonusVal % 1 === 0 ? bonusVal : parseFloat(bonusVal.toFixed(2))}</div>
+                      )}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                        {[{ label: "Weekly", mult: 7 }, { label: "Monthly", mult: 30 }, { label: "Quarterly", mult: 90 }, { label: "Yearly", mult: 365 }].map(p => (
+                          <div key={p.label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 9, color: COLORS.textSecondary, marginBottom: 1 }}>{p.label}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>{Math.round(bonusVal * p.mult).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Card 3: Commission Rates */}
+          <Card title="COMMISSION RATES">
+            <div style={{ padding: 16, background: "rgba(255,45,146,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(255,45,146,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <span style={{ fontSize: 20 }}>💰</span>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.5 }}>
+                  Commission paid to sales reps per signup type. Advertising commission is calculated per $100 of ad spend sold.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              {[
+                { key: "basic_signup", label: "Basic Signup", desc: "Per basic plan signup", icon: "📋" },
+                { key: "premium_signup", label: "Premium Signup", desc: "Per premium plan signup", icon: "⭐" },
+                { key: "advertising_per_100", label: "Advertising / $100", desc: "Per $100 ad spend sold", icon: "📺" },
+              ].map(item => {
+                const val = quotaRateEdits[item.key] !== undefined ? quotaRateEdits[item.key] : getQuotaConfig(item.key, "cents");
+                return (
+                  <div key={item.key} style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 18 }}>{item.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{item.desc}</div>
+                      </div>
+                    </div>
+                    {quotaEditing ? (
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 20, fontWeight: 800, color: COLORS.textSecondary }}>$</span>
+                        <input type="number" step="0.01" value={(val / 100).toFixed(2)} onChange={e => setQuotaRateEdits(prev => ({ ...prev, [item.key]: Math.round(parseFloat(e.target.value || "0") * 100) }))} style={{ width: "100%", padding: "10px 14px 10px 32px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 24, fontWeight: 800, textAlign: "center" }} />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 32, fontWeight: 900, color: COLORS.neonPink, textAlign: "center" }}>${(val / 100).toFixed(2)}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Card 4: Active Quota Overrides */}
+          <Card title="ACTIVE QUOTA OVERRIDES">
+            <div style={{ padding: 16, background: "rgba(191,95,255,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(191,95,255,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <span style={{ fontSize: 20 }}>📝</span>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.5 }}>
+                  Per-rep, per-team, or per-division overrides. These take priority over the defaults above. Manage overrides from the Sales page Quotas tab.
+                </div>
+              </div>
+            </div>
+            {quotaOverrides.length === 0 ? (
+              <div style={{ padding: 32, textAlign: "center", color: COLORS.textSecondary, fontSize: 14 }}>No active overrides. Use the Sales page to add per-rep or per-division overrides.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
+                    <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Type</th>
+                    <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Target</th>
+                    <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Quota</th>
+                    <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Period</th>
+                    <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotaOverrides.map(o => (
+                    <tr key={o.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                      <td style={{ padding: "10px 12px", textTransform: "capitalize" }}>
+                        <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: o.target_type === "individual" ? "rgba(0,212,255,0.15)" : o.target_type === "team" ? "rgba(57,255,20,0.15)" : "rgba(255,45,146,0.15)", color: o.target_type === "individual" ? COLORS.neonBlue : o.target_type === "team" ? COLORS.neonGreen : COLORS.neonPink }}>{o.target_type}</span>
+                      </td>
+                      <td style={{ padding: "10px 12px", fontWeight: 600 }}>
+                        {o.target_type === "division" ? (quotaZoneNames[o.target_id] || o.target_id) : (quotaRepNames[o.target_id] || o.target_id)}
+                      </td>
+                      <td style={{ textAlign: "right", padding: "10px 12px", fontWeight: 800, color: COLORS.neonPurple, fontSize: 15 }}>{o.quota}</td>
+                      <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 12, color: COLORS.textSecondary }}>{o.period}</td>
+                      <td style={{ textAlign: "right", padding: "10px 12px" }}>
+                        <button onClick={() => handleDeleteOverride(o.id)} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid rgba(255,49,49,0.3)", background: "rgba(255,49,49,0.1)", color: "#ff4444", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </Card>
         </div>

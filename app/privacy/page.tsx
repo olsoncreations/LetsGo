@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 32, lineHeight: 1.7, fontSize: 14 }}>
 
           <Section title="1. Introduction">
-            <p>Let&apos;s Go, LLC (&quot;Let&apos;s Go,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy and the security of your personal information. This Privacy Policy explains in detail how we collect, use, disclose, store, and safeguard your information when you use our website, mobile applications, APIs, and all related services (collectively, the &quot;Services&quot;).</p>
+            <p>OlsonCreations, LLC, DBA &quot;LETS GO OUT&quot; (&quot;LetsGo,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy and the security of your personal information. This Privacy Policy explains in detail how we collect, use, disclose, store, and safeguard your information when you use our website, mobile applications, APIs, and all related services (collectively, the &quot;Services&quot;).</p>
             <p>By creating an account or using the Services, you consent to the data practices described in this Privacy Policy. If you do not agree with any part of this Privacy Policy, please do not create an account or use the Services. This Privacy Policy is incorporated by reference into our <a href="/terms" style={{ color: "#00d4ff", textDecoration: "underline" }}>Terms of Service</a>.</p>
           </Section>
 
@@ -108,7 +108,7 @@ export default function PrivacyPolicyPage() {
             <ul style={{ paddingLeft: 20, margin: "8px 0" }}>
               <li>Messages sent through our in-app messaging/support system</li>
               <li>Support ticket content</li>
-              <li>Emails and other correspondence with Let&apos;s Go</li>
+              <li>Emails and other correspondence with LetsGo</li>
             </ul>
 
             <p><strong style={{ color: "#fff" }}>Business Account Information (for Partners):</strong></p>
@@ -221,7 +221,7 @@ export default function PrivacyPolicyPage() {
 
             <p><strong style={{ color: "#fff" }}>4.4 Tax Authorities:</strong> We are legally required to report Payout information to the Internal Revenue Service (IRS) and applicable state tax authorities when you meet the $600 annual reporting threshold. Information shared includes your legal name, address, SSN/TIN, and total Payout amounts.</p>
 
-            <p><strong style={{ color: "#fff" }}>4.5 Legal Compliance and Safety:</strong> We may disclose your information if we believe, in good faith, that disclosure is: (a) required by applicable law, regulation, legal process, or governmental request (including subpoenas and court orders); (b) necessary to protect the rights, property, or safety of Let&apos;s Go, our users, or the public; (c) necessary to investigate or prevent fraud, security breaches, or other harmful activity; (d) necessary to enforce our Terms of Service; or (e) required to cooperate with law enforcement investigations.</p>
+            <p><strong style={{ color: "#fff" }}>4.5 Legal Compliance and Safety:</strong> We may disclose your information if we believe, in good faith, that disclosure is: (a) required by applicable law, regulation, legal process, or governmental request (including subpoenas and court orders); (b) necessary to protect the rights, property, or safety of LetsGo, our users, or the public; (c) necessary to investigate or prevent fraud, security breaches, or other harmful activity; (d) necessary to enforce our Terms of Service; or (e) required to cooperate with law enforcement investigations.</p>
 
             <p><strong style={{ color: "#fff" }}>4.6 Business Transfers:</strong> In the event of a merger, acquisition, bankruptcy, dissolution, reorganization, asset sale, or similar corporate transaction, your information may be transferred to the successor entity as part of that transaction. We will notify you via email and/or prominent notice on the Platform of any change in ownership or use of your personal information.</p>
 
@@ -235,9 +235,9 @@ export default function PrivacyPolicyPage() {
               ════════════════════════════════════════════════ */}
 
           <Section title="5. Contact Data and Invitations">
-            <p><strong style={{ color: "#fff" }}>5.1 How Contact Data Is Collected.</strong> The Platform offers a &quot;Find Your Friends&quot; feature that allows you to check if people you know are already on Let&apos;s Go. This feature uses the Contact Picker API — a browser-level interface that shows your device&apos;s native contact selection dialog. You choose which specific contacts to share. We NEVER access your full address book automatically or in the background. On devices where the Contact Picker API is not available (e.g., iOS Safari), we offer manual email entry and share-link alternatives instead.</p>
-            <p><strong style={{ color: "#fff" }}>5.2 How Contact Data Is Used.</strong> Imported contact information (names, email addresses, phone numbers) is used solely to: (a) match email addresses against existing Let&apos;s Go user accounts so you can send friend requests; and (b) send invitation emails to non-users, only when you explicitly request it. Contact data is NOT used for any other purpose, including advertising, profiling, or marketing by Let&apos;s Go or any third party.</p>
-            <p><strong style={{ color: "#fff" }}>5.3 Invitation Emails.</strong> When you invite contacts, Let&apos;s Go sends a single invitation email on your behalf. The email identifies you by name as the sender. Recipients are not added to any mailing list and will not receive further emails unless they create their own account. Invitations are rate-limited (maximum 100 per day) to prevent abuse.</p>
+            <p><strong style={{ color: "#fff" }}>5.1 How Contact Data Is Collected.</strong> The Platform offers a &quot;Find Your Friends&quot; feature that allows you to check if people you know are already on LetsGo. This feature uses the Contact Picker API — a browser-level interface that shows your device&apos;s native contact selection dialog. You choose which specific contacts to share. We NEVER access your full address book automatically or in the background. On devices where the Contact Picker API is not available (e.g., iOS Safari), we offer manual email entry and share-link alternatives instead.</p>
+            <p><strong style={{ color: "#fff" }}>5.2 How Contact Data Is Used.</strong> Imported contact information (names, email addresses, phone numbers) is used solely to: (a) match email addresses against existing LetsGo user accounts so you can send friend requests; and (b) send invitation emails to non-users, only when you explicitly request it. Contact data is NOT used for any other purpose, including advertising, profiling, or marketing by LetsGo or any third party.</p>
+            <p><strong style={{ color: "#fff" }}>5.3 Invitation Emails.</strong> When you invite contacts, LetsGo sends a single invitation email on your behalf. The email identifies you by name as the sender. Recipients are not added to any mailing list and will not receive further emails unless they create their own account. Invitations are rate-limited (maximum 100 per day) to prevent abuse.</p>
             <p><strong style={{ color: "#fff" }}>5.4 Contact Data Storage.</strong> Contact invitation records (inviter ID, contact name, contact email, and invitation status) are stored in our database to: prevent duplicate invitations to the same person; enforce daily rate limits; and track invitation acceptance. We do NOT store your full contact list — only the contacts you explicitly selected for matching or invitation.</p>
           </Section>
 
@@ -351,7 +351,7 @@ export default function PrivacyPolicyPage() {
               ════════════════════════════════════════════════ */}
 
           <Section title="12. Biometric Data">
-            <p>Let&apos;s Go does NOT collect, store, or process biometric data (such as fingerprints, facial recognition data, voiceprints, or retinal scans). Receipt verification is performed through image analysis of receipt documents, not biometric identification of individuals.</p>
+            <p>LetsGo does NOT collect, store, or process biometric data (such as fingerprints, facial recognition data, voiceprints, or retinal scans). Receipt verification is performed through image analysis of receipt documents, not biometric identification of individuals.</p>
           </Section>
 
           {/* ════════════════════════════════════════════════
@@ -375,7 +375,7 @@ export default function PrivacyPolicyPage() {
               ════════════════════════════════════════════════ */}
 
           <Section title="15. Third-Party Links and Services">
-            <p>The Platform may contain links to third-party websites, applications, or services that are not operated or controlled by Let&apos;s Go. This Privacy Policy does not apply to those third-party services. We are not responsible for the privacy practices, content, or security of any third-party website or service. We encourage you to review the privacy policies of any third-party service you access through or in connection with the Platform.</p>
+            <p>The Platform may contain links to third-party websites, applications, or services that are not operated or controlled by LetsGo. This Privacy Policy does not apply to those third-party services. We are not responsible for the privacy practices, content, or security of any third-party website or service. We encourage you to review the privacy policies of any third-party service you access through or in connection with the Platform.</p>
             <p>Specifically, our Services integrate with the following third-party providers, each with their own privacy policies: Supabase (database and authentication), Resend (email delivery), Google (maps and address services), and payment processors (for Payout delivery and business billing).</p>
           </Section>
 
@@ -395,7 +395,7 @@ export default function PrivacyPolicyPage() {
           <Section title="17. Contact Us">
             <p>If you have questions, concerns, or complaints about this Privacy Policy, our data practices, or your personal information, please contact us at:</p>
             <p style={{ color: "rgba(255,255,255,0.6)" }}>
-              Let&apos;s Go, LLC<br />
+              OlsonCreations, LLC, DBA &quot;LETS GO OUT&quot;<br />
               Email: privacy@letsgolive.app<br />
               General Support: support@letsgolive.app<br />
               Security Issues: security@letsgolive.app<br />

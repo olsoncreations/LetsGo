@@ -1,0 +1,3112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LetsGo — Owner's Manual</title>
+<style>
+  /* ===== RESET & BASE ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --pink: #ff2d92;
+    --blue: #00d4ff;
+    --green: #39ff14;
+    --yellow: #ffff00;
+    --orange: #ff6b35;
+    --purple: #bf5fff;
+    --red: #ff3131;
+    --bg-primary: #0f0f1a;
+    --bg-card: #1a1a2e;
+    --bg-card-alt: #16162a;
+    --border: #2d2d44;
+    --text: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6b6b80;
+  }
+
+  @page {
+    size: letter;
+    margin: 0.75in;
+  }
+
+  body {
+    font-family: 'Segoe UI', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 11pt;
+  }
+
+  /* ===== PRINT STYLES ===== */
+  @media print {
+    body { background: white; color: #1a1a2e; font-size: 10pt; }
+    .page-break { /* removed for continuous flow */ }
+    .no-print { display: none !important; }
+    .cover { background: #0f0f1a !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .cover * { color: white !important; }
+    .section-header { background: #1a1a2e !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section-header * { color: white !important; }
+    .feature-card { border: 1px solid #ddd; background: #fafafa !important; }
+    .feature-card h4, .feature-card p, .feature-card li { color: #1a1a2e !important; }
+    .toc a { color: #004e89 !important; }
+    .step-number { background: #ff6b35 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tier-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .icon-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .nav-diagram { border: 1px solid #ccc; }
+    a { text-decoration: none; }
+  }
+
+  /* ===== COVER PAGE ===== */
+  .cover {
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%);
+    padding: 3rem 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 40%, rgba(255,45,146,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 60%, rgba(0,212,255,0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .cover-logo {
+    font-size: 4rem;
+    font-weight: 900;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--pink), var(--orange));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+    position: relative;
+  }
+  .cover-tagline {
+    font-size: 1.35rem;
+    color: var(--blue);
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+  }
+  .cover-subtitle {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 2rem 0 0.5rem;
+    letter-spacing: 1px;
+  }
+  .cover-edition {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin-bottom: 3rem;
+  }
+  .cover-meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    line-height: 2;
+  }
+  .cover-meta strong { color: var(--text-secondary); }
+  .cover-divider {
+    width: 120px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--pink), var(--blue));
+    border: none;
+    margin: 2rem auto;
+    border-radius: 2px;
+  }
+
+  /* ===== TABLE OF CONTENTS ===== */
+  .toc {
+    padding: 2rem 3rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .toc h2 {
+    font-size: 1.8rem;
+    margin-bottom: 1.5rem;
+    color: var(--blue);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+  .toc-section {
+    margin-bottom: 1.25rem;
+  }
+  .toc-section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--pink);
+    margin-bottom: 0.4rem;
+    font-weight: 700;
+  }
+  .toc a {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    text-decoration: none;
+    color: var(--text);
+    padding: 0.3rem 0;
+    border-bottom: 1px dotted var(--border);
+    transition: color 0.2s;
+  }
+  .toc a:hover { color: var(--blue); }
+  .toc .page-num { color: var(--text-muted); font-size: 0.85rem; }
+
+  /* ===== SECTION HEADERS ===== */
+  .section-header {
+    background: linear-gradient(135deg, #1a1a2e, #0f0f1a);
+    padding: 2.5rem 3rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .section-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--pink), var(--blue), var(--green));
+  }
+  .section-number {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .section-header h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+  }
+  .section-header .section-desc {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* ===== CONTENT ===== */
+  .content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 3rem;
+  }
+  .content h3 {
+    font-size: 1.4rem;
+    color: var(--orange);
+    margin: 2rem 0 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .content h4 {
+    font-size: 1.1rem;
+    color: var(--blue);
+    margin: 1.25rem 0 0.5rem;
+  }
+  .content p {
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .content ul, .content ol {
+    margin: 0.5rem 0 1rem 1.5rem;
+    color: var(--text-secondary);
+  }
+  .content li { margin-bottom: 0.35rem; }
+  .content strong { color: var(--text); }
+
+  /* ===== FEATURE CARDS ===== */
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin: 1rem 0;
+  }
+  .feature-card h4 {
+    margin-top: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .feature-card p { font-size: 0.95rem; }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 700px) {
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ===== ICON BADGES ===== */
+  .icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .icon-badge.pink { background: rgba(255,45,146,0.2); }
+  .icon-badge.blue { background: rgba(0,212,255,0.2); }
+  .icon-badge.green { background: rgba(57,255,20,0.2); }
+  .icon-badge.yellow { background: rgba(255,255,0,0.2); }
+  .icon-badge.orange { background: rgba(255,107,53,0.2); }
+  .icon-badge.purple { background: rgba(191,95,255,0.2); }
+
+  /* ===== STEP INDICATORS ===== */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+  }
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+  }
+  .steps li::before {
+    content: counter(step);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: white;
+  }
+  .step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    background: var(--orange);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  /* ===== PAYOUT TIERS VISUAL ===== */
+  .tier-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  .tier-table th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 2px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .tier-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .tier-bar {
+    height: 8px;
+    border-radius: 4px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+
+  /* ===== CALLOUT BOXES ===== */
+  .callout {
+    border-left: 4px solid var(--blue);
+    background: rgba(0,212,255,0.06);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+  }
+  .callout.tip { border-left-color: var(--green); background: rgba(57,255,20,0.06); }
+  .callout.warning { border-left-color: var(--yellow); background: rgba(255,255,0,0.06); }
+  .callout.important { border-left-color: var(--pink); background: rgba(255,45,146,0.06); }
+  .callout-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    display: block;
+  }
+  .callout.tip .callout-label { color: var(--green); }
+  .callout.warning .callout-label { color: var(--yellow); }
+  .callout.important .callout-label { color: var(--pink); }
+  .callout .callout-label { color: var(--blue); }
+
+  /* ===== NAVIGATION DIAGRAM ===== */
+  .nav-diagram {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .nav-diagram .route { color: var(--blue); }
+  .nav-diagram .arrow { color: var(--pink); }
+  .nav-diagram .label { color: var(--green); }
+
+  /* ===== UI MOCKUP BOX ===== */
+  .ui-mockup {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem;
+    margin: 1rem 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .ui-mockup::before {
+    content: '';
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, var(--pink), var(--orange), var(--yellow), var(--green), var(--blue), var(--purple));
+    margin: -1.25rem -1.25rem 1rem;
+    border-radius: 16px 16px 0 0;
+  }
+  .ui-mockup-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+  }
+  .mockup-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .mockup-row:last-child { border-bottom: none; }
+  .mockup-pill {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .mockup-pill.approved { background: rgba(57,255,20,0.15); color: var(--green); }
+  .mockup-pill.pending { background: rgba(255,255,0,0.15); color: var(--yellow); }
+  .mockup-pill.rejected { background: rgba(255,49,49,0.15); color: var(--red); }
+
+  /* ===== FOOTER ===== */
+  .manual-footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+
+  /* ===== TWO-COLUMN LAYOUT ===== */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 700px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  /* ===== COMPARISON TABLE ===== */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  .compare-table th {
+    background: var(--bg-card);
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    color: var(--text);
+    border-bottom: 2px solid var(--border);
+  }
+  .compare-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .check { color: var(--green); font-weight: bold; }
+  .cross { color: var(--text-muted); }
+
+  /* ===== PHONE MOCKUP FRAME ===== */
+  .phone-frame {
+    width: 320px;
+    margin: 1.5rem auto;
+    background: #0a0a14;
+    border-radius: 32px;
+    border: 3px solid #2d2d44;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 60px rgba(0,212,255,0.05);
+    position: relative;
+  }
+  .phone-frame::before {
+    content: '';
+    display: block;
+    width: 80px;
+    height: 6px;
+    background: #2d2d44;
+    border-radius: 3px;
+    margin: 8px auto 0;
+  }
+  .phone-screen {
+    padding: 0;
+    min-height: 520px;
+    overflow: hidden;
+    position: relative;
+    background: #0a0a14;
+  }
+  .phone-label {
+    text-align: center;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Phone top bar */
+  .phone-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 8px;
+    background: rgba(10,10,20,0.95);
+    position: relative;
+    z-index: 2;
+  }
+  .phone-topbar-logo {
+    font-weight: 900;
+    font-size: 0.85rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .phone-topbar-logo .lg-icon {
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, var(--pink), var(--orange));
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 900;
+    color: white;
+  }
+  .phone-topbar-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .phone-topbar-icons {
+    display: flex;
+    gap: 6px;
+  }
+  .phone-topbar-icons .icon-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid #2d2d44;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    position: relative;
+  }
+  .notif-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 14px;
+    height: 14px;
+    background: var(--red);
+    border-radius: 50%;
+    font-size: 0.5rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  /* Marquee bar */
+  .phone-marquee {
+    background: rgba(255,255,255,0.03);
+    padding: 6px 12px;
+    font-size: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* Home page mode cards */
+  .mock-spotlight {
+    margin: 8px;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+  }
+  .mock-spotlight-inner {
+    display: flex;
+    background: linear-gradient(135deg, #1a1a2e, #12121f);
+    border: 1px solid;
+    border-image: linear-gradient(135deg, var(--pink), var(--green)) 1;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .mock-spotlight-img {
+    width: 120px;
+    min-height: 100px;
+    background: linear-gradient(135deg, #8b5cf6, #ec4899, #f97316);
+    flex-shrink: 0;
+  }
+  .mock-spotlight-text {
+    padding: 10px 12px;
+    font-size: 0.6rem;
+  }
+  .mock-spotlight-text .label {
+    color: var(--yellow);
+    font-size: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .mock-spotlight-text h5 {
+    font-size: 0.8rem;
+    font-weight: 800;
+    font-style: italic;
+    color: white;
+    margin: 2px 0;
+  }
+  .mock-spotlight-text p {
+    color: var(--text-muted);
+    font-size: 0.55rem;
+    line-height: 1.4;
+    margin: 0;
+  }
+  .mock-section-label {
+    font-size: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    padding: 6px 12px 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mock-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  /* Mode cards grid */
+  .mock-cards-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 4px 8px;
+  }
+  .mock-cards-4 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
+    padding: 4px 8px 12px;
+  }
+  .mock-mode-card {
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .mock-mode-card.small {
+    min-height: 100px;
+    padding: 8px;
+  }
+  .mock-mode-card .card-label {
+    font-size: 0.45rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .mock-mode-card h5 {
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: white;
+    margin: 2px 0;
+    line-height: 1.2;
+    font-style: italic;
+  }
+  .mock-mode-card.small h5 {
+    font-size: 0.6rem;
+  }
+  .mock-mode-card .card-desc {
+    font-size: 0.45rem;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.3;
+  }
+  .mock-mode-card .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 6px;
+  }
+  .mock-mode-card .card-footer .type-label {
+    font-size: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.35);
+  }
+  .mock-mode-card .card-footer .enter-btn {
+    font-size: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* Discovery mockup */
+  .mock-discovery-hero {
+    position: relative;
+    height: 420px;
+    background: linear-gradient(180deg, #5c3a1a 0%, #8b5e3a 30%, #a0714a 50%, #6b4226 70%, #3a2010 100%);
+    overflow: hidden;
+  }
+  .mock-discovery-hero .food-visual {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 6rem;
+    opacity: 0.9;
+  }
+  .mock-discovery-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 14px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+  }
+  .mock-discovery-overlay .type-pill {
+    display: inline-block;
+    background: rgba(255,107,53,0.25);
+    color: var(--orange);
+    font-size: 0.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .mock-discovery-overlay .biz-name {
+    font-size: 1.3rem;
+    font-weight: 900;
+    font-style: italic;
+    color: white;
+  }
+  .mock-discovery-overlay .biz-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .mock-discovery-overlay .meta-pill {
+    font-size: 0.55rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .mock-discovery-overlay .meta-open {
+    background: rgba(57,255,20,0.15);
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .mock-discovery-overlay .meta-open::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .mock-discovery-overlay .meta-price {
+    color: var(--pink);
+    font-weight: 700;
+    font-size: 0.6rem;
+  }
+  .mock-discovery-overlay .meta-dist {
+    color: var(--blue);
+    font-size: 0.55rem;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .mock-discovery-actions {
+    position: absolute;
+    right: 10px;
+    bottom: 50px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  .mock-discovery-actions .action-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: white;
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(4px);
+  }
+  .mock-discovery-actions .follow-btn {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: white;
+    margin-bottom: 4px;
+  }
+  .mock-swipe-dots {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 0;
+  }
+  .mock-swipe-dots .dot {
+    width: 16px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.15);
+  }
+  .mock-swipe-dots .dot.active {
+    background: var(--pink);
+    width: 24px;
+  }
+  .mock-swipe-hint {
+    text-align: center;
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    padding-bottom: 8px;
+    letter-spacing: 1px;
+  }
+
+  /* Progress dots (right side discovery) */
+  .mock-progress-dots {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .mock-progress-dots .pdot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+  }
+  .mock-progress-dots .pdot.active { background: var(--pink); width: 4px; height: 12px; border-radius: 2px; }
+
+  /* Date Night mockup */
+  .mock-datenight {
+    padding: 12px;
+  }
+  .mock-dn-robot {
+    text-align: center;
+    padding: 16px 0;
+  }
+  .mock-dn-robot .robot-icon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .mock-dn-robot .robot-text {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .mock-dn-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 0 4px;
+  }
+  .mock-dn-card {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .mock-dn-card-img {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+  }
+  .mock-dn-card-body {
+    padding: 8px;
+    background: var(--bg-card);
+  }
+  .mock-dn-card-body .dn-type {
+    font-size: 0.45rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .mock-dn-card-body h6 {
+    font-size: 0.65rem;
+    color: white;
+    font-weight: 800;
+    margin: 0;
+  }
+  .mock-dn-card-body .dn-meta {
+    font-size: 0.45rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .mock-dn-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+  }
+  .mock-dn-actions .dn-btn {
+    padding: 6px 20px;
+    border-radius: 20px;
+    font-size: 0.55rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: none;
+  }
+  .mock-dn-actions .dn-btn.reject {
+    background: rgba(255,49,49,0.15);
+    color: var(--red);
+    border: 1px solid rgba(255,49,49,0.3);
+  }
+  .mock-dn-actions .dn-btn.accept {
+    background: linear-gradient(135deg, var(--green), #00b894);
+    color: #0a0a14;
+  }
+
+  /* Game mockup (5v3v1 / Group) */
+  .mock-game-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .mock-game-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    position: relative;
+  }
+  .mock-game-option.selected {
+    border-color: var(--yellow);
+    box-shadow: 0 0 12px rgba(255,214,0,0.15);
+  }
+  .mock-game-option.eliminated {
+    opacity: 0.35;
+  }
+  .mock-game-option .opt-img {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .mock-game-option .opt-info h6 {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+  }
+  .mock-game-option .opt-info span {
+    font-size: 0.45rem;
+    color: var(--text-muted);
+  }
+  .mock-game-option .vote-check {
+    margin-left: auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+  }
+  .mock-game-option.selected .vote-check {
+    background: var(--yellow);
+    color: #0a0a14;
+  }
+  .mock-game-option:not(.selected) .vote-check {
+    border: 1px solid var(--border);
+    color: transparent;
+  }
+  .mock-game-round-label {
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--yellow);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 10px 0 4px;
+  }
+  .mock-game-funnel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0;
+  }
+  .mock-game-funnel .funnel-num {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: var(--yellow);
+  }
+  .mock-game-funnel .funnel-arrow {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+  .mock-game-funnel .funnel-num.dim {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  /* Events mockup */
+  .mock-events {
+    padding: 8px;
+  }
+  .mock-event-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+  .mock-event-banner {
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    position: relative;
+  }
+  .mock-event-banner .event-date-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 6px;
+    padding: 3px 6px;
+    text-align: center;
+    line-height: 1;
+  }
+  .mock-event-banner .event-date-badge .edb-month {
+    font-size: 0.35rem;
+    text-transform: uppercase;
+    color: var(--pink);
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .mock-event-banner .event-date-badge .edb-day {
+    font-size: 0.7rem;
+    font-weight: 900;
+    color: white;
+  }
+  .mock-event-body {
+    padding: 8px 10px;
+  }
+  .mock-event-body h6 {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 2px;
+  }
+  .mock-event-body .ev-biz {
+    font-size: 0.45rem;
+    color: var(--text-muted);
+  }
+  .mock-event-body .ev-details {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.45rem;
+    color: var(--text-muted);
+  }
+  .mock-event-body .ev-cat {
+    display: inline-block;
+    background: rgba(191,95,255,0.15);
+    color: var(--purple);
+    font-size: 0.4rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+  .mock-event-rsvp {
+    display: flex;
+    gap: 6px;
+    padding: 6px 10px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .mock-event-rsvp .rsvp-btn {
+    font-size: 0.4rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Experiences mockup */
+  .mock-exp-post {
+    position: relative;
+    height: 460px;
+    overflow: hidden;
+  }
+  .mock-exp-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+  }
+  .mock-exp-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.9));
+  }
+  .mock-exp-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .mock-exp-user .avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--pink), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5rem;
+    color: white;
+    font-weight: 700;
+  }
+  .mock-exp-user .username {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: white;
+  }
+  .mock-exp-user .timestamp {
+    font-size: 0.45rem;
+    color: var(--text-muted);
+  }
+  .mock-exp-caption {
+    font-size: 0.55rem;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 6px;
+  }
+  .mock-exp-biz-tag {
+    display: inline-block;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.5rem;
+    color: var(--text-secondary);
+  }
+  .mock-exp-sidebar {
+    position: absolute;
+    right: 10px;
+    bottom: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+  .mock-exp-sidebar .exp-action {
+    text-align: center;
+  }
+  .mock-exp-sidebar .exp-action .act-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    background: rgba(0,0,0,0.4);
+  }
+  .mock-exp-sidebar .exp-action .act-count {
+    font-size: 0.4rem;
+    color: white;
+    margin-top: 2px;
+  }
+
+  /* Profile mockup */
+  .mock-profile-earnings {
+    background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(191,95,255,0.1));
+    border-bottom: 1px solid var(--border);
+    padding: 12px;
+  }
+  .mock-earnings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .mock-earning-card {
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+  }
+  .mock-earning-card .earn-amount {
+    font-size: 1rem;
+    font-weight: 900;
+    color: white;
+  }
+  .mock-earning-card .earn-label {
+    font-size: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .mock-profile-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    overflow-x: auto;
+  }
+  .mock-profile-tabs .ptab {
+    padding: 8px 10px;
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .mock-profile-tabs .ptab.active {
+    color: var(--blue);
+    border-bottom: 2px solid var(--blue);
+  }
+
+  /* Progress bars */
+  .mock-payout-progress {
+    padding: 8px 12px;
+  }
+  .mock-progress-item {
+    margin-bottom: 8px;
+  }
+  .mock-progress-item .prog-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.5rem;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+  }
+  .mock-progress-item .prog-header .tier-name {
+    color: white;
+    font-weight: 600;
+  }
+  .mock-progress-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mock-progress-bar .prog-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  /* Onboarding mockup */
+  .mock-onboarding {
+    background: #fafbfc;
+    min-height: 520px;
+  }
+  .mock-onb-header {
+    background: white;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mock-onb-logo {
+    font-weight: 900;
+    font-size: 0.8rem;
+    color: var(--orange);
+  }
+  .mock-onb-steps {
+    display: flex;
+    gap: 4px;
+    padding: 12px 14px;
+  }
+  .mock-onb-steps .onb-step {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: #e2e8f0;
+  }
+  .mock-onb-steps .onb-step.done { background: var(--orange); }
+  .mock-onb-steps .onb-step.current { background: linear-gradient(90deg, var(--orange), #e2e8f0); }
+  .mock-onb-form {
+    padding: 12px 14px;
+  }
+  .mock-onb-form h5 {
+    font-size: 0.85rem;
+    color: #1a2332;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .mock-onb-form p {
+    font-size: 0.5rem;
+    color: #8892a6;
+    margin-bottom: 12px;
+  }
+  .mock-form-field {
+    margin-bottom: 10px;
+  }
+  .mock-form-field label {
+    display: block;
+    font-size: 0.5rem;
+    font-weight: 600;
+    color: #4a5568;
+    margin-bottom: 3px;
+  }
+  .mock-form-field .mock-input {
+    width: 100%;
+    height: 28px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0 8px;
+    font-size: 0.55rem;
+    color: #1a2332;
+    display: flex;
+    align-items: center;
+  }
+  .mock-form-field .mock-input.filled { color: #1a2332; }
+  .mock-form-field .mock-input.empty { color: #8892a6; }
+
+  /* Business Dashboard mockup */
+  .mock-biz-dash {
+    min-height: 520px;
+  }
+  .mock-biz-header {
+    background: linear-gradient(135deg, #0f2027, #203a43);
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .mock-biz-header h5 {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: white;
+    margin: 0;
+  }
+  .mock-biz-header span {
+    font-size: 0.45rem;
+    color: rgba(255,255,255,0.5);
+  }
+  .mock-biz-tabs {
+    display: flex;
+    gap: 0;
+    background: rgba(0,0,0,0.2);
+    overflow-x: auto;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .mock-biz-tabs .btab {
+    padding: 8px 10px;
+    font-size: 0.45rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .mock-biz-tabs .btab.active {
+    color: #14b8a6;
+    border-bottom: 2px solid #14b8a6;
+  }
+  .mock-biz-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px;
+  }
+  .mock-biz-metric {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .mock-biz-metric .bm-value {
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: white;
+  }
+  .mock-biz-metric .bm-label {
+    font-size: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* Two phones side by side */
+  .phone-pair {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+  .phone-pair .phone-frame {
+    width: 280px;
+  }
+  .phone-pair .phone-frame .phone-screen {
+    min-height: 460px;
+  }
+
+  /* ===== SCREENSHOT IMAGES ===== */
+  .screenshot-container {
+    margin: 1.5rem auto;
+    text-align: center;
+  }
+  .screenshot-container img {
+    max-width: 320px;
+    width: 100%;
+    border-radius: 16px;
+    border: 2px solid var(--border);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 60px rgba(0,212,255,0.05);
+  }
+  .screenshot-pair {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin: 1.5rem auto;
+    text-align: center;
+  }
+  .screenshot-pair .screenshot-item {
+    max-width: 320px;
+    flex: 1;
+    min-width: 260px;
+  }
+  .screenshot-pair .screenshot-item img {
+    width: 100%;
+    border-radius: 16px;
+    border: 2px solid var(--border);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 60px rgba(0,212,255,0.05);
+  }
+  .screenshot-label {
+    text-align: center;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
+  }
+  /* Screenshot flow grid (for multi-step features) */
+  .screenshot-flow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.25rem;
+    margin: 1.5rem auto;
+    max-width: 800px;
+  }
+  .screenshot-flow .flow-step {
+    text-align: center;
+  }
+  .screenshot-flow .flow-step img {
+    width: 100%;
+    max-width: 240px;
+    border-radius: 16px;
+    border: 2px solid var(--border);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }
+  .screenshot-flow .flow-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #0a0a14;
+    margin-bottom: 0.4rem;
+  }
+  .screenshot-flow .flow-step-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .screenshot-flow .flow-step-desc {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+  @media (max-width: 700px) {
+    .screenshot-flow { grid-template-columns: 1fr 1fr; }
+  }
+  @media print {
+    .screenshot-flow .flow-step img { max-width: 200px; border: 1px solid #ccc; box-shadow: none; }
+    .screenshot-flow .flow-step-num { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  @media print {
+    .screenshot-container img,
+    .screenshot-pair .screenshot-item img {
+      border: 1px solid #ccc;
+      box-shadow: none;
+      max-width: 280px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================== -->
+<!-- COVER PAGE                      -->
+<!-- ============================== -->
+<div class="cover">
+  <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:0.5rem;">
+    <img src="public/lg-logo.png" alt="LetsGo" style="height:80px;object-fit:contain;">
+    <div class="cover-logo">LETSGO</div>
+  </div>
+  <div class="cover-tagline">GO. PLAY. EAT. GET PAID TO LIVE YOUR BEST LIFE.</div>
+  <hr class="cover-divider">
+  <div class="cover-subtitle">Owner's Manual</div>
+  <div class="cover-edition">For Sales Representatives &amp; Customers</div>
+  <div class="cover-meta">
+    <strong>Platform</strong>: www.useletsgo.com<br>
+    <strong>Operator</strong>: OlsonCreations, LLC &mdash; DBA "LETS GO OUT"<br>
+    <strong>Version</strong>: March 2026 Edition
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- TABLE OF CONTENTS               -->
+<!-- ============================== -->
+<div class="page-break"></div>
+<div class="toc">
+  <h2>Table of Contents</h2>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Getting Started</div>
+    <a href="#s1"><span>1. What Is LetsGo?</span><span class="page-num">Overview</span></a>
+    <a href="#s2"><span>2. How Rewards Work</span><span class="page-num">Payout System</span></a>
+    <a href="#s3"><span>3. Welcome &amp; Sign Up</span><span class="page-num">Account Creation</span></a>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">User Features</div>
+    <a href="#s4"><span>4. Home</span><span class="page-num">Navigation</span></a>
+    <a href="#s5"><span>5. Discovery</span><span class="page-num">Finding Places</span></a>
+    <a href="#s6"><span>6. Date Night Generator</span><span class="page-num">System Picks</span></a>
+    <a href="#s7"><span>7. 5v3v1</span><span class="page-num">Two-Player</span></a>
+    <a href="#s8"><span>8. Group Vote</span><span class="page-num">Multi-Player</span></a>
+    <a href="#s9"><span>9. Events</span><span class="page-num">Calendar</span></a>
+    <a href="#s10"><span>10. User Experiences</span><span class="page-num">Social Content</span></a>
+    <a href="#s11"><span>11. User Profile &amp; Earnings</span><span class="page-num">Dashboard</span></a>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Business Features</div>
+    <a href="#s12"><span>12. Partner Onboarding (7 Steps)</span><span class="page-num">Business Signup</span></a>
+    <a href="#s13"><span>13. Business Dashboard</span><span class="page-num">Management Hub</span></a>
+    <a href="#s14"><span>14. Advertising &amp; Spotlights</span><span class="page-num">Promotion</span></a>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Reference</div>
+    <a href="#s15"><span>15. Payout Tier Plans</span><span class="page-num">Plan Details</span></a>
+    <a href="#s16"><span>16. Revenue &amp; Fee Structure</span><span class="page-num">Business Costs</span></a>
+    <a href="#s17"><span>17. Navigation Map</span><span class="page-num">App Flow</span></a>
+    <a href="#s18"><span>18. FAQ</span><span class="page-num">Common Questions</span></a>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 1: WHAT IS LETSGO      -->
+<!-- ============================== -->
+<div class="page-break" id="s1"></div>
+<div class="section-header">
+  <div class="section-number">Section 1</div>
+  <h2>What Is LetsGo?</h2>
+  <p class="section-desc">A discovery + rewards platform where users get paid to explore their city.</p>
+</div>
+
+<div class="content">
+  <p><strong>LetsGo</strong> is a progressive cash-back discovery platform. Users find restaurants, bars, activities, and events &mdash; then earn increasing rewards every time they visit. The more loyal a customer is, the more they earn back.</p>
+
+  <h3>The Core Loop</h3>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4><span class="icon-badge blue">1</span> Discover</h4>
+      <p>Users browse local restaurants and activities through an engaging swipe feed, date-night generator, voting games, event calendar, and social content feed.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge pink">2</span> Visit</h4>
+      <p>Users go to the business, enjoy their experience, and keep their receipt.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge green">3</span> Upload</h4>
+      <p>Users upload their receipt via the Profile page. They snap a photo, enter the total, and submit for approval.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge yellow">4</span> Earn</h4>
+      <p>Once approved, users earn progressive cash-back &mdash; starting at <strong>3%</strong> and increasing up to possibly as high as <strong>50%</strong> with repeated visits to the same business.</p>
+    </div>
+  </div>
+
+  <h3>Who Uses LetsGo?</h3>
+  <div class="two-col">
+    <div class="feature-card">
+      <h4>Customers (Users)</h4>
+      <ul>
+        <li>Discover new restaurants, bars, and activities</li>
+        <li>Play games to decide where to go</li>
+        <li>Earn real cash-back on every visit</li>
+        <li>Share experiences with the community</li>
+        <li>Track earnings and visit history</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <h4>Businesses (Partners)</h4>
+      <ul>
+        <li>Get discovered by local customers</li>
+        <li>Build loyal, repeat visitors</li>
+        <li>Set their own reward tiers</li>
+        <li>Manage receipts and media</li>
+        <li>Run advertising campaigns</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-label">Key Selling Point</span>
+    Unlike traditional loyalty programs, LetsGo rewards <em>increase</em> with every visit. A first-time visitor could earn 3%, but a 60+ visit regular could earn up to as high as 50%. This creates a powerful incentive to keep coming back to the same business.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 2: HOW REWARDS WORK    -->
+<!-- ============================== -->
+<div class="page-break" id="s2"></div>
+<div class="section-header">
+  <div class="section-number">Section 2</div>
+  <h2>How Rewards Work</h2>
+  <p class="section-desc">Progressive cash-back that grows with every visit.</p>
+</div>
+
+<div class="content">
+  <h3>Progressive Payout Tiers</h3>
+  <p>Every business on LetsGo has <strong>7 payout tiers</strong>. As a user visits the same business more, they unlock higher reward percentages.</p>
+
+  <table class="tier-table">
+    <thead>
+      <tr>
+        <th>Tier</th>
+        <th>Name</th>
+        <th>Visits</th>
+        <th>Cash-Back %</th>
+        <th style="width:180px">Visual</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1</strong></td>
+        <td>Starter</td>
+        <td>1 &ndash; 10</td>
+        <td>5.0%</td>
+        <td><span class="tier-bar" style="width:25%; background:var(--pink);">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><strong>2</strong></td>
+        <td>Regular</td>
+        <td>11 &ndash; 20</td>
+        <td>7.5%</td>
+        <td><span class="tier-bar" style="width:37%; background:var(--orange);">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><strong>3</strong></td>
+        <td>Favorite</td>
+        <td>21 &ndash; 30</td>
+        <td>10.0%</td>
+        <td><span class="tier-bar" style="width:50%; background:var(--yellow);">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><strong>4</strong></td>
+        <td>VIP</td>
+        <td>31 &ndash; 40</td>
+        <td>12.5%</td>
+        <td><span class="tier-bar" style="width:62%; background:var(--green);">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><strong>5</strong></td>
+        <td>Elite</td>
+        <td>41 &ndash; 50</td>
+        <td>15.0%</td>
+        <td><span class="tier-bar" style="width:75%; background:var(--blue);">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><strong>6</strong></td>
+        <td>Legend</td>
+        <td>51 &ndash; 60</td>
+        <td>17.5%</td>
+        <td><span class="tier-bar" style="width:87%; background:var(--purple);">&nbsp;</span></td>
+      </tr>
+      <tr>
+        <td><strong>7</strong></td>
+        <td>Ultimate</td>
+        <td>61+</td>
+        <td>20.0%</td>
+        <td><span class="tier-bar" style="width:100%; background:linear-gradient(90deg, var(--pink), var(--purple));">&nbsp;</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="callout-label">How It's Calculated</span>
+    <strong>Payout = Receipt Subtotal &times; Tier Percentage</strong><br>
+    Example: A $50 receipt subtotal at Tier 3 (10%) = <strong>$5.00 cash-back</strong> to the user.<br>
+    Example: A $80 receipt subtotal at Tier 7 (20%) = <strong>$16.00 cash-back</strong> to the user.
+  </div>
+
+  <h3>The 365-Day Rolling Window</h3>
+  <p>Visit counts are tracked on a <strong>365-day rolling window</strong> per user based on the user's signup anniversary. This means:</p>
+  <ul>
+    <li>Only visits within the last 365 days count toward the tier</li>
+    <li>Each user/business relationship is tracked independently</li>
+    <li>Every year, on the user's anniversary, their Progressive Payout Tiers will reset to zero</li>
+    <li>Only <strong>approved receipts</strong> count toward visit totals</li>
+  </ul>
+
+  <h3>Example Journey</h3>
+  <div class="feature-card">
+    <p><strong>Sarah discovers "Taco Palace" on LetsGo:</strong></p>
+    <ul>
+      <li><strong>Visit 1</strong>: $30 dinner &rarr; 5% payout = <strong>$1.50 earned</strong></li>
+      <li><strong>Visit 5</strong>: $45 dinner &rarr; still Tier 1 (5%) = <strong>$2.25 earned</strong></li>
+      <li><strong>Visit 11</strong>: $30 dinner &rarr; now Tier 2 (7.5%) = <strong>$2.25 earned</strong></li>
+      <li><strong>Visit 25</strong>: $50 dinner &rarr; now Tier 3 (10%) = <strong>$5.00 earned</strong></li>
+      <li><strong>Visit 61</strong>: $50 dinner &rarr; Tier 7 (20%) = <strong>$10.00 earned!</strong></li>
+    </ul>
+    <p style="margin-top:0.5rem;">Sarah has become a loyal regular. The increasing rewards kept her coming back, and now she earns top-tier cash-back at her favorite taco spot.</p>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 3: WELCOME & SIGN UP   -->
+<!-- ============================== -->
+<div class="page-break" id="s3"></div>
+<div class="section-header">
+  <div class="section-number">Section 3</div>
+  <h2>Welcome &amp; Sign Up</h2>
+  <p class="section-desc">Creating an account and getting started.</p>
+</div>
+
+<div class="content">
+  <h3>The Welcome Page</h3>
+  <p>When users first visit <strong>www.useletsgo.com</strong>, they land on the Welcome page &mdash; an animated experience showing the LetsGo concept with a city map journey.</p>
+
+  <h4>Sign-Up Flow</h4>
+  <ol class="steps">
+    <li><div><strong>Open the Auth Modal</strong><br>Users tap "Get Started" to open the login/signup modal. They can toggle between Login and Sign Up tabs.</div></li>
+    <li><div><strong>Create Account</strong><br>Enter email and password (or use social login). Account is created via Supabase Auth with email verification.</div></li>
+    <li><div><strong>Find Friends</strong><br>After signing up, users are directed to the Find Friends page where they can import contacts, send friend invitations via email, or share an invite link.</div></li>
+    <li><div><strong>Start Exploring</strong><br>Users are redirected to the Discovery Feed where they can start browsing local businesses.</div></li>
+  </ol>
+
+  <h4>Find Friends Page</h4>
+  <p>After signup, users can grow their network:</p>
+  <ul>
+    <li><strong>Import Contacts</strong> &mdash; Uses the Contact Picker API (Android/Chrome) to scan the user's address book</li>
+    <li><strong>Share Invite Link</strong> &mdash; Generates a unique link that can be shared via text, social media, or copied to clipboard</li>
+    <li><strong>Manual Email Entry</strong> &mdash; For iOS users, manually type friend email addresses to send invitations</li>
+    <li><strong>Add Existing Users</strong> &mdash; If contacts are already on LetsGo, users can send friend requests directly</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="callout-label">Sales Tip</span>
+    The "Find Friends" step is optional but powerful. Users who invite friends are more likely to use the 5v3v1 and Group Vote games, increasing engagement with businesses.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 4: HOME PAGE           -->
+<!-- ============================== -->
+<div class="page-break" id="s4"></div>
+<div class="section-header">
+  <div class="section-number">Section 4</div>
+  <h2>Home</h2>
+  <p class="section-desc">The main navigation center with 9 experience modes.</p>
+</div>
+
+<div class="content">
+  <p>The Home page is the central navigation page of LetsGo. It displays <strong>9 interactive mode cards</strong> that users tap to enter different experiences. Each card has an animated illustration and a brief description.</p>
+
+  <!-- HOME PAGE SCREENSHOT -->
+  <div class="screenshot-container">
+    <img src="public/manual-screenshots/Home%20screenshots/Screenshot%202026-03-09%20202327.png" alt="LetsGo Home Page">
+    <div class="screenshot-label">Home</div>
+  </div>
+
+  <h3>The 9 Modes</h3>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4><span class="icon-badge blue">&#x1F50D;</span> Discovery</h4>
+      <p>Full-screen swipe feed to browse businesses. Tap to explore restaurants, bars, and activities.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge pink">&#x1F496;</span> Date Night</h4>
+      <p>Systemic generator that pairs one restaurant + one activity for the perfect date.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge yellow">&#x1F3AF;</span> 5v3v1</h4>
+      <p>Two-player elimination game: start with 5 options, narrow to 3, pick 1 winner.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge green">&#x1F5F3;</span> Group Vote</h4>
+      <p>Multi-player voting game for groups of up to 16 people to decide where to go.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge purple">&#x1F389;</span> Events</h4>
+      <p>Calendar of upcoming events at local businesses &mdash; music, food, comedy, sports, and more.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge orange">&#x1F4F8;</span> Experiences</h4>
+      <p>Photo and video feed of real user experiences at local businesses.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge pink">&#x2728;</span> Spotlight</h4>
+      <p>Featured businesses running advertising campaigns &mdash; premium visibility in the feed.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge blue">&#x1F514;</span> Notifications</h4>
+      <p>Real-time alerts for receipt approvals, friend requests, game invites, and more.</p>
+    </div>
+    <div class="feature-card">
+      <h4><span class="icon-badge green">&#x1F464;</span> Profile</h4>
+      <p>Personal dashboard with earnings, receipts, payout levels, saved places, and friends.</p>
+    </div>
+  </div>
+
+  <h3>First-Time Experience</h3>
+  <p>New users see <strong>onboarding tooltips</strong> that walk them through each mode with animated illustrations. These tooltips appear once and explain what each section does, making the app easy to learn.</p>
+
+  <div class="callout">
+    <span class="callout-label">Design Note</span>
+    The Home Page uses a dark neon aesthetic with animated glow effects. Each mode card has its own accent color and icon, creating a vibrant, game-like feel that matches the platform's personality.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 5: DISCOVERY FEED      -->
+<!-- ============================== -->
+<div class="page-break" id="s5"></div>
+<div class="section-header">
+  <div class="section-number">Section 5</div>
+  <h2 style="color:var(--blue);">Discovery</h2>
+  <p class="section-desc">Full-screen carousel to discover restaurants and activities.</p>
+</div>
+
+<div class="content">
+  <p>The Discovery Feed is the core browsing experience &mdash; an <strong>image swipe carousel</strong> where users vertically scroll through businesses and horizontally swipe through detail panels.</p>
+
+  <!-- DISCOVERY FEED SCREENSHOTS -->
+  <div class="screenshot-pair">
+    <div class="screenshot-item">
+      <img src="public/manual-screenshots/Discovery%20screenshots/Screenshot%202026-03-09%20202542.png" alt="Discovery Feed - Hero Panel">
+      <div class="screenshot-label">Panel 1 &mdash; Hero Image</div>
+    </div>
+    <div class="screenshot-item">
+      <img src="public/manual-screenshots/Discovery%20screenshots/Screenshot%202026-03-09%20202603.png" alt="Discovery Feed - Details Panel">
+      <div class="screenshot-label">Panel 2 &mdash; Business Details</div>
+    </div>
+  </div>
+
+  <h3>Card Layout (3 Panels Per Business)</h3>
+  <p>Each business has three horizontal panels that users swipe through:</p>
+
+  <div class="feature-card">
+    <h4>Panel 1 &mdash; Hero Image</h4>
+    <p>Full-screen photo of the business with its name and type overlaid. Shows the business emoji and category tag. If no photos exist, a branded gradient placeholder is shown.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Panel 2 &mdash; Details</h4>
+    <ul>
+      <li>Business name, type, and price level ($, $$, $$$)</li>
+      <li>Address and distance from user's location</li>
+      <li>Open/Closed status with today's hours</li>
+      <li>Tags (cuisine, vibe, amenities, dietary options)</li>
+      <li><strong>All 7 payout tiers displayed</strong> (so users see their earning potential)</li>
+      <li>Description and highlights</li>
+    </ul>
+  </div>
+
+  <div class="feature-card">
+    <h4>Panel 3 &mdash; Photo Gallery</h4>
+    <p>Additional business photos in a scrollable gallery. Shows approved user-generated content alongside official business photos.</p>
+  </div>
+
+  <h3>Filters &amp; Search</h3>
+  <p>Users can refine what appears in the feed using a powerful filter panel:</p>
+  <div class="two-col">
+    <div>
+      <ul>
+        <li><strong>Distance</strong> &mdash; Slider by miles from current location or zip code</li>
+        <li><strong>Price Level</strong> &mdash; $, $$, $$$, $$$$</li>
+        <li><strong>Category</strong> &mdash; Restaurant, Bar, Activity, Salon, etc.</li>
+        <li><strong>Open Now</strong> &mdash; Toggle to show only currently open businesses</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>Cuisine Tags</strong> &mdash; Italian, Mexican, Japanese, BBQ, etc.</li>
+        <li><strong>Vibe Tags</strong> &mdash; Casual, Upscale, Family-Friendly, etc.</li>
+        <li><strong>Service Style</strong> &mdash; Dine-In, Delivery, Takeout, Drive-Thru, etc.</li>
+        <li><strong>Sort Options</strong> &mdash; Nearest, Most Popular, Highest Payout, Newest</li>
+        <li><strong>Search by Name</strong> &mdash; Type a business name to jump directly to it</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Key Interactions</h3>
+  <ul>
+    <li><strong>Heart Button</strong> &mdash; Save businesses to a "Saved Places" list accessible from the Profile page</li>
+    <li><strong>Vertical Swipe</strong> &mdash; Scroll to the next business</li>
+    <li><strong>Horizontal Swipe</strong> &mdash; Browse hero &rarr; details &rarr; photos for each business</li>
+    <li><strong>Notification Bell</strong> &mdash; Top-right icon shows unread alerts</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="callout-label">Sales Tip</span>
+    When pitching to businesses, emphasize that the Discovery Feed shows <strong>all 7 payout tiers upfront</strong>. Users see exactly how much they can earn at each level, creating a built-in incentive to visit repeatedly.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 6: DATE NIGHT          -->
+<!-- ============================== -->
+<div class="page-break" id="s6"></div>
+<div class="section-header">
+  <div class="section-number">Section 6</div>
+  <h2 style="color:#00E5FF;">Date Night Generator</h2>
+  <p class="section-desc">Systemic intelligence picking algorithms for restaurant + activity pairing.</p>
+</div>
+
+<div class="content">
+  <p>The Date Night Generator is designed for couples who can't decide where to go. It uses systemic intelligence picking algorithms with a fun "robot" personality to select <strong>one restaurant AND one activity</strong> for a complete date night experience.</p>
+
+  <!-- DATE NIGHT SCREENSHOTS -->
+  <div class="screenshot-pair">
+    <div class="screenshot-item">
+      <img src="public/manual-screenshots/Date%20Night%20Generator%20screenshots/Screenshot%202026-03-09%20203119.png" alt="Date Night Generator - Hub">
+      <div class="screenshot-label">Plan a Date Night</div>
+    </div>
+    <div class="screenshot-item">
+      <img src="public/manual-screenshots/Date%20Night%20Generator%20screenshots/Screenshot%202026-03-09%20203054.png" alt="Date Night Generator - Robot Reveal">
+      <div class="screenshot-label">The Reveal &mdash; System's Pick</div>
+    </div>
+  </div>
+
+  <h3>How It Works</h3>
+  <ol class="steps">
+    <li><div><strong>Open Date Night Generator</strong><br>Users tap "Date Night" on the Home page to enter the generator. Click the "Let's Go" button to automatically generate a matching restaurant + activity pair!</div></li>
+    <li><div><strong>The Reveal</strong><br>Results are shown side-by-side &mdash; restaurant on one side, activity on the other. Both show full details: name, hours, address, price, vibe, and payout tiers.</div></li>
+    <li><div><strong>Accept or Reject</strong><br>Users can "Lock In" the date, or reject and ask the robot for a new suggestion. The robot responds with humorous, sarcastic rejection messages.</div></li>
+    <li><div><strong>Share with Partner</strong><br>Once locked in, users can share the date plan via text message or link using the Share/Text buttons.</div></li>
+  </ol>
+
+  <h3>Features</h3>
+  <ul>
+    <li><strong>Robot Personality</strong> &mdash; Fun, sarcastic character that reacts to rejections with humorous messages</li>
+    <li><strong>Shuffle Animation</strong> &mdash; Visual "slot machine" effect while the robot picks</li>
+    <li><strong>Business Details</strong> &mdash; Full info for both the restaurant and activity, including hours, price, vibe, address, and payout tiers</li>
+  </ul>
+
+  <div class="callout">
+    <span class="callout-label">Example Rejection Messages</span>
+    "My therapist is going to hear about this..."<br>
+    "Fine, I'll find something else. But I'm judging you."<br>
+    The playful personality keeps the experience fun and shareable.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 7: 5v3v1               -->
+<!-- ============================== -->
+<div class="page-break" id="s7"></div>
+<div class="section-header">
+  <div class="section-number">Section 7</div>
+  <h2 style="color:#FFD600;">5v3v1 Game</h2>
+  <p class="section-desc">Two-player elimination game to pick where to go.</p>
+</div>
+
+<div class="content">
+  <p>The <strong>5v3v1</strong> is a two-player voting game where friends narrow down options together: start with 5, eliminate to 3, then pick the final 1.</p>
+
+  <!-- 5v3v1 SCREENSHOTS - GAME FLOW -->
+  <div class="screenshot-flow">
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--yellow);">1</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20222100.png" alt="5v3v1 - Category Selection">
+      <div class="flow-step-title">Pick Category</div>
+      <div class="flow-step-desc">Choose what type of spot</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--yellow);">2</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20222122.png" alt="5v3v1 - Set Filters">
+      <div class="flow-step-title">Set Filters</div>
+      <div class="flow-step-desc">Price, distance, vibes</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--yellow);">3</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20222136.png" alt="5v3v1 - Choose Friend">
+      <div class="flow-step-title">Choose Friend</div>
+      <div class="flow-step-desc">Pick your opponent</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--green);">4</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20222211.png" alt="5v3v1 - Pick 5 Spots">
+      <div class="flow-step-title">Pick 5</div>
+      <div class="flow-step-desc">Select your top 5 spots</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--blue);">5</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20222231.png" alt="5v3v1 - Waiting Room">
+      <div class="flow-step-title">Wait &amp; Play</div>
+      <div class="flow-step-desc">Mini-games while waiting</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--purple);">6</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-10%20111506.png" alt="5v3v1 - Pick 3 Response">
+      <div class="flow-step-title">Friend Picks 3</div>
+      <div class="flow-step-desc">Your friend narrows to 3</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-num" style="background:var(--pink);">7</div>
+      <img src="public/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20223023.png" alt="5v3v1 - Winner Revealed">
+      <div class="flow-step-title">It's Decided!</div>
+      <div class="flow-step-desc">Winner revealed</div>
+    </div>
+  </div>
+  <div class="screenshot-label">5v3v1 &mdash; Full Game Flow</div>
+
+  <h3>Game Setup</h3>
+  <ol class="steps">
+    <li><div><strong>Basics</strong><br>Name the game session and choose a category (Restaurant, Bar, Activity, Nightclub, Coffee Shop, etc.). Set your location.</div></li>
+    <li><div><strong>Rounds</strong><br>The game automatically structures into 3 rounds: 5 options &rarr; 3 options &rarr; 1 winner.</div></li>
+    <li><div><strong>Rules</strong><br>Configure filters &mdash; distance, price level, tags, and whether to show only open businesses. Hidden voting can be toggled on/off.</div></li>
+    <li><div><strong>Invite</strong><br>Share a game code with a friend. They enter the code to join the session.</div></li>
+  </ol>
+
+  <h3>Playing the Game</h3>
+  <div class="feature-card">
+    <h4>Round 1: Pick 5</h4>
+    <p>The system presents businesses matching the filters. Each player votes on their top 5 picks. Votes are tallied.</p>
+  </div>
+  <div class="feature-card">
+    <h4>Round 2: Narrow to 3</h4>
+    <p>The top 5 voted businesses are shown. Players now pick their top 3. The funnel narrows.</p>
+  </div>
+  <div class="feature-card">
+    <h4>Round 3: Final Pick</h4>
+    <p>The remaining 3 businesses are shown. Each player picks their #1. The winner is revealed with full business details.</p>
+  </div>
+
+  <h3>Additional Features</h3>
+  <ul>
+    <li><strong>7 Waiting Room Mini-Games</strong> &mdash; Fun games to play while waiting for your partner to join or vote</li>
+    <li><strong>Winner Celebration</strong> &mdash; Animated reveal of the winning business with full details, address, hours, and payout tiers</li>
+    <li><strong>Game History</strong> &mdash; Expandable cards showing past games with business details and "Would Go Again" hearts</li>
+    <li><strong>Discovery Links</strong> &mdash; Jump from game results to the full Discovery Feed entry for any business</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="callout-label">Sales Tip</span>
+    The 5v3v1 game is a powerful engagement tool. Every time friends play, businesses get exposed to potential customers through a fun, social experience. Businesses appearing in games get organic discovery.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 8: GROUP VOTE          -->
+<!-- ============================== -->
+<div class="page-break" id="s8"></div>
+<div class="section-header">
+  <div class="section-number">Section 8</div>
+  <h2 style="color:#00FF87;">Group Vote</h2>
+  <p class="section-desc">Multi-player voting game for groups of up to 16.</p>
+</div>
+
+<div class="content">
+  <p>Group Vote extends the 5v3v1 concept for larger groups. Up to <strong>16 players</strong> can vote together through customizable elimination rounds.</p>
+
+  <!-- GROUP VOTE SCREENSHOTS -->
+  <div class="screenshot-flow" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.5rem;">
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--green);">1</div>
+      <img src="public/manual-screenshots/Group%20Vote%20Screen%20Shots/Screenshot%202026-03-09%20225035.png" alt="Group Vote - Rounds & Funnel" />
+      <div class="step-label">Rounds &amp; Funnel</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--blue);">2</div>
+      <img src="public/manual-screenshots/Group%20Vote%20Screen%20Shots/Screenshot%202026-03-09%20225108.png" alt="Group Vote - Schedule & Rules" />
+      <div class="step-label">Schedule &amp; Rules</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--purple);">3</div>
+      <img src="public/manual-screenshots/Group%20Vote%20Screen%20Shots/Screenshot%202026-03-09%20225147.png" alt="Group Vote - Invite Your Crew" />
+      <div class="step-label">Invite Your Crew</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--orange);">4</div>
+      <img src="public/manual-screenshots/Group%20Vote%20Screen%20Shots/Screenshot%202026-03-09%20225739.png" alt="Group Vote - Exploration & Suggestions" />
+      <div class="step-label">Explore &amp; Suggest</div>
+    </div>
+  </div>
+
+  <div class="screenshot-container" style="margin-top: 0.75rem;">
+    <img src="public/manual-screenshots/Group%20Vote%20Screen%20Shots/Screenshot%202026-03-09%20234023.png" alt="Group Vote - Winner Result" />
+    <div class="phone-label">The Group Has Spoken &mdash; Winner Result</div>
+  </div>
+
+  <h3>4-Step Setup Wizard</h3>
+  <ol class="steps">
+    <li><div><strong>Basics</strong><br>Name the session, choose a category, and set the location.</div></li>
+    <li><div><strong>Rounds</strong><br>Define how many rounds and how many options advance per round. Example: 10 &rarr; 5 &rarr; 3 &rarr; 1.</div></li>
+    <li><div><strong>Rules</strong><br>Toggle hidden voting (players can't see others' votes until the round ends), allow mid-game invites, and set filters (distance, price, tags).</div></li>
+    <li><div><strong>Invite</strong><br>Share a unique game code. Players join by entering the code. The host sees who's joined and can start when ready.</div></li>
+  </ol>
+
+  <h3>During the Game</h3>
+  <ul>
+    <li><strong>Real-Time Voting</strong> &mdash; All players vote simultaneously. The system tracks who has and hasn't voted.</li>
+    <li><strong>Player Activity Tracking</strong> &mdash; See which players are active and who has submitted votes</li>
+    <li><strong>Round Results</strong> &mdash; After each round, eliminated options are revealed and vote counts shown</li>
+    <li><strong>Winner Announcement</strong> &mdash; Final business is revealed with full details, address, and hours</li>
+  </ul>
+
+  <div class="callout">
+    <span class="callout-label">Perfect For</span>
+    Friend groups deciding on dinner plans, office teams choosing a lunch spot, bachelor/bachelorette parties picking activities, or any group of 2-16 that needs a fun way to make decisions together.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 9: EVENTS              -->
+<!-- ============================== -->
+<div class="page-break" id="s9"></div>
+<div class="section-header">
+  <div class="section-number">Section 9</div>
+  <h2 style="color:#D050FF;">Events</h2>
+  <p class="section-desc">Discover and RSVP to local events.</p>
+</div>
+
+<div class="content">
+  <p>The Events page is a filterable calendar of upcoming events hosted by businesses on the platform. Users can discover live music, food festivals, comedy shows, game nights, workshops, and more.</p>
+
+  <!-- EVENTS SCREENSHOT -->
+  <div class="screenshot-container">
+    <img src="public/manual-screenshots/Events%20screenshots/Screenshot%202026-03-09%20223547.png" alt="Events Page">
+    <div class="screenshot-label">Events &mdash; What's Happening</div>
+  </div>
+
+  <h3>Event Card Details</h3>
+  <p>Each event card displays:</p>
+  <ul>
+    <li><strong>Event title</strong> and description</li>
+    <li><strong>Date &amp; time</strong> (start and end)</li>
+    <li><strong>Business name</strong> and address</li>
+    <li><strong>Category</strong> (Music, Food &amp; Drink, Games, Workshop, Sports, Comedy, Special Event, etc.)</li>
+    <li><strong>Price</strong> (free or paid)</li>
+    <li><strong>Capacity</strong> and current RSVP counts (Yes / Maybe / No)</li>
+    <li><strong>Distance</strong> from user's location</li>
+    <li><strong>Payout tiers</strong> (users still earn rewards when visiting for events)</li>
+  </ul>
+
+  <h3>Filters</h3>
+  <div class="two-col">
+    <div>
+      <ul>
+        <li><strong>Category</strong> &mdash; Music, Games, Special Event, Sports, Comedy, Workshop, etc.</li>
+        <li><strong>Date Range</strong> &mdash; Today, This Week, This Month, or custom range</li>
+        <li><strong>Price</strong> &mdash; Free, $, $$, $$$</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>Distance</strong> &mdash; Radius from current location</li>
+        <li><strong>Time of Day</strong> &mdash; Morning, Afternoon, Evening, Late Night</li>
+        <li><strong>Sort</strong> &mdash; Nearest, Trending, Highest Rated, Newest</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>RSVP System</h3>
+  <p>Users can respond to events with <strong>Yes</strong>, <strong>Maybe</strong>, or <strong>No</strong>. RSVP counts are displayed on the event card so users can see popularity. Events with booking URLs link directly to external ticketing.</p>
+
+  <div class="callout tip">
+    <span class="callout-label">For Businesses</span>
+    Businesses on Premium plans can create and manage events from their Dashboard. Events appear in the public Events feed, driving foot traffic for special occasions and recurring happenings.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 10: EXPERIENCES (UGC)  -->
+<!-- ============================== -->
+<div class="page-break" id="s10"></div>
+<div class="section-header">
+  <div class="section-number">Section 10</div>
+  <h2 style="color:var(--orange);">User Experiences</h2>
+  <p class="section-desc">User-generated photos and videos from real visits.</p>
+</div>
+
+<div class="content">
+  <p>The Experiences Feed is a <strong>vertical content feed</strong> where real users share photos and videos from their visits to businesses. It's social proof in action &mdash; potential customers seeing real people enjoying real places.</p>
+
+  <!-- EXPERIENCES SCREENSHOT -->
+  <div class="screenshot-container">
+    <img src="public/manual-screenshots/User%20Experience%20Screenshots/Screenshot%202026-03-09%20223646.png" alt="Experiences Feed">
+    <div class="screenshot-label">Experiences &mdash; UGC Feed</div>
+  </div>
+
+  <h3>Feed Tabs</h3>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>For You</h4>
+      <p>Personalized feed of content from businesses matching user preferences and location.</p>
+    </div>
+    <div class="feature-card">
+      <h4>Following</h4>
+      <p>Content from businesses the user has saved or frequently visits.</p>
+    </div>
+  </div>
+  <div class="feature-card">
+    <h4>Trending</h4>
+    <p>Most-liked and most-viewed content across the platform, surfacing popular businesses and experiences.</p>
+  </div>
+
+  <h3>Post Elements</h3>
+  <p>Each post in the feed displays:</p>
+  <ul>
+    <li><strong>User avatar, name, and timestamp</strong></li>
+    <li><strong>Photo or video</strong> (full-screen vertical format)</li>
+    <li><strong>Caption</strong> (optional text from the user)</li>
+    <li><strong>Business info sidebar</strong> &mdash; Business name, type, price level, hours</li>
+    <li><strong>Engagement</strong> &mdash; Like count, comment count, share button</li>
+    <li><strong>Tags/hashtags</strong> applied to the post</li>
+  </ul>
+
+  <h3>Interactions</h3>
+  <ul>
+    <li><strong>Like</strong> &mdash; Tap the heart to like (animated heart effect)</li>
+    <li><strong>Comment</strong> &mdash; Open comment panel with nested replies, like individual comments</li>
+    <li><strong>Share</strong> &mdash; Share posts with friends</li>
+    <li><strong>Business Link</strong> &mdash; Tap the business name to jump to their Discovery entry</li>
+    <li><strong>Mute Audio</strong> &mdash; Toggle sound on/off for video content</li>
+  </ul>
+
+  <h3>Content Moderation</h3>
+  <p>All user-submitted content goes through a moderation process:</p>
+  <ol>
+    <li>User uploads photo/video &rarr; status set to <strong>"Pending"</strong></li>
+    <li>Business reviews submissions in their Dashboard (Media tab)</li>
+    <li>Business approves or rejects &rarr; approved content appears in the public feed</li>
+    <li>Admin staff can also moderate from the Admin Dashboard</li>
+  </ol>
+
+  <div class="callout">
+    <span class="callout-label">Why It Matters</span>
+    User-generated content is the most authentic marketing a business can get. Real photos and videos from real customers build trust and drive new visitors. Businesses control what appears by approving content from their dashboard.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 11: USER PROFILE       -->
+<!-- ============================== -->
+<div class="page-break" id="s11"></div>
+<div class="section-header">
+  <div class="section-number">Section 11</div>
+  <h2 style="color:var(--blue);">User Profile &amp; Earnings</h2>
+  <p class="section-desc">Personal dashboard for tracking rewards, receipts, and activity.</p>
+</div>
+
+<div class="content">
+  <p>The Profile page is the user's personal hub. It shows their earnings, receipt history, payout level progress, saved places, friends, and more.</p>
+
+  <!-- PROFILE SCREENSHOT -->
+  <div class="screenshot-container">
+    <img src="public/manual-screenshots/User%20Profile%20Screen%20Shots/Screenshot%202026-03-09%20224232.png" alt="User Profile Page">
+    <div class="screenshot-label">User Profile &mdash; Dashboard</div>
+  </div>
+
+  <h3>Earnings Banner</h3>
+  <p>At the top of the Profile, a prominent banner displays four key stats:</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4 style="color:var(--green);">Lifetime Earnings</h4>
+      <p>Total cash-back earned across all businesses since joining the platform.</p>
+    </div>
+    <div class="feature-card">
+      <h4 style="color:var(--blue);">This Month</h4>
+      <p>Cash-back earned in the current calendar month.</p>
+    </div>
+    <div class="feature-card">
+      <h4 style="color:var(--yellow);">Pending</h4>
+      <p>Amount from submitted receipts awaiting business approval.</p>
+    </div>
+    <div class="feature-card">
+      <h4 style="color:var(--pink);">Available</h4>
+      <p>Cash-back that is approved and ready for payout.</p>
+    </div>
+  </div>
+
+  <h3>Profile Tabs</h3>
+
+  <div class="feature-card">
+    <h4>Overview</h4>
+    <p>Quick stats: nights out, places visited, and saved places. Summary of earnings breakdown and recent activity.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Receipts</h4>
+    <p>Complete receipt history. Filter by business, date, or status (Pending, Approved, Rejected). Each receipt shows the amount, payout earned, tier applied, and status. The <strong>"Add Receipt"</strong> button opens the upload modal.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Payout Levels</h4>
+    <p>Visual progress bars for each business the user has visited. Shows current tier, visit count, and how many more visits to reach the next level. Color-coded neon rainbow from Starter (pink) to Ultimate (purple gradient).</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Saved Places</h4>
+    <p>Saved list &mdash; all businesses the user has hearted from the Discovery Feed or Game results.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Friends</h4>
+    <p>Friend list with sent/pending/accepted request status. Send new friend requests by searching names.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Game History</h4>
+    <p>Past 5v3v1 and Group Vote game results with expandable business details and "Would Go Again" heart buttons.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Experiences</h4>
+    <p>Gallery of photos and videos the user has uploaded to the Experiences feed.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Ratings</h4>
+    <p>User's star ratings and "Would Go Again" reviews for businesses they've visited.</p>
+  </div>
+
+  <h3>Uploading a Receipt</h3>
+  <ol class="steps">
+    <li><div><strong>Tap "Add Receipt"</strong><br>Opens the receipt upload modal from the Receipts tab.</div></li>
+    <li><div><strong>Search for the Business</strong><br>Type the business name to find and select the correct match.</div></li>
+    <li><div><strong>Upload Photo</strong><br>Take a photo of the receipt or select from the camera roll.</div></li>
+    <li><div><strong>Enter Details</strong><br>Input the receipt subtotal and visit date. The system auto-calculates the expected payout based on current tier.</div></li>
+    <li><div><strong>Submit</strong><br>Receipt is submitted with status "Pending." Once the business or admin approves, the payout is credited.</div></li>
+  </ol>
+
+  <div class="ui-mockup">
+    <div class="ui-mockup-label">Receipt Status Examples</div>
+    <div class="mockup-row">
+      <span class="mockup-pill pending">Pending</span>
+      <span style="color:var(--text-secondary);">$42.50 at Taco Palace &mdash; Submitted Mar 5</span>
+    </div>
+    <div class="mockup-row">
+      <span class="mockup-pill approved">Approved</span>
+      <span style="color:var(--text-secondary);">$78.00 at The Rustic &mdash; Tier 2 (7.5%) &mdash; <strong style="color:var(--green);">+$5.85</strong></span>
+    </div>
+    <div class="mockup-row">
+      <span class="mockup-pill rejected">Rejected</span>
+      <span style="color:var(--text-secondary);">$15.00 at Coffee Hut &mdash; Reason: Illegible receipt</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 12: PARTNER ONBOARDING -->
+<!-- ============================== -->
+<div class="page-break" id="s12"></div>
+<div class="section-header">
+  <div class="section-number">Section 12</div>
+  <h2 style="color:var(--orange);">Partner Onboarding</h2>
+  <p class="section-desc">7-step business signup process.</p>
+</div>
+
+<div class="content">
+  <p>Businesses join LetsGo through a comprehensive 7-step onboarding form. The form auto-saves progress to the browser, so business owners can complete it in multiple sessions.</p>
+
+  <!-- ONBOARDING SCREENSHOTS -->
+  <div class="screenshot-flow" style="grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--orange);">1</div>
+      <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20000001.png" alt="Onboarding - Get Started" />
+      <div class="step-label">Get Started</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--blue);">2</div>
+      <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20000052.png" alt="Onboarding - Business Details" />
+      <div class="step-label">Business Details</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--green);">3</div>
+      <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20000227.png" alt="Onboarding - Choose Your Package" />
+      <div class="step-label">Choose Package</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--purple);">4</div>
+      <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20000309.png" alt="Onboarding - Progressive Payout Structure" />
+      <div class="step-label">Payout Structure</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--pink);">5</div>
+      <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20070106.png" alt="Onboarding - Billing & Payment" />
+      <div class="step-label">Billing &amp; Payment</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--yellow);">6</div>
+      <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20070255.png" alt="Onboarding - Verification & Uploads" />
+      <div class="step-label">Verification &amp; Uploads</div>
+    </div>
+  </div>
+  <div class="screenshot-container" style="margin-top: 1.25rem;">
+    <img src="public/manual-screenshots/Onboarding%20screenshots/Screenshot%202026-03-10%20070326.png" alt="Onboarding - Review & Agree" />
+    <div class="phone-label">Step 7: Review &amp; Agree &mdash; Final Summary</div>
+  </div>
+
+  <h3>Step 1: Business Basics</h3>
+  <div class="feature-card">
+    <ul>
+      <li><strong>Business name</strong> (legal and public display name)</li>
+      <li><strong>Business type</strong> (Restaurant &amp; Bar, Activity, Salon &amp; Beauty)</li>
+      <li><strong>Contact info</strong> (owner/manager name, phone, email)</li>
+      <li><strong>Your role</strong> (Owner, Manager, Marketing, or Other)</li>
+      <li><strong>Tags</strong> (cuisine, vibe, amenities &mdash; selected from database-driven list)</li>
+      <li><strong>Price level</strong> ($, $$, $$$)</li>
+    </ul>
+  </div>
+
+  <h3>Step 2: Location &amp; Hours</h3>
+  <div class="feature-card">
+    <ul>
+      <li><strong>Address</strong> &mdash; Google Maps autocomplete integration for accurate location</li>
+      <li><strong>Operating hours</strong> &mdash; Day-by-day schedule grid (Monday through Sunday)</li>
+      <li>Toggle each day open/closed with start and end times</li>
+    </ul>
+  </div>
+
+  <h3>Step 3: Plan Selection</h3>
+  <div class="feature-card">
+    <ul>
+      <li><strong>Basic Plan</strong> &mdash; Core discovery + receipts + payouts</li>
+      <li><strong>Premium Plan</strong> &mdash; Everything in Basic + Events, Advertising, Analytics, UGC management</li>
+      <li><strong>Advertising Add-Ons</strong> (optional):
+        <ul>
+          <li>1-Day Spotlight &mdash; $99</li>
+          <li>7-Day Spotlight &mdash; $599</li>
+          <li>14-Day Spotlight &mdash; $999</li>
+          <li>100-Mile Push &mdash; $2,599</li>
+          <li>Tour-Wide Push &mdash; $4,599</li>
+        </ul>
+      </li>
+      <li><strong>Premium Add-Ons</strong>: Video production, 15-min live feature, 30-min live feature</li>
+    </ul>
+  </div>
+
+  <h3>Step 4: Payout Configuration</h3>
+  <div class="feature-card">
+    <p>Businesses choose how much cash-back they want to offer users. Three preset plans or a fully custom option:</p>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Tier</th>
+          <th>Conservative</th>
+          <th>Standard (Default)</th>
+          <th>Aggressive</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Starter (1-10)</td><td>3%</td><td>5%</td><td>8%</td></tr>
+        <tr><td>Regular (11-20)</td><td>4%</td><td>7.5%</td><td>10%</td></tr>
+        <tr><td>Favorite (21-30)</td><td>5%</td><td>10%</td><td>12%</td></tr>
+        <tr><td>VIP (31-40)</td><td>6%</td><td>12.5%</td><td>14%</td></tr>
+        <tr><td>Elite (41-50)</td><td>7%</td><td>15%</td><td>16%</td></tr>
+        <tr><td>Legend (51-60)</td><td>8%</td><td>17.5%</td><td>18%</td></tr>
+        <tr><td>Ultimate (61+)</td><td>10%</td><td>20%</td><td>20%</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Custom</strong> &mdash; Business defines each tier percentage individually</p>
+  </div>
+
+  <h3>Step 5: Payment Method</h3>
+  <div class="feature-card">
+    <p>Businesses set up their payment method for billing (how LetsGo charges them). Options include bank account or credit/debit card via Stripe secure payment integration.</p>
+  </div>
+
+  <h3>Step 6: Verification</h3>
+  <div class="feature-card">
+    <ul>
+      <li><strong>Business license</strong> upload</li>
+      <li><strong>EIN document</strong> upload</li>
+      <li><strong>Utility bill</strong> (proof of address) upload</li>
+      <li><strong>Business logo</strong> upload</li>
+    </ul>
+  </div>
+
+  <h3>Step 7: Legal Agreements</h3>
+  <div class="feature-card">
+    <ul>
+      <li><strong>Terms of Service</strong> acceptance</li>
+      <li><strong>Billing agreement</strong> &mdash; Acknowledge platform fees and payout obligations</li>
+      <li><strong>Content policy</strong> &mdash; Agree to user-generated content policies</li>
+      <li><strong>Fraud policy</strong> &mdash; Acknowledge anti-fraud measures</li>
+      <li><strong>Marketing permissions</strong> &mdash; Opt-in to feature in discovery, user uploads, A/B testing</li>
+      <li><strong>Referral code</strong> (optional) &mdash; Enter if referred by another business</li>
+    </ul>
+  </div>
+
+  <div class="callout important">
+    <span class="callout-label">After Submission</span>
+    Once submitted, the onboarding is reviewed by the LetsGo admin team. After verification and approval, the business goes live in the Discovery Feed and starts appearing to users.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 13: BUSINESS DASHBOARD -->
+<!-- ============================== -->
+<div class="page-break" id="s13"></div>
+<div class="section-header">
+  <div class="section-number">Section 13</div>
+  <h2>Business Dashboard</h2>
+  <p class="section-desc">9-tab management hub for business partners.</p>
+</div>
+
+<div class="content">
+  <p>Once approved, businesses access their Dashboard to manage everything &mdash; from approving receipts to running advertising campaigns.</p>
+
+  <!-- BUSINESS DASHBOARD SCREENSHOTS -->
+  <div class="screenshot-flow" style="grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--blue);">1</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224301.png" alt="Business Dashboard - Overview" />
+      <div class="step-label">Overview</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--green);">2</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224320.png" alt="Business Dashboard - Analytics" />
+      <div class="step-label">Analytics</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--yellow);">3</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224335.png" alt="Business Dashboard - Receipts" />
+      <div class="step-label">Receipt Redemption</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--purple);">4</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224423.png" alt="Business Dashboard - Media Gallery" />
+      <div class="step-label">Media Gallery</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--orange);">5</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224441.png" alt="Business Dashboard - Events" />
+      <div class="step-label">Events</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--pink);">6</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224452.png" alt="Business Dashboard - Advertising" />
+      <div class="step-label">Advertising &amp; Add-ons</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--blue);">7</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224503.png" alt="Business Dashboard - Plans & Billing" />
+      <div class="step-label">Plans &amp; Billing</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--green);">8</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224529.png" alt="Business Dashboard - Profile Settings" />
+      <div class="step-label">Profile Settings</div>
+    </div>
+    <div class="flow-step">
+      <div class="step-number" style="background: var(--yellow);">9</div>
+      <img src="public/manual-screenshots/Business%20Profile%20ScreenShots/Screenshot%202026-03-09%20224553.png" alt="Business Dashboard - Support" />
+      <div class="step-label">Support &amp; Help</div>
+    </div>
+  </div>
+
+  <h3>Dashboard Tabs</h3>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge blue">1</span> Overview</h4>
+    <p>Key performance metrics at a glance: total customers, latest invoice amount, upcoming events count, and pending receipts. Quick-action cards link to other tabs. Shows plan status (Basic or Premium).</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge green">2</span> Analytics <span class="mockup-pill" style="background:rgba(191,95,255,0.15);color:var(--purple);margin-left:8px;">Premium</span></h4>
+    <p>Revenue charts, customer insights, and performance trends over time. Visual graphs powered by Recharts showing receipt volume, payout amounts, and customer growth.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge orange">3</span> Receipts</h4>
+    <p>Approve or reject user-submitted receipts. Table shows receipt ID, user name, date, amount, payout tier, and status. Filter by date range and status. Support for bulk actions. Export to CSV.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge pink">4</span> Media</h4>
+    <p>Gallery of user-uploaded photos and videos. Business reviews each submission and approves or rejects before it appears in the public Experiences Feed. Upload official business photos here too.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge purple">5</span> Events <span class="mockup-pill" style="background:rgba(191,95,255,0.15);color:var(--purple);margin-left:8px;">Premium</span></h4>
+    <p>Create and manage events: live music nights, happy hours, trivia, workshops, etc. Set title, date/time, capacity, price, description, and category. Manage RSVPs.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge yellow">6</span> Advertising <span class="mockup-pill" style="background:rgba(191,95,255,0.15);color:var(--purple);margin-left:8px;">Premium</span></h4>
+    <p>Purchase and manage advertising campaigns (Spotlights and Pushes). Track impressions, clicks, and conversions. View active and past campaigns.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge blue">7</span> Billing</h4>
+    <p>Payment method management, invoice history, and upcoming charges. View line items: receipt payouts, platform fees, premium subscriptions, and advertising charges.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge green">8</span> Profile</h4>
+    <p>Edit business details: name, description, type, phone, website, hours, tags, price level, age restrictions, logo, and representative contact info.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4><span class="icon-badge pink">9</span> Support</h4>
+    <p>Help center with articles and FAQs. Submit support tickets directly to the LetsGo team. Live chat option available.</p>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 14: ADVERTISING        -->
+<!-- ============================== -->
+<div class="page-break" id="s14"></div>
+<div class="section-header">
+  <div class="section-number">Section 14</div>
+  <h2>Advertising &amp; Spotlights</h2>
+  <p class="section-desc">Paid promotion options for businesses.</p>
+</div>
+
+<div class="content">
+  <p>Businesses on Premium plans can boost their visibility through paid advertising campaigns.</p>
+
+  <h3>Advertising Packages</h3>
+
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Package</th>
+        <th>Duration</th>
+        <th>Price</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1-Day Spotlight</strong></td>
+        <td>24 hours</td>
+        <td>$99</td>
+        <td>Featured placement in Discovery Feed for one day</td>
+      </tr>
+      <tr>
+        <td><strong>7-Day Spotlight</strong></td>
+        <td>7 days</td>
+        <td>$599</td>
+        <td>Week-long featured placement with priority in feed</td>
+      </tr>
+      <tr>
+        <td><strong>14-Day Spotlight</strong></td>
+        <td>14 days</td>
+        <td>$999</td>
+        <td>Two-week spotlight with boosted visibility</td>
+      </tr>
+      <tr>
+        <td><strong>100-Mile Push</strong></td>
+        <td>Campaign</td>
+        <td>$2,599</td>
+        <td>Push notifications to all users within 100-mile radius</td>
+      </tr>
+      <tr>
+        <td><strong>Tour-Wide Push</strong></td>
+        <td>Campaign</td>
+        <td>$4,599</td>
+        <td>Push notifications to all users across the entire platform</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Premium Add-Ons</h3>
+  <ul>
+    <li><strong>Video Production</strong> &mdash; Professional video content created for the business</li>
+    <li><strong>15-Minute Live Feature</strong> &mdash; Live broadcast showcasing the business</li>
+    <li><strong>30-Minute Live Feature</strong> &mdash; Extended live showcase with more coverage</li>
+  </ul>
+
+  <h3>Campaign Tracking</h3>
+  <p>Businesses can track campaign performance directly in their Dashboard:</p>
+  <ul>
+    <li><strong>Impressions</strong> &mdash; How many users saw the ad</li>
+    <li><strong>Clicks</strong> &mdash; How many users tapped to learn more</li>
+    <li><strong>Conversions</strong> &mdash; How many users visited after seeing the ad</li>
+    <li><strong>Payment Status</strong> &mdash; Paid or pending</li>
+  </ul>
+
+  <div class="callout tip">
+    <span class="callout-label">Sales Tip</span>
+    Spotlights are the quickest upsell during onboarding. When a business signs up, offer a 1-Day Spotlight ($99) as a "launch day special" to maximize their initial visibility on the platform.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 15: PAYOUT TIER PLANS  -->
+<!-- ============================== -->
+<div class="page-break" id="s15"></div>
+<div class="section-header">
+  <div class="section-number">Section 15</div>
+  <h2>Payout Tier Plans</h2>
+  <p class="section-desc">Detailed breakdown of all preset reward structures.</p>
+</div>
+
+<div class="content">
+  <p>Each business selects a payout plan during onboarding. Here are all three preset options side-by-side, or the business can opt for the Custom option:</p>
+
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Tier</th>
+        <th>Visits</th>
+        <th>Conservative</th>
+        <th>Standard</th>
+        <th>Aggressive</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1 &mdash; Starter</strong></td>
+        <td>1&ndash;10</td>
+        <td>3.0%</td>
+        <td>5.0%</td>
+        <td>8.0%</td>
+      </tr>
+      <tr>
+        <td><strong>2 &mdash; Regular</strong></td>
+        <td>11&ndash;20</td>
+        <td>4.0%</td>
+        <td>7.5%</td>
+        <td>10.0%</td>
+      </tr>
+      <tr>
+        <td><strong>3 &mdash; Favorite</strong></td>
+        <td>21&ndash;30</td>
+        <td>5.0%</td>
+        <td>10.0%</td>
+        <td>12.0%</td>
+      </tr>
+      <tr>
+        <td><strong>4 &mdash; VIP</strong></td>
+        <td>31&ndash;40</td>
+        <td>6.0%</td>
+        <td>12.5%</td>
+        <td>14.0%</td>
+      </tr>
+      <tr>
+        <td><strong>5 &mdash; Elite</strong></td>
+        <td>41&ndash;50</td>
+        <td>7.0%</td>
+        <td>15.0%</td>
+        <td>16.0%</td>
+      </tr>
+      <tr>
+        <td><strong>6 &mdash; Legend</strong></td>
+        <td>51&ndash;60</td>
+        <td>8.0%</td>
+        <td>17.5%</td>
+        <td>18.0%</td>
+      </tr>
+      <tr>
+        <td><strong>7 &mdash; Ultimate</strong></td>
+        <td>61+</td>
+        <td>10.0%</td>
+        <td>20.0%</td>
+        <td>20.0%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="callout-label">Which Plan to Recommend?</span>
+    <strong>Standard</strong> works for most businesses. It provides meaningful rewards without excessive cost.<br><br>
+    <strong>Conservative</strong> is best for high-volume, low-margin businesses (fast food, coffee shops) where every percentage point matters.<br><br>
+    <strong>Aggressive</strong> is ideal for businesses that want to attract customers quickly and can afford higher payouts (upscale dining, premium experiences).<br><br>
+    <strong>Custom</strong> lets the business set each tier independently &mdash; useful for businesses with unique pricing structures or specific budget constraints.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 16: REVENUE & FEES     -->
+<!-- ============================== -->
+<div class="page-break" id="s16"></div>
+<div class="section-header">
+  <div class="section-number">Section 16</div>
+  <h2>Revenue &amp; Fee Structure</h2>
+  <p class="section-desc">How LetsGo generates revenue from business partners.</p>
+</div>
+
+<div class="content">
+
+  <h3>Business Packages</h3>
+  <div class="screenshot-container">
+    <img src="public/manual-screenshots/Packages/Screenshot%202026-03-10%20120151.png" alt="Choose Your Package - Basic vs Premium" style="max-width: 700px;" />
+    <div class="phone-label">Choose Your Package &mdash; Basic vs Premium</div>
+  </div>
+
+  <div class="callout important">
+    <span class="callout-label">Two Separate Charges</span>
+    Every approved receipt generates <strong>two charges</strong> for the business. These are completely independent calculations. Do not confuse them.
+  </div>
+
+  <h3>1. User Payout (Business &rarr; LetsGo &rarr; User)</h3>
+  <div class="feature-card">
+    <p><strong>What:</strong> Progressive cash-back the business pays through LetsGo, which LetsGo then distributes to the user.</p>
+    <p><strong>Amount:</strong> Determined by the business's payout tier plan (3% &ndash; 50%)</p>
+    <p><strong>Cap:</strong> No per-receipt cap. The business's chosen tier percentage applies in full.</p>
+    <p><strong>Formula:</strong> <code>payout = receipt_subtotal &times; tier_percent</code></p>
+  </div>
+
+  <h3>2. LetsGo Platform Fee (Business &rarr; LetsGo)</h3>
+  <div class="feature-card">
+    <p><strong>What:</strong> Platform fee that LetsGo charges the business for each processed receipt. This is LetsGo's revenue.</p>
+    <p><strong>Amount:</strong> 10% of receipt subtotal</p>
+    <p><strong>Cap:</strong> $5.00 maximum per receipt</p>
+    <p><strong>Formula:</strong> <code>fee = min(receipt_subtotal &times; 10%, $5.00)</code></p>
+  </div>
+
+  <h3>Cost Example for Businesses</h3>
+
+  <div class="feature-card">
+    <h4>Basic Plan &mdash; Monthly Cost Estimate</h4>
+    <p>Assume a restaurant processes <strong>200 receipts/month</strong> with an average ticket of <strong>$40</strong>:</p>
+    <ul>
+      <li>Customers @Tier 1 (5%): 150 receipts &times; $38 &times; 5% = <strong>$285</strong></li>
+      <li>Customers @Tier 2 (7.5%): 30 receipts &times; $40 &times; 7.5% = <strong>$90</strong></li>
+      <li>Customers @Tier 3 (10%+): 20 receipts &times; $55 &times; 10% = <strong>$110</strong></li>
+      <li><strong>Total User Payouts: ~$485/month</strong></li>
+    </ul>
+    <p style="margin-top:0.5rem;">Plus LetsGo Platform Fee:</p>
+    <ul>
+      <li>Customers @Tier 1: 150 receipts &times; $38 &times; 10% = <strong>$570</strong></li>
+      <li>Customers @Tier 2: 30 receipts &times; $40 &times; 10% = <strong>$120</strong></li>
+      <li>Customers @Tier 3: 20 receipts &times; $5 (reached $5 cap) = <strong>$100</strong></li>
+      <li><strong>Total Platform Fee: ~$790/month</strong></li>
+    </ul>
+    <p style="margin-top:0.5rem;"><strong>Total Business Cost under Basic Plan: ~$485 + $790 = $1,275 or $6.38 avg per user</strong></p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Premium Plan &mdash; Monthly Cost Estimate</h4>
+    <p>Assume a restaurant processes <strong>200 receipts/month</strong> with an average ticket of <strong>$40</strong>:</p>
+    <ul>
+      <li>Customers @Tier 1 (5%): 150 receipts &times; $38 &times; 5% = <strong>$285</strong></li>
+      <li>Customers @Tier 2 (7.5%): 30 receipts &times; $40 &times; 7.5% = <strong>$90</strong></li>
+      <li>Customers @Tier 3 (10%+): 20 receipts &times; $55 &times; 10% = <strong>$110</strong></li>
+      <li><strong>Total User Payouts: ~$485/month</strong></li>
+    </ul>
+    <p style="margin-top:0.5rem;">Plus LetsGo Platform Fee:</p>
+    <ul>
+      <li>Premium monthly subscription: <strong>$399.99/month</strong></li>
+      <li>No per-receipt platform fee (10% fee is waived)</li>
+      <li><strong>Total Platform Fee: $399.99/month</strong></li>
+    </ul>
+    <p style="margin-top:0.5rem;"><strong>Total Business Cost under Premium Plan: ~$485 + $399.99 = $884.99 or $4.43 avg per user</strong></p>
+  </div>
+
+  <div class="callout tip">
+    <span class="callout-label">Sales Talking Point</span>
+    The $5 cap on the platform fee is a big selling point for businesses with higher average tickets. A $200 dinner only costs $5 in platform fees &mdash; that's just 2.5%. The fee percentage effectively <em>decreases</em> as ticket sizes increase. Premium plan businesses save significantly on platform fees &mdash; at 200 receipts/month the savings are nearly $400.
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 17: NAVIGATION MAP     -->
+<!-- ============================== -->
+<div class="page-break" id="s17"></div>
+<div class="section-header">
+  <div class="section-number">Section 17</div>
+  <h2>Navigation Map</h2>
+  <p class="section-desc">How all pages connect to each other.</p>
+</div>
+
+<div class="content">
+  <h3>User Journey</h3>
+  <div class="nav-diagram"><span class="route">www.useletsgo.com</span>
+  <span class="arrow">|</span>
+  <span class="arrow">├──</span> <span class="route">/welcome</span> <span class="label">(Sign Up / Login)</span>
+  <span class="arrow">│    └──</span> <span class="route">/welcome/find-friends</span> <span class="label">(Import Contacts)</span>
+  <span class="arrow">│</span>
+  <span class="arrow">├──</span> <span class="route">/ (Home Hub)</span> <span class="label">(9 Mode Cards)</span>
+  <span class="arrow">│    ├──</span> <span class="route">/swipe</span> <span class="label">(Discovery Feed)</span>
+  <span class="arrow">│    ├──</span> <span class="route">/datenight</span> <span class="label">(Date Night Generator)</span>
+  <span class="arrow">│    ├──</span> <span class="route">/5v3v1</span> <span class="label">(Two-Player Game)</span>
+  <span class="arrow">│    ├──</span> <span class="route">/group</span> <span class="label">(Group Vote)</span>
+  <span class="arrow">│    ├──</span> <span class="route">/events</span> <span class="label">(Event Calendar)</span>
+  <span class="arrow">│    ├──</span> <span class="route">/experiences</span> <span class="label">(UGC Feed)</span>
+  <span class="arrow">│    └──</span> <span class="route">/profile</span> <span class="label">(User Dashboard)</span>
+  <span class="arrow">│</span>
+  <span class="arrow">├──</span> <span class="route">/terms</span> <span class="label">(Terms of Service)</span>
+  <span class="arrow">└──</span> <span class="route">/privacy</span> <span class="label">(Privacy Policy)</span></div>
+
+  <h3>Business Journey</h3>
+  <div class="nav-diagram"><span class="route">/partner-onboarding</span> <span class="label">(7-Step Signup)</span>
+  <span class="arrow">│</span>
+  <span class="arrow">├──</span> Step 1: Basics
+  <span class="arrow">├──</span> Step 2: Location &amp; Hours
+  <span class="arrow">├──</span> Step 3: Plan Selection
+  <span class="arrow">├──</span> Step 4: Payout Config
+  <span class="arrow">├──</span> Step 5: Payment Method
+  <span class="arrow">├──</span> Step 6: Verification
+  <span class="arrow">└──</span> Step 7: Legal Agreements
+  <span class="arrow">      │</span>
+  <span class="arrow">      └──</span> <span class="label">Admin Review &amp; Approval</span>
+  <span class="arrow">            │</span>
+  <span class="arrow">            └──</span> <span class="route">/businessprofile-v2/[id]</span> <span class="label">(Business Dashboard)</span>
+  <span class="arrow">                  ├──</span> Overview
+  <span class="arrow">                  ├──</span> Analytics <span class="label">(Premium)</span>
+  <span class="arrow">                  ├──</span> Receipts
+  <span class="arrow">                  ├──</span> Media
+  <span class="arrow">                  ├──</span> Events <span class="label">(Premium)</span>
+  <span class="arrow">                  ├──</span> Advertising <span class="label">(Premium)</span>
+  <span class="arrow">                  ├──</span> Billing
+  <span class="arrow">                  ├──</span> Profile
+  <span class="arrow">                  └──</span> Support</div>
+
+  <h3>Key Cross-Links</h3>
+  <ul>
+    <li>Discovery &rarr; Profile (save to "Would Go Again")</li>
+    <li>Games (5v3v1 / Group) &rarr; Discovery (view winner's business)</li>
+    <li>Experiences &rarr; Discovery (tap business name)</li>
+    <li>Events &rarr; Discovery (view hosting business)</li>
+    <li>Profile &rarr; Receipt Upload &rarr; Business Search</li>
+    <li>All pages &rarr; Terms of Service / Privacy Policy (footer links)</li>
+  </ul>
+</div>
+
+<!-- ============================== -->
+<!-- SECTION 18: FAQ                -->
+<!-- ============================== -->
+<div class="page-break" id="s18"></div>
+<div class="section-header">
+  <div class="section-number">Section 18</div>
+  <h2>Frequently Asked Questions</h2>
+  <p class="section-desc">Common questions from customers and business partners.</p>
+</div>
+
+<div class="content">
+  <h3>For Users (Customers)</h3>
+
+  <div class="feature-card">
+    <h4>How do I earn cash-back?</h4>
+    <p>Visit a business on the LetsGo platform, keep your receipt, then upload it through the Profile page. Once the receipt is approved, you earn cash-back based on your current payout tier for that business.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>How much can I earn?</h4>
+    <p>It depends on how often you visit. First-time visitors can earn 3% (Standard plan). As you visit the same business more, your tier increases &mdash; up to possibly 50% at the Ultimate tier (61+ visits). There is <strong>no cap</strong> on user payouts.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>How long does receipt approval take?</h4>
+    <p>Most receipts are reviewed within 24-48 hours. You'll receive a notification when your receipt is approved or if there's an issue.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>What if my receipt is rejected?</h4>
+    <p>Common reasons include: illegible receipt image, receipt from a non-partner business, duplicate submission, or date in the future. You'll see the rejection reason on your receipt history and can resubmit with a clearer photo if applicable.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Do my visits expire?</h4>
+    <p>Yes, visit counts are based on a <strong>365-day rolling window</strong> based on the user's anniversary. Every year the visits and tiers will reset to zero.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>How do I get paid?</h4>
+    <p>Earned cash-back accumulates in your LetsGo balance. You can set up your preferred payout method (bank transfer, etc.) in your Profile settings.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Is there a tax form?</h4>
+    <p>If your total earnings exceed the IRS threshold ($600 in a calendar year), you may receive a 1099 form. You can manage your tax information in your Profile settings.</p>
+  </div>
+
+  <h3>For Business Partners</h3>
+
+  <div class="feature-card">
+    <h4>How much does it cost to join?</h4>
+    <p>There are two costs: (1) the user payout percentage you choose during setup (your reward to customers), and (2) based on your package, could either be the lesser of 10% receipt subtotal or $5 cap (Basic Package), or $399.99/month (Premium Package).</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Can I change my payout tiers later?</h4>
+    <p>Yes. You can adjust your payout structure through the Business Dashboard or by contacting LetsGo support. Changes apply to future receipts. Only 1 change is allowed every 365 days.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>How do I approve receipts?</h4>
+    <p>Log into your Business Dashboard and go to the Receipts tab. You'll see all pending submissions with receipt images, amounts, and user details. Approve or reject each one individually or use bulk actions.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>What's the difference between Basic and Premium?</h4>
+    <p><strong>Basic</strong> includes Discovery Feed listing, 5v3v1, Group Vote, receipt processing, and payout management. <strong>Premium</strong> adds Analytics charts, Event creation, Spotlight Advertising campaigns, Date Night Generator, and enhanced UGC management tools.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>How do advertising Spotlights work?</h4>
+    <p>Spotlights boost your business to the top of the Discovery Feed for a set period (1 day, 7 days, or 14 days). Push campaigns send notifications directly to users in your area (100-mile radius or platform-wide). All campaigns include performance tracking.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>Can I control user-generated content about my business?</h4>
+    <p>Yes. All user-submitted photos and videos require your approval before appearing in the public Experiences Feed. You can approve, reject, or delete content from your Media tab.</p>
+  </div>
+</div>
+
+<!-- ============================== -->
+<!-- FOOTER / BACK COVER            -->
+<!-- ============================== -->
+<div class="page-break"></div>
+<div class="cover" style="min-height:60vh;">
+  <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:0.5rem;">
+    <img src="public/lg-logo.png" alt="LetsGo" style="height:80px;object-fit:contain;">
+    <div class="cover-logo">LETSGO</div>
+  </div>
+  <div class="cover-tagline">GO. PLAY. EAT. GET PAID TO LIVE YOUR BEST LIFE.</div>
+  <hr class="cover-divider">
+  <div class="cover-meta">
+    <strong>Website</strong>: www.useletsgo.com<br>
+    <strong>Email</strong>: noreply@useletsgo.com<br>
+    <strong>Operated by</strong>: OlsonCreations, LLC &mdash; DBA "LETS GO OUT"<br><br>
+    &copy; 2026 OlsonCreations, LLC. All rights reserved.<br>
+    This manual is confidential and intended for authorized sales representatives and customers.
+  </div>
+</div>
+
+<div class="manual-footer no-print">
+  <p><strong>To print this manual:</strong> Press <kbd>Ctrl</kbd>+<kbd>P</kbd> (or <kbd>Cmd</kbd>+<kbd>P</kbd> on Mac) and select "Save as PDF" or your printer. The manual is optimized for US Letter paper.</p>
+</div>
+
+</body>
+</html>

@@ -371,7 +371,7 @@ function BoltShareButton({ postId, dataTour }: { postId: string; dataTour?: stri
     let shared = false;
     try {
       if (navigator.share) {
-        await navigator.share({ title: "Check this out on Let's Go!", url: shareUrl });
+        await navigator.share({ title: "Check this out on LetsGo!", url: shareUrl });
         shared = true;
       } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);

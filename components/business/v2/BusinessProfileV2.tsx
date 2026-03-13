@@ -385,7 +385,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
             >
               <img
                 src="/lg-logo.png"
-                alt="Let's Go"
+                alt="LetsGo"
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             </div>

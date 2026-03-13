@@ -2551,7 +2551,7 @@ function PickOneStep({ threeChoices, selectedOne, setSelectedOne, friend, onFina
         display: "flex", flexDirection: "column", alignItems: "center",
       }}>
         <NeonButton onClick={onFinalize} disabled={!selectedOne} color={COLORS.neonGreen} size="large" style={{ width: "100%", maxWidth: 360 }}>
-          {selectedOne ? "LET'S GO! 🎉" : "Choose your spot"}
+          {selectedOne ? "LETSGO! 🎉" : "Choose your spot"}
         </NeonButton>
       </div>
     </div>

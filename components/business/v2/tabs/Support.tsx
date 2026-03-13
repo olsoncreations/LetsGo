@@ -1068,7 +1068,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
                   <MessageSquare size={20} color="#fff" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: "1rem" }}>Let&apos;s Go Support</div>
+                  <div style={{ fontWeight: 700, fontSize: "1rem" }}>LetsGo Support</div>
                   <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>Usually responds within minutes</div>
                 </div>
               </div>
