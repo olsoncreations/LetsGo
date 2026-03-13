@@ -18,6 +18,7 @@ import { validateImageDimensions } from "@/lib/imageValidation";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { EarningsBannerAnim, ReceiptAnim, CashOutAnim, HeartAnim, TabSwitchAnim, PayoutTiersAnim, LevelUpAnim, MediaAnim, GameHistoryAnim, AnalyticsAnim, ProfileAnim, SupportAnim } from "@/components/TourIllustrations";
+import OpportunityCTA from "@/components/OpportunityCTA";
 
 // ═══════════════════════════════════════════════════
 // NEON PALETTE
@@ -1706,12 +1707,14 @@ export default function LetsGoProfile() {
                       <div style={{ width: 36, height: 36, borderRadius: 6, background: `rgba(${NEON.purpleRGB},0.1)`, border: `1px solid rgba(${NEON.purpleRGB},0.2)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{"\uD83C\uDF89"}</div>
                       <div style={{ flex: "1 1 140px", minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>Invite Friends to LetsGo</div>
-                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", lineHeight: 1.4 }}>Share your referral code and earn rewards when friends sign up!</div>
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", lineHeight: 1.4 }}>{influencerData ? "Share your referral code and earn rewards when friends sign up!" : "Share your profile link and invite friends to join LetsGo!"}</div>
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
+                        {influencerData && (<>
                         <div style={{ padding: "5px 12px", borderRadius: 3, background: "rgba(255,255,255,0.04)", border: `1px solid rgba(${NEON.purpleRGB},0.2)`, fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, color: NEON.purple, letterSpacing: "0.1em", textShadow: `0 0 8px rgba(${NEON.purpleRGB},0.3)` }}>{referralCode}</div>
                         <button onClick={() => { navigator.clipboard?.writeText(referralCode); setReferralCopied(true); setTimeout(() => setReferralCopied(false), 2000); }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${referralCopied ? 0.5 : 0.25})`, background: referralCopied ? `rgba(${NEON.greenRGB},0.1)` : `rgba(${NEON.purpleRGB},0.06)`, color: referralCopied ? NEON.green : NEON.purple, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s ease", whiteSpace: "nowrap" }}>{referralCopied ? "Copied!" : "Copy Code"}</button>
-                        <button onClick={async () => { const url = `${window.location.origin}/profile?add=${profile?.id||""}`; if (navigator.share) { try { await navigator.share({ title: "Add me on LetsGo!", url }); } catch {} } else { navigator.clipboard?.writeText(url); setShareLinkCopied(true); setTimeout(() => setShareLinkCopied(false), 2000); } }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${shareLinkCopied ? 0.5 : 0.2})`, background: shareLinkCopied ? `rgba(${NEON.greenRGB},0.1)` : "transparent", color: shareLinkCopied ? NEON.green : "rgba(255,255,255,0.25)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", transition: "all 0.2s ease" }}>
+                        </>)}
+                        <button onClick={async () => { const url = `${window.location.origin}/profile?add=${profile?.id||""}`; if (navigator.share) { try { await navigator.share({ title: "Add me on LetsGo!", url }); } catch {} } else { navigator.clipboard?.writeText(url); setShareLinkCopied(true); setTimeout(() => setShareLinkCopied(false), 2000); } }} onMouseEnter={e => { if (!shareLinkCopied) { e.currentTarget.style.background = `rgba(${NEON.purpleRGB},0.1)`; e.currentTarget.style.color = NEON.purple; e.currentTarget.style.borderColor = `rgba(${NEON.purpleRGB},0.4)`; } }} onMouseLeave={e => { if (!shareLinkCopied) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.45)"; e.currentTarget.style.borderColor = `rgba(${NEON.purpleRGB},0.2)`; } }} onMouseDown={e => { e.currentTarget.style.background = `rgba(${NEON.purpleRGB},0.18)`; e.currentTarget.style.color = NEON.purple; }} onMouseUp={e => { e.currentTarget.style.background = `rgba(${NEON.purpleRGB},0.1)`; }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${shareLinkCopied ? 0.5 : 0.2})`, background: shareLinkCopied ? `rgba(${NEON.greenRGB},0.1)` : "transparent", color: shareLinkCopied ? NEON.green : "rgba(255,255,255,0.45)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", transition: "all 0.2s ease" }}>
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                           {shareLinkCopied ? "Copied!" : "Share Link"}
                         </button>
@@ -2581,6 +2584,9 @@ export default function LetsGoProfile() {
               )}
             </div>
           </div>
+
+          {/* Opportunity CTAs */}
+          <OpportunityCTA />
 
           {/* FOOTER */}
           <div style={{ textAlign: "center", padding: "24px 0 12px", borderTop: "1px solid rgba(255,255,255,0.04)", animation: "fadeIn 0.6s ease 1.2s both" }}>
