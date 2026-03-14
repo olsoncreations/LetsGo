@@ -33,7 +33,7 @@ import {
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
-import { filterImagesByMinWidth } from "@/lib/imageValidation";
+import { filterImagesByMinWidth, filterByPortraitOrientation } from "@/lib/imageValidation";
 
 interface Business {
   id: string;
@@ -1967,11 +1967,22 @@ function BusinessesPage() {
                             onChange={async (e) => {
                               const files = e.target.files;
                               if (!files || files.length === 0 || !selected) return;
-                              const { passed, failed } = await filterImagesByMinWidth(Array.from(files), 1080);
+                              // Step 1: Reject landscape images
+                              const { passed: portraitOk, failed: landscapeFailed } = await filterByPortraitOrientation(Array.from(files));
+                              if (landscapeFailed.length > 0) {
+                                alert(
+                                  `${landscapeFailed.length} photo${landscapeFailed.length > 1 ? "s" : ""} rejected — portrait orientation required (height must be ≥ width).\n` +
+                                  `Recommended: 1080×1920 (9:16 ratio). Crop to portrait before uploading.\n\n` +
+                                  landscapeFailed.map((r) => `  ${r.file.name} (${r.width}×${r.height})`).join("\n")
+                                );
+                              }
+                              if (portraitOk.length === 0) { e.target.value = ""; return; }
+                              // Step 2: Enforce minimum 1080px width
+                              const { passed, failed } = await filterImagesByMinWidth(portraitOk.map((r) => r.file), 1080);
                               if (failed.length > 0) {
                                 alert(
                                   `${failed.length} photo${failed.length > 1 ? "s" : ""} rejected (minimum 1080px wide):\n` +
-                                  failed.map((r) => `  ${r.file.name} (${r.width}x${r.height})`).join("\n")
+                                  failed.map((r) => `  ${r.file.name} (${r.width}×${r.height})`).join("\n")
                                 );
                               }
                               if (passed.length === 0) { e.target.value = ""; return; }

@@ -5,6 +5,8 @@ import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
   AlertCircle,
+  ArrowUp,
+  ArrowDown,
   Award,
   Bookmark,
   Camera,
@@ -12,6 +14,7 @@ import {
   Clock,
   Crosshair,
   Heart,
+  Layers,
   MessageSquare,
   Pencil,
   Save,
@@ -22,7 +25,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { filterImagesByMinWidth, type ImageDimensionResult } from "@/lib/imageValidation";
+import { filterImagesByMinWidth, filterByPortraitOrientation, type ImageDimensionResult } from "@/lib/imageValidation";
 
 type MediaType = "photo" | "video";
 
@@ -272,7 +275,9 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [mediaGallery, setMediaGallery] = useState<UiMediaItem[]>([]);
-  const photos = useMemo(() => mediaGallery.filter((m) => m.type === "photo"), [mediaGallery]);
+  const photos = useMemo(() => mediaGallery.filter((m) => m.type === "photo").sort((a, b) => a.sortOrder - b.sortOrder), [mediaGallery]);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const videos = useMemo(() => mediaGallery.filter((m) => m.type === "video"), [mediaGallery]);
 
   const [uploading, setUploading] = useState(false);
@@ -280,7 +285,7 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
   const [showPhotoUploadModal, setShowPhotoUploadModal] = useState(false);
   const [showVideoUploadModal, setShowVideoUploadModal] = useState(false);
   const [viewingMedia, setViewingMedia] = useState<UiMediaItem | null>(null);
-  const [stagedPhotos, setStagedPhotos] = useState<File[]>([]);
+  const [stagedPhotos, setStagedPhotos] = useState<ImageDimensionResult[]>([]);
   const [dimensionWarnings, setDimensionWarnings] = useState<ImageDimensionResult[]>([]);
   const [stagedVideo, setStagedVideo] = useState<File | null>(null);
   const [editing, setEditing] = useState(false);
@@ -682,13 +687,25 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
       return;
     }
 
-    // Enforce minimum 1080px width for photos
+    // Enforce portrait orientation + minimum 1080px width for photos
     if (kind === "photo") {
-      const { passed, failed } = await filterImagesByMinWidth(Array.from(files), 1080);
+      // Step 1: Reject landscape images (must be portrait — height >= width)
+      const { passed: portraitPassed, failed: landscapeFailed } = await filterByPortraitOrientation(Array.from(files));
+      if (landscapeFailed.length > 0) {
+        alert(
+          `${landscapeFailed.length} photo${landscapeFailed.length > 1 ? "s" : ""} rejected — portrait orientation required (height must be ≥ width).\n` +
+          `Recommended: 1080×1920 (9:16 ratio). Crop your photos to portrait before uploading.\n\n` +
+          landscapeFailed.map((r) => `  ${r.file.name} (${r.width}×${r.height})`).join("\n")
+        );
+      }
+      if (portraitPassed.length === 0) return;
+
+      // Step 2: Enforce minimum 1080px width
+      const { passed, failed } = await filterImagesByMinWidth(portraitPassed.map((r) => r.file), 1080);
       if (failed.length > 0) {
         alert(
           `${failed.length} photo${failed.length > 1 ? "s" : ""} rejected (minimum 1080px wide):\n` +
-          failed.map((r) => `  ${r.file.name} (${r.width}x${r.height})`).join("\n")
+          failed.map((r) => `  ${r.file.name} (${r.width}×${r.height})`).join("\n")
         );
       }
       if (passed.length === 0) return;
@@ -802,14 +819,16 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
         // Non-critical: upload succeeded, just admin sync failed
       }
 
-      // clear modal fields
+      // clear modal fields & close modals
       if (photoTitleRef.current) photoTitleRef.current.value = "";
       if (photoDescRef.current) photoDescRef.current.value = "";
       if (videoTitleRef.current) videoTitleRef.current.value = "";
       if (videoDescRef.current) videoDescRef.current.value = "";
       if (videoSetActiveRef.current) videoSetActiveRef.current.checked = false;
-
-      alert("(Saved) Upload complete.");
+      setStagedPhotos([]);
+      setDimensionWarnings([]);
+      if (kind === "photo") setShowPhotoUploadModal(false);
+      if (kind === "video") setShowVideoUploadModal(false);
     } catch (e) {
       alert(normalizeErr(e));
     } finally {
@@ -853,6 +872,41 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
         })
       );
       setViewingMedia((prev) => prev && prev.id === target.id ? { ...prev, sortOrder: 0, isMainPhoto: true } : prev);
+    } catch (e) {
+      alert(normalizeErr(e));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function swapPhotoOrder(photoA: UiMediaItem, photoB: UiMediaItem) {
+    if (!businessId) return;
+    try {
+      setUploading(true);
+      const sortA = photoA.sortOrder;
+      const sortB = photoB.sortOrder;
+
+      const { error: e1 } = await supabaseBrowser
+        .from("business_media")
+        .update({ sort_order: sortB })
+        .eq("id", photoA.id)
+        .eq("business_id", businessId);
+      if (e1) throw e1;
+
+      const { error: e2 } = await supabaseBrowser
+        .from("business_media")
+        .update({ sort_order: sortA })
+        .eq("id", photoB.id)
+        .eq("business_id", businessId);
+      if (e2) throw e2;
+
+      setMediaGallery((prev) =>
+        prev.map((m) => {
+          if (m.id === photoA.id) return { ...m, sortOrder: sortB, isMainPhoto: sortB === 0 };
+          if (m.id === photoB.id) return { ...m, sortOrder: sortA, isMainPhoto: sortA === 0 };
+          return m;
+        })
+      );
     } catch (e) {
       alert(normalizeErr(e));
     } finally {
@@ -1322,12 +1376,261 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
         </div>
       </div>
 
+      {/* Discovery Photo Guide */}
+      <div style={{
+        background: `linear-gradient(135deg, rgba(147,51,234,0.10) 0%, rgba(191,95,255,0.06) 100%)`,
+        backdropFilter: "blur(20px)",
+        border: `1px solid rgba(147,51,234,0.30)`,
+        borderRadius: "16px", padding: "2rem", marginBottom: "2rem",
+      }}>
+        <button
+          type="button"
+          onClick={() => setGuideOpen((v) => !v)}
+          style={{
+            width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0,
+            display: "flex", alignItems: "center", gap: "0.75rem", color: "inherit", fontFamily: "inherit",
+          }}
+        >
+          <div style={{
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            background: "linear-gradient(135deg, #9333ea, #bf5fff)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Eye size={18} style={{ color: "#fff" }} />
+          </div>
+          <div style={{ flex: 1, textAlign: "left" }}>
+            <span style={{ fontSize: "1.1rem", fontWeight: 900, display: "block" }}>
+              Discovery Photo Guide
+            </span>
+            <span style={{ fontSize: "0.75rem", color: "rgba(191,95,255,0.7)", fontWeight: 500 }}>
+              Make every slide count &mdash; this is how customers find you
+            </span>
+          </div>
+          <span style={{ fontSize: "0.7rem", fontWeight: 800, color: "#fff", background: "linear-gradient(135deg, #9333ea, #bf5fff)", padding: "4px 10px", borderRadius: 6, letterSpacing: "0.05em", flexShrink: 0 }}>
+            READ ME
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ transition: "transform 0.2s", transform: guideOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+            <path d="M6 9l6 6 6-6" stroke="#bf5fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {guideOpen && (
+          <div style={{ marginTop: "1.25rem" }}>
+            <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+              Your Discovery photos are what users see when swiping through the feed. Each slide is a chance to grab their attention and get them through your door. Here&apos;s how to make the most of each one:
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                {
+                  num: 1,
+                  label: "Hero Photo",
+                  color: colors.primary,
+                  title: "Your best, most eye-catching image",
+                  desc: "This is your one shot to stop someone mid-scroll. Use your most stunning food photo, your signature dish, or your most inviting interior shot. Make it impossible to swipe past.",
+                },
+                {
+                  num: 2,
+                  label: "Details Page",
+                  color: colors.accent,
+                  title: "Auto-generated — keep your info up to date",
+                  desc: "This slide is built from your business profile (address, hours, payout tiers). Users need to know where you are and when you're open. If this info is wrong, they can't visit you.",
+                  isAuto: true,
+                },
+                {
+                  num: 3,
+                  label: "Second Photo",
+                  color: colors.primary,
+                  title: "Another great dish or a different angle",
+                  desc: "Reinforce the first impression. Show another signature item, a different part of your space, or a crowd-favorite menu item. Keep the quality high.",
+                },
+                {
+                  num: 4,
+                  label: "Third Photo",
+                  color: colors.primary,
+                  title: "Your menu, price list, or specials board",
+                  desc: "Users want to know what to expect. A clean photo of your menu, a happy hour deal, or a services list helps them decide to visit.",
+                },
+                {
+                  num: 5,
+                  label: "Fourth Photo",
+                  color: colors.primary,
+                  title: "The vibe — your space, your people, your energy",
+                  desc: "Show the atmosphere. A packed Friday night, a cozy corner table, a bartender in action. Let users picture themselves there.",
+                },
+                {
+                  num: 6,
+                  label: "Fifth Photo+",
+                  color: colors.primary,
+                  title: "Anything else that makes you stand out",
+                  desc: "Outdoor seating, live music, unique decor, seasonal specials — this is your chance to show what makes you different from every other option.",
+                },
+              ].map((step) => (
+                <div key={step.num} style={{
+                  display: "flex", gap: 12, padding: "0.75rem 1rem", borderRadius: 10,
+                  background: step.isAuto ? "#f0f0f5" : "#ffffff",
+                  border: step.isAuto ? `1px solid ${step.color}40` : "1px solid #e2e2ea",
+                }}>
+                  <div style={{
+                    width: 32, borderRadius: 8, flexShrink: 0,
+                    alignSelf: "stretch",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: step.num <= 2 ? step.color : `${step.color}20`,
+                    color: step.num <= 2 ? "#fff" : step.color,
+                    fontSize: "0.75rem", fontWeight: 900,
+                  }}>
+                    {step.isAuto ? <Eye size={14} /> : `#${step.num > 2 ? step.num - 1 : step.num}`}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#1a1a2e" }}>
+                        {step.isAuto ? "Slide 2:" : `Slide ${step.num > 2 ? step.num : step.num}:`} {step.label}
+                      </span>
+                      {step.isAuto && (
+                        <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#fff", background: step.color, padding: "2px 6px", borderRadius: 4 }}>AUTO</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: step.color, marginBottom: 3 }}>{step.title}</div>
+                    <div style={{ fontSize: "0.7rem", color: "rgba(0,0,0,0.55)", lineHeight: 1.5 }}>{step.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{
+              marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: 10,
+              background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+            }}>
+              <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.7)", marginBottom: 6 }}>Photo Requirements</div>
+              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", lineHeight: 1.6 }}>
+                &bull; Portrait orientation only (taller than wide)<br />
+                &bull; Minimum 1080px wide<br />
+                &bull; Recommended size: 1080&times;1920 (9:16 ratio)<br />
+                &bull; Use the <strong style={{ color: "rgba(255,255,255,0.6)" }}>Reorder Photos</strong> button below to arrange your slides<br />
+                &bull; Use the <strong style={{ color: "rgba(255,255,255,0.6)" }}>Focal Point</strong> tool to control what part of your photo users see
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <Section title={`Photos (${photos.length})`} icon={<Camera size={20} style={{ color: colors.primary }} />}>
-        <Grid>
-          {photos.map((item) => (
-            <Card key={item.id} item={item} colors={colors} onClick={() => setViewingMedia(item)} />
-          ))}
-        </Grid>
+        {photos.length >= 2 && (
+          <div style={{ marginBottom: "1rem" }}>
+            <button
+              type="button"
+              onClick={() => setReorderMode((v) => !v)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "0.5rem 1rem", borderRadius: 8,
+                border: `1px solid ${reorderMode ? colors.primary : "rgba(255,255,255,0.12)"}`,
+                background: reorderMode ? `${colors.primary}15` : "rgba(255,255,255,0.03)",
+                color: reorderMode ? colors.primary : "rgba(255,255,255,0.6)",
+                fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.2s",
+              }}
+            >
+              <Layers size={14} />
+              {reorderMode ? "Done Reordering" : "Reorder Photos"}
+            </button>
+          </div>
+        )}
+
+        {reorderMode && (
+          <div style={{
+            display: "flex", gap: "0.5rem", alignItems: "flex-start",
+            padding: "0.75rem 1rem", marginBottom: "1rem",
+            background: `${colors.primary}08`, border: `1px solid ${colors.primary}25`,
+            borderRadius: 10, lineHeight: 1.5,
+          }}>
+            <Eye size={14} style={{ color: colors.primary, marginTop: 2, flexShrink: 0 }} />
+            <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>
+              <strong style={{ color: "rgba(255,255,255,0.85)" }}>How photo order works on Discovery:</strong><br />
+              <strong style={{ color: colors.primary }}>#1</strong> is the hero photo users see first when scrolling the Discovery feed.<br />
+              Swiping right shows the business details page, then photos <strong style={{ color: colors.primary }}>#2</strong>, <strong style={{ color: colors.primary }}>#3</strong>, etc. in order.<br />
+              Use the arrows to move photos up or down in the sequence.
+            </div>
+          </div>
+        )}
+
+        {reorderMode ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {photos.map((item, idx) => {
+              const isBanned = item.adminStatus === "banned";
+              return (
+                <div key={item.id} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "0.625rem 0.75rem", borderRadius: 10,
+                  background: idx === 0 ? `${colors.primary}10` : "rgba(255,255,255,0.03)",
+                  border: idx === 0 ? `1px solid ${colors.primary}30` : "1px solid rgba(255,255,255,0.06)",
+                  opacity: isBanned ? 0.4 : 1,
+                }}>
+                  {/* Position number */}
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: idx === 0 ? colors.primary : "rgba(255,255,255,0.08)",
+                    color: idx === 0 ? "#fff" : "rgba(255,255,255,0.5)",
+                    fontSize: "0.75rem", fontWeight: 900,
+                  }}>
+                    #{idx + 1}
+                  </div>
+
+                  {/* Thumbnail */}
+                  <img src={item.url} alt={item.caption} style={{ width: 56, height: 80, borderRadius: 6, objectFit: "cover", flexShrink: 0, border: "1px solid rgba(255,255,255,0.08)" }} />
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "rgba(255,255,255,0.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.caption}</div>
+                    <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                      {idx === 0 ? "Hero photo — first thing users see" : `Slide ${idx + 1} after business details`}
+                    </div>
+                  </div>
+
+                  {/* Arrow buttons */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      disabled={idx === 0 || uploading}
+                      onClick={() => swapPhotoOrder(item, photos[idx - 1])}
+                      style={{
+                        width: 28, height: 28, borderRadius: 6, border: "none", cursor: idx === 0 ? "not-allowed" : "pointer",
+                        background: idx === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)",
+                        color: idx === 0 ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.15s",
+                      }}
+                      title="Move up"
+                    >
+                      <ArrowUp size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === photos.length - 1 || uploading}
+                      onClick={() => swapPhotoOrder(item, photos[idx + 1])}
+                      style={{
+                        width: 28, height: 28, borderRadius: 6, border: "none", cursor: idx === photos.length - 1 ? "not-allowed" : "pointer",
+                        background: idx === photos.length - 1 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.08)",
+                        color: idx === photos.length - 1 ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.15s",
+                      }}
+                      title="Move down"
+                    >
+                      <ArrowDown size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <Grid>
+            {photos.map((item) => (
+              <Card key={item.id} item={item} colors={colors} onClick={() => setViewingMedia(item)} />
+            ))}
+          </Grid>
+        )}
       </Section>
 
       <Section title={`Videos (${videos.length})`} icon={<Video size={20} style={{ color: colors.warning }} />}>
@@ -1677,21 +1980,24 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
                 <input ref={photoInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={async (e) => {
                   if (!e.target.files || e.target.files.length === 0) return;
                   const allFiles = Array.from(e.target.files);
-                  const { passed, failed } = await filterImagesByMinWidth(allFiles, 1080);
-                  setDimensionWarnings(failed);
-                  setStagedPhotos(passed.map((r) => r.file));
+                  // Step 1: Reject landscape images
+                  const { passed: portraitOk, failed: landscapeRejects } = await filterByPortraitOrientation(allFiles);
+                  // Step 2: Enforce minimum 1080px width on portrait images
+                  const { passed, failed: dimRejects } = await filterImagesByMinWidth(portraitOk.map((r) => r.file), 1080);
+                  setDimensionWarnings([...landscapeRejects, ...dimRejects]);
+                  setStagedPhotos(passed);
                 }} />
                 <div style={dropzone(uploading)} onClick={() => !uploading && photoInputRef.current?.click()}>
                   <Upload size={32} style={{ color: colors.primary, margin: "0 auto 0.5rem" }} />
                   <div style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.6)" }}>Click to browse</div>
-                  <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", marginTop: "0.25rem" }}>JPG, PNG up to 10MB</div>
+                  <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", marginTop: "0.25rem" }}>JPG, PNG — portrait only, min 1080px wide</div>
                 </div>
               </Field>
 
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.625rem 0.75rem", background: "rgba(6,182,212,0.08)", border: "1px solid rgba(6,182,212,0.2)", borderRadius: "8px" }}>
                 <Camera size={14} style={{ color: "#06b6d4", marginTop: "2px", flexShrink: 0 }} />
                 <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.4 }}>
-                  <strong style={{ color: "rgba(255,255,255,0.8)" }}>Best results:</strong> Minimum width: 1080px. Portrait photos (1080&times;1920 or 9:16+ ratio) fill the Discovery screen perfectly. Landscape photos will be cropped &mdash; use the Focal Point tool after upload to control what users see.
+                  <strong style={{ color: "rgba(255,255,255,0.8)" }}>Photo requirements:</strong> Portrait orientation only (height &ge; width), minimum 1080px wide. Recommended size: 1080&times;1920 (9:16 ratio). Landscape photos are not accepted &mdash; crop to portrait before uploading.
                 </div>
               </div>
 
@@ -1700,15 +2006,17 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
                   <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: "0.5rem" }}>
                     {stagedPhotos.length} photo{stagedPhotos.length > 1 ? "s" : ""} selected
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {stagedPhotos.map((f, i) => (
-                      <div key={i} style={{ position: "relative" }}>
-                        <img src={URL.createObjectURL(f)} alt={f.name} style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)" }} />
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {stagedPhotos.map((r, i) => (
+                      <div key={i} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                        <img src={URL.createObjectURL(r.file)} alt={r.file.name} style={{ width: 80, height: 120, borderRadius: 8, objectFit: "cover", border: "1px solid rgba(255,255,255,0.1)" }} />
+                        <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.45)", textAlign: "center", lineHeight: 1.3, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.file.name}</div>
+                        <div style={{ fontSize: "0.6rem", color: "rgba(6,182,212,0.7)", textAlign: "center", lineHeight: 1.3 }}>{r.width}&times;{r.height} &middot; {(r.file.size / 1024).toFixed(0)}KB</div>
                         <button type="button" onClick={() => setStagedPhotos(prev => prev.filter((_, j) => j !== i))} style={{
                           position: "absolute", top: -4, right: -4, width: 18, height: 18, borderRadius: "50%",
                           background: "rgba(239,68,68,0.9)", border: "none", color: "#fff", cursor: "pointer",
                           fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>✕</button>
+                        }}>&#x2715;</button>
                       </div>
                     ))}
                   </div>
@@ -1722,10 +2030,10 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
                     <strong style={{ color: "rgba(255,255,255,0.9)" }}>
                       {dimensionWarnings.length} photo{dimensionWarnings.length > 1 ? "s" : ""} rejected
                     </strong>
-                    {" "}&mdash; minimum width is 1080px for Discovery display.
+                    {" "}&mdash; photos must be portrait orientation (height &ge; width) and at least 1080px wide.
                     <div style={{ marginTop: "0.25rem" }}>
                       {dimensionWarnings.map((r, i) => (
-                        <div key={i}>{r.file.name} ({r.width}&times;{r.height}px)</div>
+                        <div key={i}>{r.file.name} ({r.width}&times;{r.height}px) &mdash; {r.height < r.width ? "landscape, crop to portrait" : "too small"}</div>
                       ))}
                     </div>
                   </div>
@@ -1748,11 +2056,10 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
                   Choose Files
                 </button>
               ) : (
-                <button type="button" onClick={() => {
+                <button type="button" onClick={async () => {
                   const dt = new DataTransfer();
-                  stagedPhotos.forEach(f => dt.items.add(f));
-                  uploadFiles("photo", dt.files);
-                  setStagedPhotos([]);
+                  stagedPhotos.forEach(r => dt.items.add(r.file));
+                  await uploadFiles("photo", dt.files);
                 }} style={btnPrimary(colors.primary, colors.accent, uploading)} disabled={uploading}>
                   {uploading ? "Uploading…" : `Upload ${stagedPhotos.length} Photo${stagedPhotos.length > 1 ? "s" : ""}`}
                 </button>

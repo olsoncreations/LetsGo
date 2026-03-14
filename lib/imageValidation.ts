@@ -58,3 +58,46 @@ export async function filterImagesByMinWidth(
     failed: results.filter((r) => !r.valid),
   };
 }
+
+/**
+ * Check that an image is portrait orientation (height >= width).
+ * Returns the result with valid=true only if height >= width.
+ */
+export function validatePortraitOrientation(
+  file: File,
+): Promise<ImageDimensionResult> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      resolve({ file, valid: h >= w, width: w, height: h });
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ file, valid: false, width: 0, height: 0 });
+    };
+
+    img.src = url;
+  });
+}
+
+/**
+ * Filter a batch of images, rejecting any that are landscape (wider than tall).
+ * Recommended: 9:16 portrait aspect ratio (e.g. 1080x1920).
+ */
+export async function filterByPortraitOrientation(
+  files: File[],
+): Promise<{ passed: ImageDimensionResult[]; failed: ImageDimensionResult[] }> {
+  const results = await Promise.all(
+    files.map((f) => validatePortraitOrientation(f)),
+  );
+  return {
+    passed: results.filter((r) => r.valid),
+    failed: results.filter((r) => !r.valid),
+  };
+}

@@ -315,6 +315,7 @@ export default function SalesPage() {
   const [config, setConfig] = useState<SalesConfig[]>([]);
   const [quotaOverrides, setQuotaOverrides] = useState<QuotaOverride[]>([]);
   const [counties, setCounties] = useState<SalesCounty[]>([]);
+  const [planPrices, setPlanPrices] = useState<{ basic_monthly_cents: number; premium_monthly_cents: number }>({ basic_monthly_cents: 0, premium_monthly_cents: 0 });
   const [loading, setLoading] = useState(true);
 
   // Ad campaign revenue (from business_ad_campaigns)
@@ -351,7 +352,7 @@ export default function SalesPage() {
   const [payoutPeriodFilter, setPayoutPeriodFilter] = useState("all");
   const [payoutStatusFilter, setPayoutStatusFilter] = useState("all");
   const [payoutDateFilter, setPayoutDateFilter] = useState({ from: "", to: "" });
-  const [paidCommissions, setPaidCommissions] = useState<Record<string, { period1: boolean; period2: boolean }>>({});
+  const [paidCommissions, setPaidCommissions] = useState<Record<string, { month: boolean }>>({});
   const [paidBonusQuarters, setPaidBonusQuarters] = useState<string[]>([]);
   const [showBonusDetailsModal, setShowBonusDetailsModal] = useState(false);
   const [selectedBonusQuarter, setSelectedBonusQuarter] = useState<BonusPool | null>(null);
@@ -364,7 +365,7 @@ export default function SalesPage() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState<RoleApplication | null>(null);
-  const [approveData, setApproveData] = useState({ role: "sales_rep", zone_id: "", division_id: "", supervisor_id: "", individual_quota: "2", state: "", county_id: "" });
+  const [approveData, setApproveData] = useState({ role: "sales_rep", zone_id: "", division_id: "", supervisor_id: "", state: "", county_id: "" });
   const [rejectReason, setRejectReason] = useState("");
   const [appActionLoading, setAppActionLoading] = useState(false);
   const [showEditAppModal, setShowEditAppModal] = useState(false);
@@ -411,11 +412,13 @@ export default function SalesPage() {
 
   // Form state
   const [newSale, setNewSale] = useState({ rep_id: "", business_name: "", plan: "basic", ad_spend: 0, notes: "", city: "", state: "" });
+  const [businessSuggestions, setBusinessSuggestions] = useState<{ id: string; business_name: string; public_business_name: string | null }[]>([]);
+  const [showBusinessSuggestions, setShowBusinessSuggestions] = useState(false);
   const [repSearchQuery, setRepSearchQuery] = useState("");
   const [newRep, setNewRep] = useState({
     name: "", email: "", phone: "", role: "sales_rep",
     division_id: "", zone_id: "", city: "", supervisor_id: "",
-    hire_date: new Date().toISOString().slice(0, 10), individual_quota: "2",
+    hire_date: new Date().toISOString().slice(0, 10),
     state: "", county_id: ""
   });
   const [editRates, setEditRates] = useState<Record<string, number>>({});
@@ -425,7 +428,7 @@ export default function SalesPage() {
   const getConfig = useCallback((key: string, type: "cents" | "int" = "cents"): number => {
     const c = config.find((cfg) => cfg.key === key);
     if (!c) {
-      const defaults: Record<string, number> = { basic_signup: 2500, premium_signup: 10000, advertising_per_100: 1000, individual_monthly: 60, bonus_eligibility: 30, team_monthly: 300, rep_quota_daily: 200, rep_bonus_daily: 100, lead_quota_daily: 200, lead_bonus_daily: 100, training_quota_daily: 100, training_bonus_daily: 50, individual_daily: 200, team_daily: 1000, bonus_eligibility_daily: 100 };
+      const defaults: Record<string, number> = { basic_signup: 2500, premium_signup: 10000, advertising_per_100: 1000, individual_monthly: 60, bonus_eligibility: 30, team_monthly: 300, rep_quota_daily: 200, rep_bonus_daily: 100, lead_quota_daily: 200, lead_bonus_daily: 100, training_quota_daily: 100, training_bonus_daily: 50, individual_daily: 200, team_daily: 1000, bonus_eligibility_daily: 100, pool_outbound_basic: 500, pool_outbound_premium: 1000, pool_inbound_basic: 100, pool_inbound_premium: 200, pool_ad_spend_per_100: 500, pool_repeat_monthly: 50 };
       return defaults[key] || 0;
     }
     return type === "cents" ? (c.value_cents || 0) : (c.value_int || 0);
@@ -453,7 +456,7 @@ export default function SalesPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [divRes, zoneRes, configRes, repsRes, signupsRes, inboundRes, historyRes, repeatRes, quotaRes] = await Promise.all([
+      const [divRes, zoneRes, configRes, repsRes, signupsRes, inboundRes, historyRes, repeatRes, quotaRes, platformRes] = await Promise.all([
         supabaseBrowser.from("sales_divisions").select("*").order("name"),
         supabaseBrowser.from("sales_zones").select("*").order("name"),
         supabaseBrowser.from("sales_config").select("*"),
@@ -463,6 +466,7 @@ export default function SalesPage() {
         supabaseBrowser.from("sales_payout_history").select("*").order("paid_at", { ascending: false, nullsFirst: true }),
         supabaseBrowser.from("sales_repeat_customers").select("*").eq("active", true),
         supabaseBrowser.from("sales_quota_overrides").select("*"),
+        supabaseBrowser.from("platform_settings").select("package_pricing").eq("id", 1).maybeSingle(),
       ]);
 
       if (divRes.data) setDivisions(divRes.data);
@@ -474,6 +478,7 @@ export default function SalesPage() {
       if (historyRes.data) setPayoutHistory(historyRes.data);
       if (repeatRes.data) setRepeatCustomers(repeatRes.data);
       if (quotaRes.data) setQuotaOverrides(quotaRes.data);
+      if (platformRes.data?.package_pricing) setPlanPrices(platformRes.data.package_pricing);
 
       // Fetch all counties in batches (Supabase default limit is 1000)
       try {
@@ -503,11 +508,11 @@ export default function SalesPage() {
       }
 
       // Get bonus pools
-      const currentQuarter = `Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`;
-      const { data: poolData } = await supabaseBrowser.from("sales_bonus_pool").select("*").eq("quarter", currentQuarter).maybeSingle();
+      const currentBonusPeriod = `${monthNames[new Date().getMonth()]} ${new Date().getFullYear()}`;
+      const { data: poolData } = await supabaseBrowser.from("sales_bonus_pool").select("*").eq("quarter", currentBonusPeriod).maybeSingle();
       if (poolData) setBonusPool(poolData);
 
-      const { data: prevPoolsData } = await supabaseBrowser.from("sales_bonus_pool").select("*").neq("quarter", currentQuarter).order("quarter_start", { ascending: false }).limit(4);
+      const { data: prevPoolsData } = await supabaseBrowser.from("sales_bonus_pool").select("*").neq("quarter", currentBonusPeriod).order("quarter_start", { ascending: false }).limit(12);
       if (prevPoolsData) {
         setPreviousPools(prevPoolsData);
       }
@@ -642,6 +647,12 @@ export default function SalesPage() {
   const totalSignups = filteredSignups.length;
   const totalCommissions = filteredSignups.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
   const totalAdSpend = filteredSignups.reduce((sum, s) => sum + (s.ad_spend_cents || 0), 0);
+
+  // Revenue = package price + ad spend per signup
+  const getSignupRevenue = useCallback((s: SalesSignup | InboundSignup) => {
+    const packagePrice = s.plan === "premium" ? planPrices.premium_monthly_cents : planPrices.basic_monthly_cents;
+    return packagePrice + (s.ad_spend_cents || 0);
+  }, [planPrices]);
   const getRepBonusThreshold = useCallback((rep: SalesRep): number => Math.round(getRepBonusDaily(rep.role) * 30), [getRepBonusDaily]);
   const eligibleReps = actualSalesReps.filter((rep) => getRepPerformance(rep.id).total >= getRepBonusThreshold(rep));
   const notYetEligibleReps = actualSalesReps.filter((rep) => getRepPerformance(rep.id).total < getRepBonusThreshold(rep));
@@ -725,6 +736,60 @@ export default function SalesPage() {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const currentMonthName = monthNames[currentMonth - 1];
   const periodLabel = salesPeriod === "day" ? "Today" : salesPeriod === "week" ? "This Week" : salesPeriod === "year" ? "This Year" : "This Month";
+
+  // Auto-calculated bonus pool from current month signups + inbound
+  const computedBonusPool = useMemo(() => {
+    const monthInbound = inboundSignups.filter(s => {
+      const d = new Date(s.signed_at);
+      return d.getFullYear() === currentYear && d.getMonth() + 1 === currentMonth;
+    });
+    const outboundPool = monthSignups.reduce((sum, s) => {
+      const planPool = s.plan === "premium" ? getConfig("pool_outbound_premium") : getConfig("pool_outbound_basic");
+      const adPool = Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100");
+      return sum + planPool + adPool;
+    }, 0);
+    const inboundPool = monthInbound.reduce((sum, s) => {
+      const planPool = s.plan === "premium" ? getConfig("pool_inbound_premium") : getConfig("pool_inbound_basic");
+      const adPool = Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100");
+      return sum + planPool + adPool;
+    }, 0);
+    return outboundPool + inboundPool;
+  }, [monthSignups, inboundSignups, currentYear, currentMonth, getConfig]);
+
+  // Auto-calculated bonus pool breakdown (replaces DB-based bonusPool for display)
+  const computedPoolData = useMemo(() => {
+    const monthInbound = inboundSignups.filter(s => {
+      const d = new Date(s.signed_at);
+      return d.getFullYear() === currentYear && d.getMonth() + 1 === currentMonth;
+    });
+    const inbound_basic_cents = monthInbound.filter(s => s.plan === "basic").reduce((sum, s) => {
+      return sum + (s.plan === "basic" ? getConfig("pool_inbound_basic") : 0);
+    }, 0);
+    const inbound_premium_cents = monthInbound.filter(s => s.plan === "premium").reduce((sum, s) => {
+      return sum + (s.plan === "premium" ? getConfig("pool_inbound_premium") : 0);
+    }, 0);
+    const inbound_ads_cents = monthInbound.reduce((sum, s) => sum + Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100"), 0);
+    const rep_basic_cents = monthSignups.filter(s => s.plan === "basic").reduce((sum, s) => {
+      return sum + (s.plan === "basic" ? getConfig("pool_outbound_basic") : 0);
+    }, 0);
+    const rep_premium_cents = monthSignups.filter(s => s.plan === "premium").reduce((sum, s) => {
+      return sum + (s.plan === "premium" ? getConfig("pool_outbound_premium") : 0);
+    }, 0);
+    const rep_ads_cents = monthSignups.reduce((sum, s) => sum + Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100"), 0);
+    const total = inbound_basic_cents + inbound_premium_cents + inbound_ads_cents + rep_basic_cents + rep_premium_cents + rep_ads_cents;
+    const perRep = eligibleReps.length > 0 ? Math.floor(total / eligibleReps.length) : 0;
+    return {
+      total_pool_cents: total,
+      inbound_basic_cents, inbound_premium_cents, inbound_ads_cents,
+      rep_basic_cents, rep_premium_cents, rep_ads_cents,
+      repeat_customers_cents: 0,
+      projected_per_rep_cents: perRep,
+      eligible_rep_ids: eligibleReps.map(r => r.id),
+      quarter: `${currentMonthName} ${currentYear}`,
+      status: "active",
+    };
+  }, [monthSignups, inboundSignups, currentYear, currentMonth, currentMonthName, getConfig, eligibleReps]);
+
   const hasActiveFilters = salesFilters.dateFrom || salesFilters.dateTo || salesFilters.zone !== "all" || salesFilters.state !== "all" || salesFilters.rep !== "all";
 
   // Fetch sales rep applications
@@ -992,7 +1057,7 @@ export default function SalesPage() {
         setShowRejectModal(false);
         setSelectedApp(null);
         setExpandedAppId(null);
-        setApproveData({ role: "sales_rep", zone_id: "", division_id: "", supervisor_id: "", individual_quota: "2", state: "", county_id: "" });
+        setApproveData({ role: "sales_rep", zone_id: "", division_id: "", supervisor_id: "", state: "", county_id: "" });
         setRejectReason("");
         fetchApplications();
         if (action === "approve") fetchData();
@@ -1122,7 +1187,7 @@ export default function SalesPage() {
     });
     alert(`Sales rep "${newRep.name}" added!`);
     setShowAddRepModal(false);
-    setNewRep({ name: "", email: "", phone: "", role: "sales_rep", division_id: "", zone_id: "", city: "", supervisor_id: "", hire_date: new Date().toISOString().slice(0, 10), individual_quota: "2", state: "", county_id: "" });
+    setNewRep({ name: "", email: "", phone: "", role: "sales_rep", division_id: "", zone_id: "", city: "", supervisor_id: "", hire_date: new Date().toISOString().slice(0, 10), state: "", county_id: "" });
     await fetchData();
   }
 
@@ -1160,6 +1225,57 @@ export default function SalesPage() {
     await fetchData();
   }
 
+  const searchBusinesses = useCallback(async (query: string) => {
+    if (query.length < 2) { setBusinessSuggestions([]); return; }
+    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name").or(`business_name.ilike.%${query}%,public_business_name.ilike.%${query}%`).limit(10);
+    setBusinessSuggestions(data || []);
+  }, []);
+
+  async function updateBonusPool(isInbound: boolean, plan: string, adSpendCents: number) {
+    const now = new Date();
+    const quarter = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+    const quarterStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    const quarterEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+
+    // Get pool contribution amounts from Settings
+    const planPool = isInbound
+      ? (plan === "premium" ? getConfig("pool_inbound_premium") : getConfig("pool_inbound_basic"))
+      : (plan === "premium" ? getConfig("pool_outbound_premium") : getConfig("pool_outbound_basic"));
+    const adPool = Math.floor(adSpendCents / 100) * getConfig("pool_ad_spend_per_100");
+
+    // Determine which breakdown fields to increment
+    const planField = isInbound
+      ? (plan === "premium" ? "inbound_premium_cents" : "inbound_basic_cents")
+      : (plan === "premium" ? "rep_premium_cents" : "rep_basic_cents");
+    const adsField = isInbound ? "inbound_ads_cents" : "rep_ads_cents";
+
+    // Fetch or create the current month pool
+    const { data: existing } = await supabaseBrowser.from("sales_bonus_pool").select("*").eq("quarter", quarter).maybeSingle();
+    if (existing) {
+      const updates: Record<string, number> = {
+        [planField]: (existing[planField as keyof BonusPool] as number || 0) + planPool,
+        total_pool_cents: (existing.total_pool_cents || 0) + planPool + adPool,
+      };
+      if (adPool > 0) updates[adsField] = (existing[adsField as keyof BonusPool] as number || 0) + adPool;
+      // Recalculate projected per-rep
+      const eligibleCount = existing.eligible_rep_ids?.length || 0;
+      if (eligibleCount > 0) updates.projected_per_rep_cents = Math.floor(updates.total_pool_cents / eligibleCount);
+      await supabaseBrowser.from("sales_bonus_pool").update(updates).eq("id", existing.id);
+    } else {
+      const newPool: Record<string, unknown> = {
+        quarter, quarter_start: quarterStart, quarter_end: quarterEnd,
+        total_pool_cents: planPool + adPool,
+        inbound_basic_cents: 0, inbound_premium_cents: 0, inbound_ads_cents: 0,
+        rep_basic_cents: 0, rep_premium_cents: 0, rep_ads_cents: 0,
+        repeat_customers_cents: 0, eligible_rep_ids: [], projected_per_rep_cents: 0,
+        status: "active",
+      };
+      newPool[planField] = planPool;
+      if (adPool > 0) newPool[adsField] = adPool;
+      await supabaseBrowser.from("sales_bonus_pool").insert(newPool);
+    }
+  }
+
   async function handleAddSale() {
     if (!newSale.business_name.trim()) { alert("Please enter a business name."); return; }
     if (newSale.rep_id !== "inbound" && !newSale.rep_id) { alert("Please select a sales rep or choose Inbound."); return; }
@@ -1169,7 +1285,9 @@ export default function SalesPage() {
     const planCommission = newSale.plan === "premium" ? commissionRates.individual.premium_signup : commissionRates.individual.basic_signup;
     const adCommission = Math.floor(newSale.ad_spend / 100) * commissionRates.individual.advertising_per_100;
     const totalCommission = isInbound ? 0 : planCommission + adCommission;
-    const poolContribution = isInbound ? (newSale.plan === "premium" ? 200 : 100) + Math.floor(newSale.ad_spend / 100) * 100 : (newSale.plan === "premium" ? 1000 : 500) + Math.floor(newSale.ad_spend / 100) * 500;
+    const poolContribution = isInbound
+      ? (newSale.plan === "premium" ? getConfig("pool_inbound_premium") : getConfig("pool_inbound_basic")) + Math.floor(newSale.ad_spend / 100) * getConfig("pool_ad_spend_per_100")
+      : (newSale.plan === "premium" ? getConfig("pool_outbound_premium") : getConfig("pool_outbound_basic")) + Math.floor(newSale.ad_spend / 100) * getConfig("pool_ad_spend_per_100");
 
     if (isInbound) {
       const { error } = await supabaseBrowser.from("inbound_signups").insert({
@@ -1218,6 +1336,9 @@ export default function SalesPage() {
         details: `Outbound signup for "${newSale.business_name}" by rep "${rep?.name || newSale.rep_id}" (${newSale.plan} plan, commission ${formatMoney(totalCommission)}, ad spend $${(newSale.ad_spend).toFixed(2)})`,
       });
     }
+
+    // Update the bonus pool with this sale's contribution
+    await updateBonusPool(isInbound, newSale.plan, newSale.ad_spend * 100);
 
     alert(`${isInbound ? "Inbound" : "Outbound"} sale added!`);
     setShowAddSaleModal(false);
@@ -1436,7 +1557,7 @@ export default function SalesPage() {
 
     try {
       // Get the current bonus pool data
-      const currentPool = quarter === bonusPool?.quarter ? bonusPool : previousPools.find(p => p.quarter === quarter);
+      const currentPool = quarter === computedPoolData.quarter ? computedPoolData : previousPools.find(p => p.quarter === quarter);
 
       if (!currentPool) {
         alert(`Error: Cannot find bonus pool data for ${quarter}`);
@@ -1621,26 +1742,20 @@ export default function SalesPage() {
     const data: Array<Record<string, string | number>> = [];
 
     actualSalesReps.forEach(rep => {
-      const repP1 = period1Signups.filter(s => s.rep_id === rep.id);
-      const repP2 = period2Signups.filter(s => s.rep_id === rep.id);
+      const repMonth = monthSignups.filter(s => s.rep_id === rep.id);
 
-      if (repP1.length > 0 || repP2.length > 0) {
-        const p1Total = repP1.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
-        const p2Total = repP2.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
-        const p1Paid = paidCommissions[rep.id]?.period1 ? "Yes" : "No";
-        const p2Paid = paidCommissions[rep.id]?.period2 ? "Yes" : "No";
+      if (repMonth.length > 0) {
+        const monthTotal = repMonth.reduce((sum, s) => sum + (s.commission_cents || 0), 0);
+        const monthPaid = paidCommissions[rep.id]?.month ? "Yes" : "No";
 
         data.push({
           "Rep Name": rep.name,
           "Email": rep.email,
           "Division": getDivisionName(rep.zone_id),
-          "Period 1 Signups": repP1.length,
-          "Period 1 Commission": (p1Total / 100).toFixed(2),
-          "Period 1 Paid": p1Paid,
-          "Period 2 Signups": repP2.length,
-          "Period 2 Commission": (p2Total / 100).toFixed(2),
-          "Period 2 Paid": p2Paid,
-          "Total Commission": ((p1Total + p2Total) / 100).toFixed(2),
+          "Month": `${currentMonthName} ${currentYear}`,
+          "Signups": repMonth.length,
+          "Commission": (monthTotal / 100).toFixed(2),
+          "Paid": monthPaid,
         });
       }
     });
@@ -1782,7 +1897,7 @@ export default function SalesPage() {
     document.body.removeChild(link);
   }
 
-  const filteredRepsForSearch = actualSalesReps.filter(r => r.name.toLowerCase().includes(repSearchQuery.toLowerCase()) || r.email.toLowerCase().includes(repSearchQuery.toLowerCase()));
+  const filteredRepsForSearch = salesReps.filter(r => r.status === "active" && FIELD_ROLES.includes(r.role) && (r.name.toLowerCase().includes(repSearchQuery.toLowerCase()) || r.email.toLowerCase().includes(repSearchQuery.toLowerCase())));
 
   // Export data for CSV/XLSX
   const exportHeaders = ["Business", "Rep", "Plan", "Commission", "Ad Spend", "Division", "State", "Date"];
@@ -1828,21 +1943,32 @@ export default function SalesPage() {
                   <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>No individual commission. Contributes to team bonus pool only.</div>
                 </div>
               )}
-              <div>
+              <div style={{ position: "relative" }}>
                 <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase", fontWeight: 600 }}>Business Name</label>
-                <input type="text" value={newSale.business_name} onChange={(e) => setNewSale({ ...newSale, business_name: e.target.value })} placeholder="Enter business name" style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, fontSize: 14 }} />
+                <input type="text" value={newSale.business_name} onChange={(e) => { setNewSale({ ...newSale, business_name: e.target.value }); searchBusinesses(e.target.value); setShowBusinessSuggestions(true); }} onFocus={() => { if (businessSuggestions.length > 0) setShowBusinessSuggestions(true); }} placeholder="Search businesses..." style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, fontSize: 14 }} />
+                {showBusinessSuggestions && businessSuggestions.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, marginTop: 4, maxHeight: 200, overflowY: "auto", zIndex: 10 }}>
+                    {businessSuggestions.map(b => (
+                      <div key={b.id} onClick={() => { setNewSale({ ...newSale, business_name: b.public_business_name || b.business_name }); setShowBusinessSuggestions(false); }} style={{ padding: "10px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid rgba(255,255,255,0.05)" }} onMouseEnter={(e) => (e.currentTarget.style.background = COLORS.darkBg)} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                        <div style={{ fontWeight: 600 }}>{b.public_business_name || b.business_name}</div>
+                        {b.public_business_name && b.business_name !== b.public_business_name && <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.business_name}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase", fontWeight: 600 }}>Plan Type</label>
-                  <select value={newSale.plan} onChange={(e) => setNewSale({ ...newSale, plan: e.target.value })} style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, fontSize: 14 }}>
+                  <select value={newSale.plan} onChange={(e) => setNewSale({ ...newSale, plan: e.target.value, ad_spend: e.target.value === "basic" ? 0 : newSale.ad_spend })} style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, fontSize: 14 }}>
                     <option value="basic">Basic</option>
                     <option value="premium">Premium</option>
                   </select>
                 </div>
-                <div>
+                <div style={{ opacity: newSale.plan === "basic" ? 0.4 : 1 }}>
                   <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase", fontWeight: 600 }}>Ad Spend Sold</label>
-                  <input type="number" value={newSale.ad_spend} onChange={(e) => setNewSale({ ...newSale, ad_spend: parseInt(e.target.value) || 0 })} placeholder="0" style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: COLORS.textPrimary, fontSize: 14 }} />
+                  <input type="number" value={newSale.plan === "basic" ? 0 : newSale.ad_spend} onChange={(e) => setNewSale({ ...newSale, ad_spend: parseInt(e.target.value) || 0 })} disabled={newSale.plan === "basic"} placeholder="0" style={{ width: "100%", padding: 14, background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 10, color: newSale.plan === "basic" ? COLORS.textSecondary : COLORS.textPrimary, fontSize: 14, cursor: newSale.plan === "basic" ? "not-allowed" : "text" }} />
+                  {newSale.plan === "basic" && <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Ads not available on Basic plan</div>}
                 </div>
               </div>
               <div>
@@ -1851,24 +1977,37 @@ export default function SalesPage() {
               </div>
               <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12 }}>
                 {newSale.rep_id === "inbound" ? (
-                  <>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: COLORS.neonPurple }}>🏆 Pool Contribution Preview</div>
-                    <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>Plan ({newSale.plan}) - Commission</span><span style={{ color: COLORS.neonPurple }}>+${newSale.plan === "premium" ? 2 : 1}</span></div>
-                      {newSale.ad_spend > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend (${newSale.ad_spend})</span><span style={{ color: COLORS.neonPurple }}>+${Math.floor(newSale.ad_spend / 100)}</span></div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 8, marginTop: 4 }}><span>Total to Bonus Pool</span><span style={{ color: COLORS.neonPurple }}>+${(newSale.plan === "premium" ? 2 : 1) + Math.floor(newSale.ad_spend / 100)}</span></div>
-                    </div>
-                  </>
+                  (() => {
+                    const planPool = newSale.plan === "premium" ? getConfig("pool_inbound_premium") : getConfig("pool_inbound_basic");
+                    const adPool = newSale.ad_spend > 0 ? Math.floor(newSale.ad_spend / 100) * getConfig("pool_ad_spend_per_100") : 0;
+                    return (
+                      <>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: COLORS.neonPurple }}>🏆 Pool Contribution Preview</div>
+                        <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Plan ({newSale.plan}) - Pool</span><span style={{ color: COLORS.neonPurple }}>+{formatMoney(planPool)}</span></div>
+                          {adPool > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend (${newSale.ad_spend}) - Pool</span><span style={{ color: COLORS.neonPurple }}>+{formatMoney(adPool)}</span></div>}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 8, marginTop: 4 }}><span>Total to Bonus Pool</span><span style={{ color: COLORS.neonPurple }}>+{formatMoney(planPool + adPool)}</span></div>
+                        </div>
+                      </>
+                    );
+                  })()
                 ) : (
-                  <>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: COLORS.neonGreen }}>💰 Commission & Pool Preview</div>
-                    <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>Plan ({newSale.plan}) - Commission</span><span style={{ color: COLORS.neonGreen }}>+${newSale.plan === "premium" ? 100 : 25}</span></div>
-                      {newSale.ad_spend > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend (${newSale.ad_spend}) - Commission</span><span style={{ color: COLORS.neonGreen }}>+${Math.floor(newSale.ad_spend / 100) * 10}</span></div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 8, marginTop: 4 }}><span>Total Commission</span><span style={{ color: COLORS.neonGreen }}>${(newSale.plan === "premium" ? 100 : 25) + Math.floor(newSale.ad_spend / 100) * 10}</span></div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px dashed " + COLORS.cardBorder }}><span style={{ color: COLORS.textSecondary }}>Pool Contribution</span><span style={{ color: COLORS.neonPurple }}>+${(newSale.plan === "premium" ? 10 : 5) + Math.floor(newSale.ad_spend / 100) * 5}</span></div>
-                    </div>
-                  </>
+                  (() => {
+                    const planComm = newSale.plan === "premium" ? commissionRates.individual.premium_signup : commissionRates.individual.basic_signup;
+                    const adComm = newSale.ad_spend > 0 ? Math.floor(newSale.ad_spend / 100) * commissionRates.individual.advertising_per_100 : 0;
+                    const totalComm = planComm + adComm;
+                    return (
+                      <>
+                        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: COLORS.neonGreen }}>💰 Commission & Pool Preview</div>
+                        <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Plan ({newSale.plan}) - Commission</span><span style={{ color: COLORS.neonGreen }}>+{formatMoney(planComm)}</span></div>
+                          {adComm > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend (${newSale.ad_spend}) - Commission</span><span style={{ color: COLORS.neonGreen }}>+{formatMoney(adComm)}</span></div>}
+                          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 8, marginTop: 4 }}><span>Total Commission</span><span style={{ color: COLORS.neonGreen }}>{formatMoney(totalComm)}</span></div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px dashed " + COLORS.cardBorder }}><span style={{ color: COLORS.textSecondary }}>Pool Contribution</span><span style={{ color: COLORS.neonPurple }}>+{formatMoney((newSale.plan === "premium" ? getConfig("pool_outbound_premium") : getConfig("pool_outbound_basic")) + (newSale.ad_spend > 0 ? Math.floor(newSale.ad_spend / 100) * getConfig("pool_ad_spend_per_100") : 0))}</span></div>
+                        </div>
+                      </>
+                    );
+                  })()
                 )}
               </div>
             </div>
@@ -2157,7 +2296,7 @@ export default function SalesPage() {
                   style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: COLORS.textPrimary, fontSize: 16 }}
                 />
                 <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 6 }}>
-                  This goes into the quarterly bonus pool
+                  This goes into the monthly bonus pool
                 </div>
               </div>
             )}
@@ -2520,7 +2659,7 @@ export default function SalesPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Total Commissions", value: formatMoney(totalCommissions), sub: periodLabel, color: COLORS.neonGreen },
-                  { label: "Bonus Pool", value: formatMoney(bonusPool?.total_pool_cents || 0), sub: bonusPool?.quarter || "Q1 2026", color: COLORS.neonPurple },
+                  { label: "Bonus Pool", value: formatMoney(computedBonusPool), sub: `${currentMonthName} ${currentYear}`, color: COLORS.neonPurple },
                   { label: "Team Signups", value: totalSignups, sub: `vs ${Math.round(commissionRates.daily.team * 30)} quota`, color: COLORS.neonBlue },
                   { label: "Eligible for Bonus", value: `${eligibleReps.length}/${actualSalesReps.length}`, sub: `Role-based thresholds`, color: COLORS.neonYellow },
                   { label: "Ad Spend Sold", value: formatMoney(totalAdSpend), sub: periodLabel, color: COLORS.neonOrange },
@@ -2530,214 +2669,214 @@ export default function SalesPage() {
                 ))}
               </div>
 
-              {/* TEAM QUOTA PROGRESS - Matching Original Color Scheme */}
-              <Card title={`🎯 Team Quota Progress (${periodLabel})`} style={{ marginBottom: 24 }} actions={<button onClick={() => setSalesTab("quotas")} style={{ padding: "6px 12px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.textSecondary, cursor: "pointer", fontSize: 11 }}>Manage Quotas →</button>}>
-                <div style={{ marginBottom: 16 }}>
-                  {(() => { const teamMonthly = Math.round(commissionRates.daily.team * 30); return (<><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><span>Team Progress: <strong>{totalSignups}</strong> / {teamMonthly} businesses</span><span style={{ fontWeight: 700, color: COLORS.neonGreen }}>{((totalSignups / teamMonthly) * 100).toFixed(1)}%</span></div><ProgressBar value={totalSignups} max={teamMonthly} height={12} /></>); })()}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(actualSalesReps.length || 1, 6)}, 1fr)`, gap: 12 }}>
-                  {(() => {
-                    // Match original mockup colors: Pink, Blue, Green, Yellow, Orange, Purple
-                    const repColors = ["#FF6B9D", "#00D4FF", "#39FF14", "#FFFF00", "#FF6B35", "#BF5FFF"];
-                    return (salesFilters.rep === "all" ? actualSalesReps : actualSalesReps.filter((r) => r.id === salesFilters.rep)).slice(0, 6).map((rep, idx) => {
-                      const perf = getRepPerformance(rep.id);
-                      const bonusThreshold = getRepBonusThreshold(rep);
-                      const monthlyQuota = Math.round(getRepDailyQuota(rep) * 30);
-                      const isEligible = perf.total >= bonusThreshold;
-                      const repColor = repColors[idx % repColors.length];
-                      return (
-                        <div key={rep.id} style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                            <div style={{ width: 40, height: 40, borderRadius: "50%", background: repColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#000" }}>{rep.avatar || rep.name.split(" ").map(w => w[0]).join("").slice(0,2)}</div>
-                            <div><div style={{ fontWeight: 600, fontSize: 13 }}>{rep.name.split(" ")[0]}</div><div style={{ fontSize: 10, color: isEligible ? COLORS.neonGreen : COLORS.textSecondary }}>{isEligible ? "✓ Eligible" : `Need ${bonusThreshold - perf.total}`}</div></div>
-                          </div>
-                          <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4, color: repColor }}>{perf.total}</div>
-                          <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${Math.min(100, (perf.total / monthlyQuota) * 100)}%`, background: repColor, borderRadius: 100, transition: "width 0.5s" }} />
-                          </div>
-                          <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>{perf.total}/{monthlyQuota} quota</div>
+              {/* COMPANY-WIDE ATTAINMENT CARDS */}
+              {(() => {
+                // All active field reps — single source of truth
+                const allFieldReps = salesReps.filter(r => r.status === "active" && FIELD_ROLES.includes(r.role));
+                const daysInMonth = (year: number, monthIdx: number) => new Date(year, monthIdx + 1, 0).getDate();
+                const currentMonthDays = daysInMonth(currentYear, currentMonth - 1);
+
+                // Get actual days worked by a rep in a given month
+                // Current month: hire date (or month start) → today
+                // Past months: hire date (or month start) → month end
+                // Future months: 0
+                const today = new Date();
+                const todayDate = today.getDate();
+                const yesterday = new Date(today);
+                yesterday.setDate(todayDate - 1);
+                const throughDate = yesterday.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                const repActiveDays = (rep: SalesRep, year: number, monthIdx: number) => {
+                  const totalDays = daysInMonth(year, monthIdx);
+                  const monthStart = new Date(year, monthIdx, 1);
+                  const monthEnd = new Date(year, monthIdx + 1, 0, 23, 59, 59);
+                  const mNum = monthIdx + 1;
+                  const isCurrent = year === currentYear && mNum === currentMonth;
+                  const isFuture = year > currentYear || (year === currentYear && mNum > currentMonth);
+                  if (isFuture) return 0;
+
+                  // Determine start day (1st or hire date, whichever is later)
+                  let startDay = 1;
+                  if (rep.hire_date) {
+                    const hireDate = new Date(rep.hire_date + "T00:00:00");
+                    if (hireDate > monthEnd) return 0; // hired after this month
+                    if (hireDate > monthStart) startDay = hireDate.getDate();
+                  }
+
+                  // Determine end day (yesterday for current month since today isn't complete, last day for past months)
+                  const endDay = isCurrent ? todayDate - 1 : totalDays;
+
+                  return Math.max(0, endDay - startDay + 1);
+                };
+
+                // Build division data from reps' zone_id → division mapping
+                const divData = divisions.map(div => {
+                  const divZones = zones.filter(z => z.division_id === div.id);
+                  const divZoneIds = divZones.map(z => z.id);
+                  const divReps = allFieldReps.filter(r => r.zone_id && divZoneIds.includes(r.zone_id));
+                  // Monthly quota for division = sum of each rep's daily quota × their active days (no rounding — keep decimal precision)
+                  const getDivMonthQuota = (monthIdx: number) =>
+                    divReps.reduce((sum, rep) => sum + getRepDailyQuota(rep) * repActiveDays(rep, currentYear, monthIdx), 0);
+                  return { division: div, repCount: divReps.length, reps: divReps, getDivMonthQuota };
+                });
+
+                // Company quotas = sum of per-division quotas (hire-date-aware, prorated)
+                const getMonthQuota = (monthIdx: number) => {
+                  return divData.reduce((sum, d) => sum + d.getDivMonthQuota(monthIdx), 0);
+                };
+                const companyMonthQuota = getMonthQuota(currentMonth - 1);
+                const monthAttainment = companyMonthQuota > 0 ? (monthSignups.length / companyMonthQuota) * 100 : 0;
+
+                const ytdStart = new Date(currentYear, 0, 1);
+                const ytdSignups = signups.filter(s => new Date(s.signed_at) >= ytdStart);
+                const ytdQuota = Array.from({ length: currentMonth }, (_, i) => getMonthQuota(i)).reduce((a, b) => a + b, 0);
+                const ytdAttainment = ytdQuota > 0 ? (ytdSignups.length / ytdQuota) * 100 : 0;
+
+                // Helper: get signups belonging to a division
+                const getDivSignups = (divZoneIds: string[], source: SalesSignup[]) => {
+                  return source.filter(s => {
+                    const rep = salesReps.find(r => r.id === s.rep_id);
+                    return rep?.zone_id ? divZoneIds.includes(rep.zone_id) : false;
+                  });
+                };
+
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 20, marginBottom: 24 }}>
+                    {/* Monthly Attainment — All Months */}
+                    <Card>
+                      <div style={{ padding: "12px 0" }}>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, letterSpacing: 1, marginBottom: 14, textAlign: "center" }}>Monthly Attainment</div>
+                        <div style={{ display: "grid", gap: 6 }}>
+                          {monthNames.map((mName, mIdx) => {
+                            const mNum = mIdx + 1;
+                            const mStart = new Date(currentYear, mIdx, 1);
+                            const mEnd = new Date(currentYear, mIdx + 1, 0, 23, 59, 59);
+                            const mSignups = signups.filter(s => { const d = new Date(s.signed_at); return d >= mStart && d <= mEnd; }).length;
+                            const mQuota = getMonthQuota(mIdx);
+                            const mPct = mQuota > 0 ? (mSignups / mQuota) * 100 : 0;
+                            const isCurrent = mNum === currentMonth;
+                            const isFuture = mNum > currentMonth;
+                            if (!isCurrent && !isFuture && mPct === 0) return null;
+                            const barColor = isFuture ? "rgba(255,255,255,0.05)" : mPct >= 100 ? COLORS.neonGreen : mPct >= 50 ? COLORS.neonYellow : COLORS.neonRed;
+                            return (
+                              <div key={mIdx} style={{ display: "flex", alignItems: "center", gap: 8, opacity: isFuture ? 0.3 : 1 }}>
+                                <span style={{ fontSize: 11, fontWeight: isCurrent ? 800 : 500, color: isCurrent ? COLORS.neonBlue : COLORS.textSecondary, width: 28, textAlign: "right" }}>{mName}</span>
+                                <div style={{ flex: 1, height: 10, background: "rgba(255,255,255,0.06)", borderRadius: 100, overflow: "hidden", border: isCurrent ? "1px solid " + COLORS.neonBlue : "none" }}>
+                                  <div style={{ height: "100%", width: isFuture ? "0%" : `${Math.min(100, mPct)}%`, background: barColor, borderRadius: 100, transition: "width 0.5s" }} />
+                                </div>
+                                <span style={{ fontSize: 11, fontWeight: 700, width: 50, textAlign: "right", color: isFuture ? COLORS.textSecondary : barColor }}>{isFuture ? "—" : `${mPct.toFixed(1)}%`}</span>
+                                <span style={{ fontSize: 9, color: COLORS.textSecondary, width: 52, textAlign: "right" }}>{isFuture ? "" : `${mSignups}/${mQuota % 1 === 0 ? mQuota : mQuota.toFixed(2)}`}</span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </Card>
-
-              {/* QUOTA ROLLUP: Division → State → County → Rep */}
-              <Card title="📊 Quota Rollup (Rep → County → State → Division)" style={{ marginBottom: 24 }} actions={
-                <div style={{ display: "flex", gap: 4, background: COLORS.darkBg, padding: 4, borderRadius: 6 }}>
-                  {(["division", "state", "county"] as const).map(v => (
-                    <button key={v} onClick={() => { setQuotaRollupView(v); setQuotaRollupDrill(null); }} style={{ padding: "6px 12px", borderRadius: 4, border: "none", cursor: "pointer", background: quotaRollupView === v ? COLORS.gradient1 : "transparent", color: quotaRollupView === v ? "#fff" : COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{v}</button>
-                  ))}
-                </div>
-              }>
-                {/* Drill-down breadcrumb */}
-                {quotaRollupDrill && (
-                  <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                    <button onClick={() => setQuotaRollupDrill(null)} style={{ color: COLORS.neonBlue, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>← Back</button>
-                    <span style={{ color: COLORS.textSecondary }}>Showing {quotaRollupDrill.type}s in</span>
-                    <span style={{ color: COLORS.neonPink, fontWeight: 700 }}>{quotaRollupDrill.parentName}</span>
-                  </div>
-                )}
-
-                {(() => {
-                  // Division view OR drilled into a division showing states
-                  if (quotaRollupView === "division" && !quotaRollupDrill) {
-                    const divData = Object.values(quotaRollup.byDivision).sort((a, b) => b.totalQuota - a.totalQuota);
-                    const totalAll = divData.reduce((s, d) => s + d.totalQuota, 0);
-                    return (
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", background: COLORS.darkBg, borderRadius: 8, fontWeight: 700, fontSize: 13 }}>
-                          <span>Total Company Quota</span>
-                          <span style={{ color: COLORS.neonGreen }}>{totalAll} businesses/mo</span>
-                        </div>
-                        {divData.map(d => (
-                          <div key={d.division.id} style={{ padding: 14, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => setQuotaRollupDrill({ type: "state", parentId: d.division.id, parentName: d.division.name })}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <div>
-                                <span style={{ fontWeight: 700, fontSize: 14 }}>{d.division.name}</span>
-                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{d.stateCount} states · {d.countyCount} counties · {d.repCount} reps</span>
-                              </div>
-                              <span style={{ fontWeight: 800, fontSize: 18, color: COLORS.neonPurple }}>{d.totalQuota}</span>
-                            </div>
-                            <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: totalAll ? `${(d.totalQuota / totalAll) * 100}%` : "0%", background: COLORS.gradient1, borderRadius: 100 }} />
-                            </div>
-                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Click to drill into states →</div>
-                          </div>
-                        ))}
-                        {divData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet. Assign reps to counties to see rollup data.</div>}
+                        <div style={{ fontSize: 9, color: COLORS.textSecondary, textAlign: "center", marginTop: 10, opacity: 0.6 }}>Through {throughDate}</div>
                       </div>
-                    );
-                  }
+                    </Card>
 
-                  // Drilled into a division → show states
-                  if (quotaRollupDrill?.type === "state") {
-                    const zone = zones.find(z => z.division_id === quotaRollupDrill.parentId);
-                    const statesInDiv = zone ? zone.states : [];
-                    const stateData = statesInDiv.map(st => quotaRollup.byState[st]).filter(Boolean).sort((a, b) => b.totalQuota - a.totalQuota);
-                    return (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {stateData.map(st => (
-                          <div key={st.state} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => setQuotaRollupDrill({ type: "county", parentId: st.state, parentName: st.state })}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div>
-                                <span style={{ fontWeight: 700, fontSize: 14 }}>{st.state}</span>
-                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{st.countyCount} counties · {st.repCount} reps</span>
-                              </div>
-                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonGreen }}>{st.totalQuota}</span>
-                            </div>
-                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Click to drill into counties →</div>
+                    {/* Division Attainment by Month — Table */}
+                    <Card>
+                      <div style={{ padding: "12px 0" }}>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, letterSpacing: 1, marginBottom: 14, textAlign: "center" }}>Division Attainment by Month</div>
+                        {divData.length === 0 ? (
+                          <div style={{ textAlign: "center", color: COLORS.textSecondary, fontSize: 13, padding: 20 }}>No divisions configured</div>
+                        ) : (
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                              <thead>
+                                <tr style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                                  <th style={{ padding: "8px 6px", textAlign: "left", color: COLORS.textSecondary, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}></th>
+                                  {divData.map(d => (
+                                    <th key={d.division.id} style={{ padding: "8px 4px", textAlign: "center", color: COLORS.textSecondary, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{d.division.name}</th>
+                                  ))}
+                                  <th style={{ padding: "8px 6px", textAlign: "center", color: COLORS.textSecondary, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>Avg</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {monthNames.map((mName, mIdx) => {
+                                  const mNum = mIdx + 1;
+                                  const mStart = new Date(currentYear, mIdx, 1);
+                                  const mEnd = new Date(currentYear, mIdx + 1, 0, 23, 59, 59);
+                                  const mDays = daysInMonth(currentYear, mIdx);
+                                  const isCurrent = mNum === currentMonth;
+                                  const isFuture = mNum > currentMonth;
+                                  const mAllSignups = signups.filter(s => { const d = new Date(s.signed_at); return d >= mStart && d <= mEnd; });
+                                  const divPcts = divData.map(d => {
+                                    const divMonthQuota = d.getDivMonthQuota(mIdx);
+                                    const divZoneIds = zones.filter(z => z.division_id === d.division.id).map(z => z.id);
+                                    const divSigs = getDivSignups(divZoneIds, mAllSignups).length;
+                                    return divMonthQuota > 0 ? (divSigs / divMonthQuota) * 100 : 0;
+                                  });
+                                  const avgPct = divPcts.length > 0 ? divPcts.reduce((a, b) => a + b, 0) / divPcts.length : 0;
+                                  const allZero = !isCurrent && !isFuture && divPcts.every(p => p === 0);
+                                  if (allZero) return null;
+                                  const getColor = (pct: number) => pct >= 100 ? COLORS.neonGreen : pct >= 50 ? COLORS.neonYellow : COLORS.neonRed;
+                                  return (
+                                    <tr key={mIdx} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: isFuture ? 0.25 : 1, background: isCurrent ? "rgba(0,212,255,0.06)" : "transparent" }}>
+                                      <td style={{ padding: "7px 6px", fontWeight: isCurrent ? 800 : 500, color: isCurrent ? COLORS.neonBlue : COLORS.textSecondary, fontSize: 11 }}>{mName}</td>
+                                      {divPcts.map((pct, dIdx) => (
+                                        <td key={divData[dIdx].division.id} style={{ padding: "7px 4px", textAlign: "center" }}>
+                                          <span style={{ fontWeight: 700, fontSize: 12, color: isFuture ? COLORS.textSecondary : getColor(pct) }}>{isFuture ? "—" : `${pct.toFixed(0)}%`}</span>
+                                        </td>
+                                      ))}
+                                      <td style={{ padding: "7px 6px", textAlign: "center" }}>
+                                        <span style={{ fontWeight: 800, fontSize: 12, color: isFuture ? COLORS.textSecondary : getColor(avgPct) }}>{isFuture ? "—" : `${avgPct.toFixed(0)}%`}</span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
-                        ))}
-                        {stateData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned in this division yet.</div>}
+                        )}
+                        <div style={{ fontSize: 9, color: COLORS.textSecondary, textAlign: "center", marginTop: 10, opacity: 0.6 }}>Through {throughDate}</div>
                       </div>
-                    );
-                  }
+                    </Card>
 
-                  // Drilled into a state → show counties
-                  if (quotaRollupDrill?.type === "county") {
-                    const countyData = Object.values(quotaRollup.byCounty).filter(c => c.county.state === quotaRollupDrill.parentId).sort((a, b) => b.totalQuota - a.totalQuota);
-                    return (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {countyData.map(c => (
-                          <div key={c.county.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => setQuotaRollupDrill({ type: "rep", parentId: c.county.id, parentName: c.county.name + ", " + c.county.state })}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div>
-                                <span style={{ fontWeight: 700, fontSize: 14 }}>{c.county.name}</span>
-                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{c.repCount} reps</span>
-                              </div>
-                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonBlue }}>{c.totalQuota}</span>
-                            </div>
-                            <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4 }}>Click to see reps →</div>
-                          </div>
-                        ))}
-                        {countyData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned in this state yet.</div>}
-                      </div>
-                    );
-                  }
-
-                  // Drilled into a county → show individual reps
-                  if (quotaRollupDrill?.type === "rep") {
-                    const countyEntry = quotaRollup.byCounty[quotaRollupDrill.parentId];
-                    const reps = countyEntry?.reps || [];
-                    return (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {reps.map(rep => {
-                          const perf = filteredSignups.filter(s => s.rep_id === rep.id).length;
-                          const quota = Math.round(getRepDailyQuota(rep) * 30);
-                          const pct = quota > 0 ? (perf / quota) * 100 : 0;
-                          return (
-                            <div key={rep.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: COLORS.neonPink, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, color: "#000" }}>{rep.avatar || rep.name.split(" ").map(w => w[0]).join("").slice(0, 2)}</div>
-                                  <div>
-                                    <div style={{ fontWeight: 700, fontSize: 13 }}>{rep.name}</div>
-                                    <div style={{ fontSize: 10, color: COLORS.textSecondary }}>{rep.city || "—"}</div>
+                    {/* YTD Attainment by Division */}
+                    <Card>
+                      <div style={{ padding: "12px 0" }}>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, letterSpacing: 1, marginBottom: 14, textAlign: "center" }}>YTD Attainment by Division</div>
+                        {divData.length === 0 ? (
+                          <div style={{ textAlign: "center", color: COLORS.textSecondary, fontSize: 13, padding: 20 }}>No divisions configured</div>
+                        ) : (
+                          <div style={{ display: "grid", gap: 12 }}>
+                            {divData.map(d => {
+                              const divYtdQuota = Array.from({ length: currentMonth }, (_, i) => d.getDivMonthQuota(i)).reduce((a, b) => a + b, 0);
+                              const divZoneIds = zones.filter(z => z.division_id === d.division.id).map(z => z.id);
+                              const divYtdSignups = getDivSignups(divZoneIds, signups.filter(s => new Date(s.signed_at) >= ytdStart)).length;
+                              const divPct = divYtdQuota > 0 ? (divYtdSignups / divYtdQuota) * 100 : 0;
+                              return (
+                                <div key={d.division.id}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 600 }}>{d.division.name}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: divPct >= 100 ? COLORS.neonGreen : divPct >= 50 ? COLORS.neonYellow : COLORS.neonRed }}>{divPct.toFixed(0)}%</span>
                                   </div>
+                                  <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${Math.min(100, divPct)}%`, background: divPct >= 100 ? COLORS.neonGreen : divPct >= 50 ? COLORS.neonYellow : COLORS.neonRed, borderRadius: 100, transition: "width 0.5s" }} />
+                                  </div>
+                                  <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }}>{divYtdSignups} / {divYtdQuota % 1 === 0 ? divYtdQuota : divYtdQuota.toFixed(2)} signups · {d.repCount} reps</div>
                                 </div>
-                                <div style={{ textAlign: "right" }}>
-                                  <div style={{ fontWeight: 800, fontSize: 16, color: pct >= 100 ? COLORS.neonGreen : COLORS.neonOrange }}>{perf}/{quota}</div>
-                                  <div style={{ fontSize: 10, color: COLORS.textSecondary }}>{pct.toFixed(0)}% of quota</div>
-                                </div>
+                              );
+                            })}
+                            {/* Total YTD row */}
+                            <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 12, marginTop: 4 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                <span style={{ fontSize: 13, fontWeight: 800 }}>Total YTD</span>
+                                <span style={{ fontSize: 16, fontWeight: 900, color: ytdAttainment >= 100 ? COLORS.neonGreen : ytdAttainment >= 50 ? COLORS.neonYellow : COLORS.neonRed }}>{ytdAttainment.toFixed(1)}%</span>
                               </div>
-                              <div style={{ height: 5, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
-                                <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: pct >= 100 ? COLORS.neonGreen : COLORS.neonOrange, borderRadius: 100 }} />
+                              <div style={{ height: 8, background: "rgba(255,255,255,0.1)", borderRadius: 100, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${Math.min(100, ytdAttainment)}%`, background: ytdAttainment >= 100 ? COLORS.neonGreen : ytdAttainment >= 50 ? COLORS.neonYellow : COLORS.neonRed, borderRadius: 100, transition: "width 0.5s" }} />
                               </div>
-                            </div>
-                          );
-                        })}
-                        {reps.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps in this county.</div>}
-                      </div>
-                    );
-                  }
-
-                  // State view (flat, no drill)
-                  if (quotaRollupView === "state") {
-                    const stateData = Object.values(quotaRollup.byState).sort((a, b) => b.totalQuota - a.totalQuota);
-                    return (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {stateData.map(st => (
-                          <div key={st.state} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => { setQuotaRollupView("state"); setQuotaRollupDrill({ type: "county", parentId: st.state, parentName: st.state }); }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div>
-                                <span style={{ fontWeight: 700 }}>{st.state}</span>
-                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{st.countyCount} counties · {st.repCount} reps</span>
-                              </div>
-                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonGreen }}>{st.totalQuota}</span>
+                              <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2 }}>{ytdSignups.length} / {ytdQuota % 1 === 0 ? ytdQuota : ytdQuota.toFixed(2)} signups · Jan – {currentMonthName} {currentYear}</div>
                             </div>
                           </div>
-                        ))}
-                        {stateData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet.</div>}
+                        )}
+                        <div style={{ fontSize: 9, color: COLORS.textSecondary, textAlign: "center", marginTop: 10, opacity: 0.6 }}>Through {throughDate}</div>
                       </div>
-                    );
-                  }
-
-                  // County view (flat, no drill)
-                  if (quotaRollupView === "county") {
-                    const countyData = Object.values(quotaRollup.byCounty).sort((a, b) => b.totalQuota - a.totalQuota);
-                    return (
-                      <div style={{ display: "grid", gap: 10 }}>
-                        {countyData.map(c => (
-                          <div key={c.county.id} style={{ padding: 12, background: COLORS.darkBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, cursor: "pointer" }} onClick={() => { setQuotaRollupView("county"); setQuotaRollupDrill({ type: "rep", parentId: c.county.id, parentName: c.county.name + ", " + c.county.state }); }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div>
-                                <span style={{ fontWeight: 700 }}>{c.county.name}</span>
-                                <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>{c.county.state} · {c.repCount} reps</span>
-                              </div>
-                              <span style={{ fontWeight: 800, fontSize: 16, color: COLORS.neonBlue }}>{c.totalQuota}</span>
-                            </div>
-                          </div>
-                        ))}
-                        {countyData.length === 0 && <div style={{ padding: 30, textAlign: "center", color: COLORS.textSecondary }}>No reps assigned to counties yet.</div>}
-                      </div>
-                    );
-                  }
-
-                  return null;
-                })()}
-              </Card>
+                    </Card>
+                  </div>
+                );
+              })()}
 
               {/* RECENT SIGNUPS + COMMISSION RATES & QUOTAS */}
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginBottom: 24 }}>
@@ -2794,11 +2933,11 @@ export default function SalesPage() {
               }>
                 {/* Context Info */}
                 <div style={{ display: "flex", gap: 24, marginBottom: 16, padding: "12px 16px", background: COLORS.darkBg, borderRadius: 8 }}>
-                  <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Quarter:</span> <strong style={{ color: COLORS.neonPurple }}>{bonusPool?.quarter || "Q1 2026"}</strong></div>
+                  <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Period:</span> <strong style={{ color: COLORS.neonPurple }}>{computedPoolData.quarter}</strong></div>
                   <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Year:</span> <strong>{currentYear}</strong></div>
                   <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Week:</span> <strong>{Math.ceil((now.getDate() + new Date(now.getFullYear(), now.getMonth(), 1).getDay()) / 7)}</strong></div>
                   <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Period:</span> <strong>{now.getDate() <= 15 ? "1st Half" : "2nd Half"}</strong></div>
-                  <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Status:</span> <strong style={{ color: bonusPool?.status === "active" ? COLORS.neonGreen : COLORS.neonOrange }}>{bonusPool?.status || "Active"}</strong></div>
+                  <div style={{ fontSize: 12 }}><span style={{ color: COLORS.textSecondary }}>Status:</span> <strong style={{ color: COLORS.neonGreen }}>Active</strong></div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -2837,14 +2976,14 @@ export default function SalesPage() {
 
                         const { outbound, inbound } = getFilteredSignups();
 
-                        // Calculate contributions
-                        const inboundBasic = inbound.filter(s => s.plan === "basic").reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0);
-                        const outboundBasic = outbound.filter(s => s.plan === "basic").reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0);
-                        const inboundPremium = inbound.filter(s => s.plan === "premium").reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0);
-                        const outboundPremium = outbound.filter(s => s.plan === "premium").reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0);
-                        const inboundAds = inbound.reduce((sum, s) => sum + (s.ad_spend_cents || 0) * 0.1, 0);
-                        const outboundAds = outbound.reduce((sum, s) => sum + (s.ad_spend_cents || 0) * 0.1, 0);
-                        const repeatCustomers = outbound.filter(s => s.plan === "repeat_customer").reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0);
+                        // Calculate contributions from live config values
+                        const inboundBasic = inbound.filter(s => s.plan === "basic").length * getConfig("pool_inbound_basic");
+                        const outboundBasic = outbound.filter(s => s.plan === "basic").length * getConfig("pool_outbound_basic");
+                        const inboundPremium = inbound.filter(s => s.plan === "premium").length * getConfig("pool_inbound_premium");
+                        const outboundPremium = outbound.filter(s => s.plan === "premium").length * getConfig("pool_outbound_premium");
+                        const inboundAds = inbound.reduce((sum, s) => sum + Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100"), 0);
+                        const outboundAds = outbound.reduce((sum, s) => sum + Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100"), 0);
+                        const repeatCustomers = 0; // TODO: compute from repeat customers table
 
                         const rows = [
                           { cat: "Basic Signups", inbound: inboundBasic, outbound: outboundBasic, color: "#4ECDC4" },
@@ -2899,8 +3038,16 @@ export default function SalesPage() {
 
                         const { outbound, inbound } = getFilteredSignups();
 
-                        const totalInbound = inbound.reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0) + inbound.reduce((sum, s) => sum + (s.ad_spend_cents || 0) * 0.1, 0);
-                        const totalOutbound = outbound.reduce((sum, s) => sum + (s.pool_contribution_cents || 0), 0) + outbound.reduce((sum, s) => sum + (s.ad_spend_cents || 0) * 0.1, 0);
+                        const totalInbound = inbound.reduce((sum, s) => {
+                          const planPool = s.plan === "premium" ? getConfig("pool_inbound_premium") : getConfig("pool_inbound_basic");
+                          const adPool = Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100");
+                          return sum + planPool + adPool;
+                        }, 0);
+                        const totalOutbound = outbound.reduce((sum, s) => {
+                          const planPool = s.plan === "premium" ? getConfig("pool_outbound_premium") : getConfig("pool_outbound_basic");
+                          const adPool = Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100");
+                          return sum + planPool + adPool;
+                        }, 0);
                         const totalPool = totalInbound + totalOutbound;
 
                         return (
@@ -3116,31 +3263,29 @@ export default function SalesPage() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {(() => {
-                    // Calculate totals by division
+                    // Revenue = plan price + ad spend per signup
                     const divTotals = divisions.map(d => {
                       const divSignups = filteredSignups.filter(s => s.division_id === d.id);
-                      const revenue = divSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0);
+                      const revenue = divSignups.reduce((sum, s) => sum + getSignupRevenue(s), 0);
                       return { name: d.name, revenue };
                     }).sort((a, b) => b.revenue - a.revenue)[0] || { name: "—", revenue: 0 };
-                    
-                    // Calculate totals by state
+
                     const stateTotals: Record<string, number> = {};
                     filteredSignups.forEach(s => {
                       if (s.state) {
-                        stateTotals[s.state] = (stateTotals[s.state] || 0) + (s.commission_cents || 0) + (s.ad_spend_cents || 0);
+                        stateTotals[s.state] = (stateTotals[s.state] || 0) + getSignupRevenue(s);
                       }
                     });
                     const topState = Object.entries(stateTotals).sort((a, b) => b[1] - a[1])[0] || ["—", 0];
-                    
-                    // Calculate totals by city
+
                     const cityTotals: Record<string, number> = {};
                     filteredSignups.forEach(s => {
                       if (s.city) {
-                        cityTotals[s.city] = (cityTotals[s.city] || 0) + (s.commission_cents || 0) + (s.ad_spend_cents || 0);
+                        cityTotals[s.city] = (cityTotals[s.city] || 0) + getSignupRevenue(s);
                       }
                     });
                     const topCity = Object.entries(cityTotals).sort((a, b) => b[1] - a[1])[0] || ["—", 0];
-                    
+
                     return [
                       { label: "Top Division", name: divTotals.name, value: divTotals.revenue, color: COLORS.neonBlue },
                       { label: "Top State", name: topState[0], value: topState[1] as number, color: COLORS.neonOrange },
@@ -3232,7 +3377,7 @@ export default function SalesPage() {
                           const key = `${s.zone_id}-${s.state}-${s.city}`;
                           const existingIdx = rows.findIndex(r => `${zones.find(z => z.name === r.division)?.id}-${r.state}-${r.city}` === key);
                           
-                          const packageAmt = s.plan === "basic" ? 2500 : 10000; // Commission for package
+                          const packageAmt = s.plan === "basic" ? commissionRates.individual.basic_signup : commissionRates.individual.premium_signup;
                           
                           if (existingIdx >= 0) {
                             if (s.plan === "basic") rows[existingIdx].basic++;
@@ -3273,9 +3418,9 @@ export default function SalesPage() {
                         <td colSpan={3} style={{ padding: "12px 8px", fontWeight: 700 }}>TOTALS</td>
                         <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700 }}>{filteredSignups.filter(s => s.plan === "basic").length}</td>
                         <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700 }}>{filteredSignups.filter(s => s.plan === "premium").length}</td>
-                        <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(filteredSignups.reduce((sum, s) => sum + (s.plan === "basic" ? 2500 : 10000), 0))}</td>
+                        <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700, color: COLORS.neonGreen }}>{formatMoney(filteredSignups.reduce((sum, s) => sum + (s.plan === "basic" ? commissionRates.individual.basic_signup : commissionRates.individual.premium_signup), 0))}</td>
                         <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 700, color: COLORS.neonOrange }}>{formatMoney(totalAdSpend)}</td>
-                        <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 800, fontSize: 13, color: COLORS.neonPurple }}>{formatMoney(filteredSignups.reduce((sum, s) => sum + (s.plan === "basic" ? 2500 : 10000) + (s.ad_spend_cents || 0), 0))}</td>
+                        <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 800, fontSize: 13, color: COLORS.neonPurple }}>{formatMoney(filteredSignups.reduce((sum, s) => sum + (s.plan === "basic" ? commissionRates.individual.basic_signup : commissionRates.individual.premium_signup) + (s.ad_spend_cents || 0), 0))}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -3342,7 +3487,7 @@ export default function SalesPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
-                        {["Name", "Role", "Division", "State", "County", "City", "Supervisor", "Daily Quota", "Signups", "Bonus", "Status", ""].map(h => (
+                        {["Name", "Role", "Division", "State", "County", "City", "Hire Date", "Supervisor", "Daily Quota", "Signups", "Bonus", "Status", ""].map(h => (
                           <th key={h} style={{ textAlign: "left", padding: "12px 8px", color: COLORS.textSecondary, fontWeight: 600, fontSize: 11, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
@@ -3395,6 +3540,9 @@ export default function SalesPage() {
                                 <input value={editRepData.city ?? rep.city ?? ""} onChange={(e) => setEditRepData({ ...editRepData, city: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, width: 80 }} />
                               ) : (rep.city || "—")}
                             </td>
+                            <td style={{ padding: "10px 8px", fontSize: 12, whiteSpace: "nowrap" }}>
+                              {rep.hire_date ? new Date(rep.hire_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                            </td>
                             <td style={{ padding: "10px 8px", fontSize: 12 }}>
                               {isEditing ? (
                                 <select value={editRepData.supervisor_id ?? rep.supervisor_id ?? ""} onChange={(e) => setEditRepData({ ...editRepData, supervisor_id: e.target.value })} style={{ padding: "4px 6px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textPrimary, fontSize: 11, maxWidth: 120 }}>
@@ -3431,7 +3579,7 @@ export default function SalesPage() {
                               })() : "—"}
                             </td>
                             <td style={{ padding: "10px 8px", fontSize: 12 }}>
-                              {rep.role === "sales_rep" ? getRepPerformance(rep.id).total : "—"}
+                              {FIELD_ROLES.includes(rep.role) ? getRepPerformance(rep.id).total : "—"}
                             </td>
                             <td style={{ padding: "10px 8px", fontSize: 12 }}>
                               {(() => {
@@ -3651,17 +3799,17 @@ export default function SalesPage() {
             </>
           )}
 
-          {/* BONUS POOL TAB - with Eligible section, Original Signup date, Previous Quarters */}
+          {/* BONUS POOL TAB - with Eligible section, Original Signup date, Previous Months */}
           {salesTab === "bonuspool" && (
             <>
-              <Card title={`🏆 ${bonusPool?.quarter || "Q1 2026"} Bonus Pool`} style={{ marginBottom: 24 }}>
+              <Card title={`🏆 ${computedPoolData.quarter} Bonus Pool`} style={{ marginBottom: 24 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 24 }}>
                   <div>
-                    <div style={{ fontSize: 48, fontWeight: 800, color: COLORS.neonPurple }}>{formatMoney(bonusPool?.total_pool_cents || 0)}</div>
+                    <div style={{ fontSize: 48, fontWeight: 800, color: COLORS.neonPurple }}>{formatMoney(computedPoolData.total_pool_cents)}</div>
                     <div style={{ color: COLORS.textSecondary, marginBottom: 16 }}>Current Pool Balance</div>
                     <div style={{ padding: 16, background: "rgba(57,255,20,0.1)", borderRadius: 12, border: "1px solid " + COLORS.neonGreen }}>
                       <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Projected Per-Rep Payout</div>
-                      <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(bonusPool?.projected_per_rep_cents || 0)}</div>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(computedPoolData.projected_per_rep_cents)}</div>
                       <div style={{ fontSize: 11, color: COLORS.textSecondary }}>Split between {eligibleReps.length} eligible reps</div>
                     </div>
                   </div>
@@ -3670,15 +3818,15 @@ export default function SalesPage() {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.neonBlue, marginBottom: 12 }}>📥 Inbound</div>
-                        <div style={{ fontSize: 13 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Basic</span><span>{formatMoney(bonusPool?.inbound_basic_cents || 0)}</span></div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Premium</span><span>{formatMoney(bonusPool?.inbound_premium_cents || 0)}</span></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend</span><span>{formatMoney(bonusPool?.inbound_ads_cents || 0)}</span></div></div>
+                        <div style={{ fontSize: 13 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Basic</span><span>{formatMoney(computedPoolData.inbound_basic_cents)}</span></div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Premium</span><span>{formatMoney(computedPoolData.inbound_premium_cents)}</span></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend</span><span>{formatMoney(computedPoolData.inbound_ads_cents)}</span></div></div>
                       </div>
                       <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.neonGreen, marginBottom: 12 }}>📤 Rep</div>
-                        <div style={{ fontSize: 13 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Basic</span><span>{formatMoney(bonusPool?.rep_basic_cents || 0)}</span></div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Premium</span><span>{formatMoney(bonusPool?.rep_premium_cents || 0)}</span></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend</span><span>{formatMoney(bonusPool?.rep_ads_cents || 0)}</span></div></div>
+                        <div style={{ fontSize: 13 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Basic</span><span>{formatMoney(computedPoolData.rep_basic_cents)}</span></div><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}><span>Premium</span><span>{formatMoney(computedPoolData.rep_premium_cents)}</span></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>Ad Spend</span><span>{formatMoney(computedPoolData.rep_ads_cents)}</span></div></div>
                       </div>
                       <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, gridColumn: "1 / -1" }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.neonOrange, marginBottom: 8 }}>🔄 Repeat Customer Bonus</div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span>$0.50/repeat/month</span><span style={{ fontWeight: 700 }}>{formatMoney(bonusPool?.repeat_customers_cents || 0)}</span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span>{formatMoney(getConfig("pool_repeat_monthly"))}/repeat/month</span><span style={{ fontWeight: 700 }}>{formatMoney(computedPoolData.repeat_customers_cents)}</span></div>
                       </div>
                     </div>
                   </div>
@@ -3694,8 +3842,8 @@ export default function SalesPage() {
                       return (
                         <div key={rep.id} style={{ padding: 20, background: "rgba(57,255,20,0.05)", borderRadius: 12, border: "1px solid " + COLORS.neonGreen }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}><Avatar name={rep.name} initials={rep.avatar} /><div><div style={{ fontWeight: 700 }}>{rep.name}</div><div style={{ fontSize: 12, color: COLORS.neonGreen }}>✓ {perf.total} signups</div></div></div>
-                          <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.neonGreen }}>+{formatMoney(bonusPool?.projected_per_rep_cents || 0)}</div>
-                          <div style={{ fontSize: 11, color: COLORS.textSecondary }}>Projected Q1 bonus</div>
+                          <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.neonGreen }}>+{formatMoney(computedPoolData.projected_per_rep_cents)}</div>
+                          <div style={{ fontSize: 11, color: COLORS.textSecondary }}>Projected monthly bonus</div>
                         </div>
                       );
                     })}
@@ -3724,9 +3872,9 @@ export default function SalesPage() {
                     See how additional signups affect the bonus pool and per-rep payout.
                   </div>
                   {(() => {
-                    const currentPool = bonusPool?.total_pool_cents || 0;
-                    const avgBasicContrib = 500; // $5 per basic signup
-                    const avgPremiumContrib = 2000; // $20 per premium signup
+                    const currentPool = computedPoolData.total_pool_cents;
+                    const avgBasicContrib = getConfig("pool_outbound_basic");
+                    const avgPremiumContrib = getConfig("pool_outbound_premium");
                     const projections = [10, 25, 50, 100].map(additionalSignups => {
                       const estimatedContrib = additionalSignups * ((avgBasicContrib + avgPremiumContrib) / 2);
                       const newPool = currentPool + estimatedContrib;
@@ -3803,11 +3951,11 @@ export default function SalesPage() {
                 )}
               </Card>
 
-              {/* PREVIOUS QUARTERS */}
-              <Card title="📊 Previous Quarters">
-                {previousPools.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No previous quarters</div> : (
+              {/* PREVIOUS MONTHS */}
+              <Card title="📊 Previous Months">
+                {previousPools.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No previous months</div> : (
                   <DataTable columns={[
-                    { key: "quarter", label: "Quarter" },
+                    { key: "quarter", label: "Month" },
                     { key: "total_pool_cents", label: "Total Pool", render: (v: unknown) => <span style={{ fontWeight: 700 }}>{formatMoney(Number(v))}</span> },
                     { key: "eligible_rep_ids", label: "Eligible Reps", render: (v: unknown) => ((v as string[]) || []).length || 0 },
                     { key: "projected_per_rep_cents", label: "Per-Rep Payout", render: (v: unknown) => <span style={{ color: COLORS.neonGreen, fontWeight: 700 }}>{formatMoney(Number(v))}</span> },
@@ -3816,12 +3964,12 @@ export default function SalesPage() {
                 )}
               </Card>
 
-              {/* HISTORICAL QUARTER COMPARISON */}
+              {/* HISTORICAL MONTH COMPARISON */}
               {previousPools.length > 0 && (
-                <Card title="📊 Quarter-over-Quarter Comparison" style={{ marginBottom: 24 }}>
+                <Card title="📊 Month-over-Month Comparison" style={{ marginBottom: 24 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-                    {[bonusPool, ...previousPools.slice(0, 3)].filter(Boolean).map((pool, i) => {
-                      const prevPool = i < 3 ? [bonusPool, ...previousPools][i + 1] : null;
+                    {[computedPoolData as BonusPool, ...previousPools.slice(0, 3)].filter(Boolean).map((pool, i) => {
+                      const prevPool = i < 3 ? [computedPoolData as BonusPool, ...previousPools][i + 1] : null;
                       const poolChange = prevPool ? ((pool!.total_pool_cents - prevPool.total_pool_cents) / prevPool.total_pool_cents) * 100 : 0;
                       const eligibleChange = prevPool && prevPool.eligible_rep_ids ? ((pool!.eligible_rep_ids?.length || 0) - prevPool.eligible_rep_ids.length) : 0;
 
@@ -3869,9 +4017,9 @@ export default function SalesPage() {
                   const signupCount = divSignups.length;
                   const ytdDivSignups = ytdSignups.filter(s => s.zone_id === z.id).length;
                   const totalSales = divSignups.reduce((sum, s) => sum + (s.commission_cents || 0) + (s.ad_spend_cents || 0), 0);
-                  // Division daily quota from Settings (zone.goal), fallback to rep rollup
+                  // Division daily quota from rep rollup (sum of per-rep Settings quotas)
                   const rollup = quotaRollup.byDivision[z.division_id];
-                  const dailyQuota = z.goal || rollup?.totalQuota || 0;
+                  const dailyQuota = rollup?.totalQuota || 0;
                   const ytdTarget = dailyQuota * daysElapsedYTD;
                   const ytdAttainment = ytdTarget > 0 ? (ytdDivSignups / ytdTarget) * 100 : 0;
                   return { id: z.id, divisionId: z.division_id, name: z.name, states: z.states, dailyQuota, signupCount, ytdSignups: ytdDivSignups, ytdAttainment, totalSales, repCount: rollup?.repCount || 0, color: divisionColors[z.name] || COLORS.neonBlue };
@@ -4571,22 +4719,14 @@ export default function SalesPage() {
           {salesTab === "payouts" && (
             <>
               {/* Summary Cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-                <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Period 1 ({currentMonthName} 1-15)</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(period1Signups.reduce((a, s) => a + s.commission_cents, 0))}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Due: {currentMonthName} 20, {currentYear}</div></Card>
-                <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Period 2 ({currentMonthName} 16-{currentMonth === 2 ? 28 : 31})</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonBlue }}>{formatMoney(period2Signups.reduce((a, s) => a + s.commission_cents, 0))}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Due: {monthNames[currentMonth % 12]} 5, {currentMonth === 12 ? currentYear + 1 : currentYear}</div></Card>
-                <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Next Bonus Payout</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonPurple }}>{formatMoney(bonusPool?.total_pool_cents || 0)}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Q1 end: April 1</div></Card>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+                <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>{currentMonthName} {currentYear} Commissions</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(monthSignups.reduce((a, s) => a + s.commission_cents, 0))}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Due: {monthNames[currentMonth % 12]} 5, {currentMonth === 12 ? currentYear + 1 : currentYear}</div></Card>
+                <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Next Bonus Payout</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonPurple }}>{formatMoney(computedPoolData.total_pool_cents)}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Month end: {computedPoolData.quarter}</div></Card>
                 <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>YTD Total Paid</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonOrange }}>{formatMoney(ytdPaid)}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Commissions + Bonuses</div></Card>
               </div>
 
               {/* Filters */}
               <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                {/* Period Filter */}
-                <div style={{ display: "flex", gap: 8 }}>
-                  {[{ key: "all", label: "All Periods" }, { key: "period1", label: `📅 Period 1 (${currentMonthName} 1-15)` }, { key: "period2", label: `📅 Period 2 (${currentMonthName} 16-${currentMonth === 2 ? 28 : 31})` }].map((f) => (
-                    <button key={f.key} onClick={() => setPayoutPeriodFilter(f.key)} style={{ padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", background: payoutPeriodFilter === f.key ? COLORS.gradient1 : COLORS.cardBg, color: payoutPeriodFilter === f.key ? "#fff" : COLORS.textSecondary, fontSize: 12, fontWeight: 600 }}>{f.label}</button>
-                  ))}
-                </div>
-
                 {/* Status Filter */}
                 <div style={{ display: "flex", gap: 8 }}>
                   {[{ key: "all", label: "All Status" }, { key: "pending", label: "⏳ Pending" }, { key: "paid", label: "✅ Paid" }].map((f) => (
@@ -4631,163 +4771,99 @@ export default function SalesPage() {
 
               {/* Per-Rep Payout Cards */}
               {actualSalesReps.map((rep) => {
-                // Filter signups by date range
-                let filteredP1 = period1Signups.filter((s) => s.rep_id === rep.id);
-                let filteredP2 = period2Signups.filter((s) => s.rep_id === rep.id);
+                let repSales = monthSignups.filter((s) => s.rep_id === rep.id);
 
                 // Apply date range filter
                 if (payoutDateFilter.from) {
                   const fromDate = new Date(payoutDateFilter.from);
-                  filteredP1 = filteredP1.filter(s => new Date(s.signed_at) >= fromDate);
-                  filteredP2 = filteredP2.filter(s => new Date(s.signed_at) >= fromDate);
+                  repSales = repSales.filter(s => new Date(s.signed_at) >= fromDate);
                 }
                 if (payoutDateFilter.to) {
                   const toDate = new Date(payoutDateFilter.to);
                   toDate.setHours(23, 59, 59, 999);
-                  filteredP1 = filteredP1.filter(s => new Date(s.signed_at) <= toDate);
-                  filteredP2 = filteredP2.filter(s => new Date(s.signed_at) <= toDate);
+                  repSales = repSales.filter(s => new Date(s.signed_at) <= toDate);
                 }
 
-                const repP1 = filteredP1;
-                const repP2 = filteredP2;
+                if (repSales.length === 0) return null;
 
-                const calcStats = (sales: SalesSignup[]) => ({
-                  basic: sales.filter((s) => s.plan === "basic").length,
-                  premium: sales.filter((s) => s.plan === "premium").length,
-                  adSpend: sales.reduce((a, s) => a + (s.ad_spend_cents || 0), 0),
-                  total: sales.reduce((a, s) => a + (s.commission_cents || 0), 0),
-                  poolContrib: sales.reduce((a, s) => a + (s.pool_contribution_cents || 0), 0),
-                });
-
-                const p1Stats = calcStats(repP1);
-                const p2Stats = calcStats(repP2);
-                const isPeriod1Paid = paidCommissions[rep.id]?.period1;
-                const isPeriod2Paid = paidCommissions[rep.id]?.period2;
-
-                // Apply period filter
-                if (payoutPeriodFilter === "period1" && repP1.length === 0) return null;
-                if (payoutPeriodFilter === "period2" && repP2.length === 0) return null;
-                if (repP1.length === 0 && repP2.length === 0) return null;
+                const stats = {
+                  basic: repSales.filter((s) => s.plan === "basic").length,
+                  premium: repSales.filter((s) => s.plan === "premium").length,
+                  adSpend: repSales.reduce((a, s) => a + (s.ad_spend_cents || 0), 0),
+                  total: repSales.reduce((a, s) => a + (s.commission_cents || 0), 0),
+                  poolContrib: repSales.reduce((a, s) => a + (s.pool_contribution_cents || 0), 0),
+                };
+                const isMonthPaid = paidCommissions[rep.id]?.month;
 
                 // Apply status filter
-                if (payoutStatusFilter === "paid") {
-                  if (payoutPeriodFilter === "period1" && !isPeriod1Paid) return null;
-                  if (payoutPeriodFilter === "period2" && !isPeriod2Paid) return null;
-                  if (payoutPeriodFilter === "all" && !isPeriod1Paid && !isPeriod2Paid) return null;
-                }
-                if (payoutStatusFilter === "pending") {
-                  if (payoutPeriodFilter === "period1" && isPeriod1Paid) return null;
-                  if (payoutPeriodFilter === "period2" && isPeriod2Paid) return null;
-                  if (payoutPeriodFilter === "all" && isPeriod1Paid && isPeriod2Paid) return null;
-                }
+                if (payoutStatusFilter === "paid" && !isMonthPaid) return null;
+                if (payoutStatusFilter === "pending" && isMonthPaid) return null;
 
                 return (
-                  <Card key={rep.id} style={{ marginBottom: 20 }} title={<div style={{ display: "flex", alignItems: "center", gap: 12 }}><Avatar name={rep.name} initials={rep.avatar} /><div><div style={{ fontWeight: 700 }}>{rep.name}</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>{rep.email}</div></div></div>} actions={<div style={{ display: "flex", gap: 8 }}><span style={{ fontSize: 20, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(p1Stats.total + p2Stats.total)}</span><span style={{ fontSize: 12, color: COLORS.textSecondary, alignSelf: "center" }}>total</span></div>}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                      {/* Period 1 */}
-                      {(payoutPeriodFilter === "all" || payoutPeriodFilter === "period1") && (
-                        <div style={{ padding: 20, background: isPeriod1Paid ? "rgba(57,255,20,0.05)" : COLORS.darkBg, borderRadius: 12, border: isPeriod1Paid ? "1px solid " + COLORS.neonGreen : "1px solid " + COLORS.cardBorder }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                            <div><div style={{ fontSize: 14, fontWeight: 700 }}>Period 1: {currentMonthName} 1-15</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Due: {currentMonthName} 20, {currentYear}</div></div>
-                            <Badge status={isPeriod1Paid ? "paid" : "pending"} />
-                          </div>
-                          <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Basic Signups ({p1Stats.basic})</span><span>{p1Stats.basic} × $25 = <strong style={{ color: COLORS.neonGreen }}>${p1Stats.basic * 25}</strong></span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Premium Signups ({p1Stats.premium})</span><span>{p1Stats.premium} × $100 = <strong style={{ color: COLORS.neonGreen }}>${p1Stats.premium * 100}</strong></span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Ad Spend Sold ({formatMoney(p1Stats.adSpend)})</span><span>{formatMoney(p1Stats.adSpend)} ÷ 100 × $10 = <strong style={{ color: COLORS.neonGreen }}>${Math.floor(p1Stats.adSpend / 10000) * 10}</strong></span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: 12, fontWeight: 700, background: COLORS.cardBg, borderRadius: 8 }}><span>Period 1 Total</span><span style={{ color: COLORS.neonGreen, fontSize: 18 }}>{formatMoney(p1Stats.total)}</span></div>
-                          </div>
-                          <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, fontWeight: 600 }}>ITEMIZED SALES ({repP1.length})</div>
-                            <div style={{ maxHeight: 150, overflowY: "auto" }}>
-                              {repP1.map((sale) => (
-                                <div key={sale.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder, fontSize: 12 }}>
-                                  <div><div style={{ fontWeight: 600 }}>{sale.business_name}</div><div style={{ color: COLORS.textSecondary, fontSize: 10 }}>{formatDate(sale.signed_at)} • {sale.city || "?"}, {sale.state || "?"}</div></div>
-                                  <div style={{ textAlign: "right" }}><Badge status={sale.plan} /><div style={{ color: COLORS.neonGreen, fontSize: 11, marginTop: 2 }}>+{formatMoney(sale.commission_cents)}</div></div>
-                                </div>
-                              ))}
-                              {repP1.length === 0 && <div style={{ color: COLORS.textSecondary, fontSize: 12, padding: 8 }}>No sales this period</div>}
+                  <Card key={rep.id} style={{ marginBottom: 20 }} title={<div style={{ display: "flex", alignItems: "center", gap: 12 }}><Avatar name={rep.name} initials={rep.avatar} /><div><div style={{ fontWeight: 700 }}>{rep.name}</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>{rep.email}</div></div></div>} actions={<div style={{ display: "flex", gap: 8 }}><span style={{ fontSize: 20, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(stats.total)}</span><span style={{ fontSize: 12, color: COLORS.textSecondary, alignSelf: "center" }}>total</span></div>}>
+                    <div style={{ padding: 20, background: isMonthPaid ? "rgba(57,255,20,0.05)" : COLORS.darkBg, borderRadius: 12, border: isMonthPaid ? "1px solid " + COLORS.neonGreen : "1px solid " + COLORS.cardBorder }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                        <div><div style={{ fontSize: 14, fontWeight: 700 }}>{currentMonthName} {currentYear}</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Due: {monthNames[currentMonth % 12]} 5, {currentMonth === 12 ? currentYear + 1 : currentYear}</div></div>
+                        <Badge status={isMonthPaid ? "paid" : "pending"} />
+                      </div>
+                      <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Basic Signups ({stats.basic})</span><span>{stats.basic} × {formatMoney(commissionRates.individual.basic_signup)} = <strong style={{ color: COLORS.neonGreen }}>{formatMoney(stats.basic * commissionRates.individual.basic_signup)}</strong></span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Premium Signups ({stats.premium})</span><span>{stats.premium} × {formatMoney(commissionRates.individual.premium_signup)} = <strong style={{ color: COLORS.neonGreen }}>{formatMoney(stats.premium * commissionRates.individual.premium_signup)}</strong></span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Ad Spend Sold ({formatMoney(stats.adSpend)})</span><span>{formatMoney(stats.adSpend)} ÷ 100 × {formatMoney(commissionRates.individual.advertising_per_100)} = <strong style={{ color: COLORS.neonGreen }}>{formatMoney(Math.floor(stats.adSpend / 10000) * commissionRates.individual.advertising_per_100)}</strong></span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: 12, fontWeight: 700, background: COLORS.cardBg, borderRadius: 8 }}><span>Monthly Total</span><span style={{ color: COLORS.neonGreen, fontSize: 18 }}>{formatMoney(stats.total)}</span></div>
+                      </div>
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, fontWeight: 600 }}>ITEMIZED SALES ({repSales.length})</div>
+                        <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                          {repSales.map((sale) => (
+                            <div key={sale.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder, fontSize: 12 }}>
+                              <div><div style={{ fontWeight: 600 }}>{sale.business_name}</div><div style={{ color: COLORS.textSecondary, fontSize: 10 }}>{formatDate(sale.signed_at)} • {sale.city || "?"}, {sale.state || "?"}</div></div>
+                              <div style={{ textAlign: "right" }}><Badge status={sale.plan} /><div style={{ color: COLORS.neonGreen, fontSize: 11, marginTop: 2 }}>+{formatMoney(sale.commission_cents)}</div></div>
                             </div>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ fontSize: 11, color: COLORS.neonPurple }}>Pool contrib: +{formatMoney(p1Stats.poolContrib)}</div>
-                            {isPeriod1Paid ? (
-                              <button onClick={() => setPaidCommissions({ ...paidCommissions, [rep.id]: { ...paidCommissions[rep.id], period1: false } })} style={{ padding: "8px 16px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontSize: 11 }}>Undo</button>
-                            ) : (
-                              <button onClick={() => setPaidCommissions({ ...paidCommissions, [rep.id]: { ...paidCommissions[rep.id], period1: true } })} style={{ padding: "8px 16px", background: COLORS.gradient2, border: "none", borderRadius: 8, color: "#000", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Mark Paid {formatMoney(p1Stats.total)}</button>
-                            )}
-                          </div>
+                          ))}
                         </div>
-                      )}
-
-                      {/* Period 2 */}
-                      {(payoutPeriodFilter === "all" || payoutPeriodFilter === "period2") && (
-                        <div style={{ padding: 20, background: isPeriod2Paid ? "rgba(57,255,20,0.05)" : COLORS.darkBg, borderRadius: 12, border: isPeriod2Paid ? "1px solid " + COLORS.neonGreen : "1px solid " + COLORS.cardBorder }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                            <div><div style={{ fontSize: 14, fontWeight: 700 }}>Period 2: {currentMonthName} 16-{currentMonth === 2 ? 28 : 31}</div><div style={{ fontSize: 11, color: COLORS.textSecondary }}>Due: {monthNames[currentMonth % 12]} 5, {currentMonth === 12 ? currentYear + 1 : currentYear}</div></div>
-                            <Badge status={isPeriod2Paid ? "paid" : "pending"} />
-                          </div>
-                          <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Basic Signups ({p2Stats.basic})</span><span>{p2Stats.basic} × $25 = <strong style={{ color: COLORS.neonGreen }}>${p2Stats.basic * 25}</strong></span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Premium Signups ({p2Stats.premium})</span><span>{p2Stats.premium} × $100 = <strong style={{ color: COLORS.neonGreen }}>${p2Stats.premium * 100}</strong></span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder }}><span>Ad Spend Sold ({formatMoney(p2Stats.adSpend)})</span><span>{formatMoney(p2Stats.adSpend)} ÷ 100 × $10 = <strong style={{ color: COLORS.neonGreen }}>${Math.floor(p2Stats.adSpend / 10000) * 10}</strong></span></div>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: 12, fontWeight: 700, background: COLORS.cardBg, borderRadius: 8 }}><span>Period 2 Total</span><span style={{ color: COLORS.neonGreen, fontSize: 18 }}>{formatMoney(p2Stats.total)}</span></div>
-                          </div>
-                          <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, fontWeight: 600 }}>ITEMIZED SALES ({repP2.length})</div>
-                            <div style={{ maxHeight: 150, overflowY: "auto" }}>
-                              {repP2.map((sale) => (
-                                <div key={sale.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + COLORS.cardBorder, fontSize: 12 }}>
-                                  <div><div style={{ fontWeight: 600 }}>{sale.business_name}</div><div style={{ color: COLORS.textSecondary, fontSize: 10 }}>{formatDate(sale.signed_at)} • {sale.city || "?"}, {sale.state || "?"}</div></div>
-                                  <div style={{ textAlign: "right" }}><Badge status={sale.plan} /><div style={{ color: COLORS.neonGreen, fontSize: 11, marginTop: 2 }}>+{formatMoney(sale.commission_cents)}</div></div>
-                                </div>
-                              ))}
-                              {repP2.length === 0 && <div style={{ color: COLORS.textSecondary, fontSize: 12, padding: 8 }}>No sales this period</div>}
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ fontSize: 11, color: COLORS.neonPurple }}>Pool contrib: +{formatMoney(p2Stats.poolContrib)}</div>
-                            {isPeriod2Paid ? (
-                              <button onClick={() => setPaidCommissions({ ...paidCommissions, [rep.id]: { ...paidCommissions[rep.id], period2: false } })} style={{ padding: "8px 16px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontSize: 11 }}>Undo</button>
-                            ) : (
-                              <button onClick={() => setPaidCommissions({ ...paidCommissions, [rep.id]: { ...paidCommissions[rep.id], period2: true } })} style={{ padding: "8px 16px", background: COLORS.gradient2, border: "none", borderRadius: 8, color: "#000", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Mark Paid {formatMoney(p2Stats.total)}</button>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: 11, color: COLORS.neonPurple }}>Pool contrib: +{formatMoney(stats.poolContrib)}</div>
+                        {isMonthPaid ? (
+                          <button onClick={() => setPaidCommissions({ ...paidCommissions, [rep.id]: { month: false } })} style={{ padding: "8px 16px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontSize: 11 }}>Undo</button>
+                        ) : (
+                          <button onClick={() => setPaidCommissions({ ...paidCommissions, [rep.id]: { month: true } })} style={{ padding: "8px 16px", background: COLORS.gradient2, border: "none", borderRadius: 8, color: "#000", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Mark Paid {formatMoney(stats.total)}</button>
+                        )}
+                      </div>
                     </div>
                   </Card>
                 );
               })}
 
-              {actualSalesReps.filter(rep => period1Signups.some(s => s.rep_id === rep.id) || period2Signups.some(s => s.rep_id === rep.id)).length === 0 && (
-                <div style={{ padding: 60, textAlign: "center", color: COLORS.textSecondary }}>No signups in this period</div>
+              {actualSalesReps.filter(rep => monthSignups.some(s => s.rep_id === rep.id)).length === 0 && (
+                <div style={{ padding: 60, textAlign: "center", color: COLORS.textSecondary }}>No signups this month</div>
               )}
 
-              {/* Quarterly Bonus Section */}
-              <Card title="🏆 Quarterly Bonus Payout" style={{ marginTop: 24 }} actions={
+              {/* Monthly Bonus Section */}
+              <Card title="🏆 Monthly Bonus Payout" style={{ marginTop: 24 }} actions={
                 <div style={{ display: "flex", gap: 8 }}>
-                  {paidBonusQuarters.includes(bonusPool?.quarter || "Q1 2026") ? (
-                    <button onClick={() => handleUndoBonusPayout(bonusPool?.quarter || "Q1 2026")} style={{ padding: "8px 16px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Undo Payment</button>
+                  {paidBonusQuarters.includes(computedPoolData.quarter) ? (
+                    <button onClick={() => handleUndoBonusPayout(computedPoolData.quarter)} style={{ padding: "8px 16px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textSecondary, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Undo Payment</button>
                   ) : (
-                    <button onClick={() => handleMarkBonusPaid(bonusPool?.quarter || "Q1 2026")} style={{ padding: "8px 16px", background: COLORS.gradient1, border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Pay {bonusPool?.quarter || "Q1"} Bonus</button>
+                    <button onClick={() => handleMarkBonusPaid(computedPoolData.quarter)} style={{ padding: "8px 16px", background: COLORS.gradient1, border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Pay {computedPoolData.quarter} Bonus</button>
                   )}
                 </div>
               }>
                 <DataTable columns={[
-                  { key: "quarter", label: "Quarter" },
+                  { key: "quarter", label: "Month" },
                   { key: "totalPool", label: "Pool Size", render: (v: unknown) => formatMoney(Number(v)) },
                   { key: "eligibleReps", label: "Eligible Reps" },
                   { key: "perRepPayout", label: "Per Rep", render: (v: unknown) => <span style={{ color: COLORS.neonPurple, fontWeight: 700 }}>{formatMoney(Number(v))}</span> },
                   { key: "quarter", label: "Status", render: (v: unknown) => <Badge status={paidBonusQuarters.includes(String(v)) ? "paid" : "active"} /> },
                   { key: "quarter", label: "", render: (v: unknown) => {
-                    const quarter = String(v);
-                    const poolData = quarter === bonusPool?.quarter ? bonusPool : previousPools.find(p => p.quarter === quarter);
+                    const period = String(v);
+                    const poolData = period === computedPoolData.quarter ? computedPoolData : previousPools.find(p => p.quarter === period);
                     return poolData ? (
                       <button onClick={() => handleShowBonusDetails(poolData)} style={{ padding: "6px 12px", background: COLORS.gradient2, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Details</button>
                     ) : null;
                   }},
-                ]} data={[{ quarter: bonusPool?.quarter || "Q1 2026", totalPool: bonusPool?.total_pool_cents || 0, eligibleReps: eligibleReps.length, perRepPayout: bonusPool?.projected_per_rep_cents || 0 }, ...previousPools.map(p => ({ quarter: p.quarter, totalPool: p.total_pool_cents, eligibleReps: p.eligible_rep_ids?.length || 0, perRepPayout: p.projected_per_rep_cents }))]} />
+                ]} data={[{ quarter: computedPoolData.quarter, totalPool: computedPoolData.total_pool_cents, eligibleReps: eligibleReps.length, perRepPayout: computedPoolData.projected_per_rep_cents }, ...previousPools.map(p => ({ quarter: p.quarter, totalPool: p.total_pool_cents, eligibleReps: p.eligible_rep_ids?.length || 0, perRepPayout: p.projected_per_rep_cents }))]} />
               </Card>
             </>
           )}

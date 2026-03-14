@@ -248,6 +248,57 @@ export default function SettingsPage() {
   const [quotaRepNames, setQuotaRepNames] = useState<Record<string, string>>({});
   const [quotaZoneNames, setQuotaZoneNames] = useState<Record<string, string>>({});
 
+  // Bonus Pool tab state
+  const BONUS_POOL_KEYS = [
+    { key: "pool_outbound_basic", label: "Outbound Basic", desc: "Per outbound basic signup", icon: "📤", default: 500 },
+    { key: "pool_outbound_premium", label: "Outbound Premium", desc: "Per outbound premium signup", icon: "📤", default: 1000 },
+    { key: "pool_inbound_basic", label: "Inbound Basic", desc: "Per inbound basic signup", icon: "📥", default: 100 },
+    { key: "pool_inbound_premium", label: "Inbound Premium", desc: "Per inbound premium signup", icon: "📥", default: 200 },
+    { key: "pool_ad_spend_per_100", label: "Ad Spend (per $100)", desc: "Per $100 in ad spend sold", icon: "📊", default: 500 },
+    { key: "pool_repeat_monthly", label: "Repeat Customer", desc: "Monthly rate per active repeat customer", icon: "🔄", default: 50 },
+  ] as const;
+  const [bonusPoolConfig, setBonusPoolConfig] = useState<Record<string, number>>({});
+  const [bonusPoolEditing, setBonusPoolEditing] = useState(false);
+  const [bonusPoolSaving, setBonusPoolSaving] = useState(false);
+  const [bonusPoolEdits, setBonusPoolEdits] = useState<Record<string, number>>({});
+
+  const fetchBonusPoolData = useCallback(async () => {
+    const { data } = await supabaseBrowser.from("sales_config").select("*").eq("category", "bonus_pool");
+    const loaded: Record<string, number> = {};
+    if (data) data.forEach(row => { loaded[row.key] = row.value_cents || 0; });
+    setBonusPoolConfig(loaded);
+  }, []);
+
+  const getBonusPoolVal = useCallback((key: string, defaultVal: number): number => {
+    if (bonusPoolEdits[key] !== undefined) return bonusPoolEdits[key];
+    if (bonusPoolConfig[key] !== undefined) return bonusPoolConfig[key];
+    return defaultVal;
+  }, [bonusPoolEdits, bonusPoolConfig]);
+
+  const handleSaveBonusPool = useCallback(async () => {
+    setBonusPoolSaving(true);
+    try {
+      const merged: Record<string, number> = {};
+      BONUS_POOL_KEYS.forEach(item => { merged[item.key] = getBonusPoolVal(item.key, item.default); });
+      for (const [key, value] of Object.entries(merged)) {
+        const { data: existing } = await supabaseBrowser.from("sales_config").select("id").eq("category", "bonus_pool").eq("key", key).maybeSingle();
+        if (existing) {
+          await supabaseBrowser.from("sales_config").update({ value_cents: value }).eq("id", existing.id);
+        } else {
+          await supabaseBrowser.from("sales_config").insert({ category: "bonus_pool", key, value_cents: value, value_int: null });
+        }
+      }
+      await logAudit({ tab: AUDIT_TABS.SETTINGS, targetType: "bonus_pool", action: "Updated bonus pool rates", details: JSON.stringify(merged), staffId: currentStaffId });
+      setBonusPoolEditing(false);
+      setBonusPoolEdits({});
+      await fetchBonusPoolData();
+    } catch (e) {
+      alert("Error saving: " + (e instanceof Error ? e.message : "Unknown"));
+    } finally {
+      setBonusPoolSaving(false);
+    }
+  }, [getBonusPoolVal, currentStaffId, fetchBonusPoolData]);
+
   const fetchQuotaData = useCallback(async () => {
     const [zonesRes, configRes, overridesRes, repsRes] = await Promise.all([
       supabaseBrowser.from("sales_zones").select("id, name, goal, states").order("name"),
@@ -277,10 +328,6 @@ export default function SettingsPage() {
   const handleSaveQuotas = useCallback(async () => {
     setQuotaSaving(true);
     try {
-      // Save zone goals
-      for (const [zoneId, goal] of Object.entries(quotaZoneEdits)) {
-        await supabaseBrowser.from("sales_zones").update({ goal }).eq("id", zoneId);
-      }
       // Save config (daily quotas stored as hundredths in value_cents, others as value_int)
       const dailyKeys = ["individual_daily", "team_daily", "bonus_eligibility_daily", "rep_quota_daily", "rep_bonus_daily", "lead_quota_daily", "lead_bonus_daily", "training_quota_daily", "training_bonus_daily"];
       for (const [key, value] of Object.entries(quotaConfigEdits)) {
@@ -302,9 +349,8 @@ export default function SettingsPage() {
           await supabaseBrowser.from("sales_config").insert({ category: "commission", key, value_cents: value, value_int: null });
         }
       }
-      await logAudit({ tab: AUDIT_TABS.SETTINGS, targetType: "quota", action: "Updated quota settings", details: JSON.stringify({ zones: quotaZoneEdits, quotas: quotaConfigEdits, rates: quotaRateEdits }), staffId: currentStaffId });
+      await logAudit({ tab: AUDIT_TABS.SETTINGS, targetType: "quota", action: "Updated quota settings", details: JSON.stringify({ quotas: quotaConfigEdits, rates: quotaRateEdits }), staffId: currentStaffId });
       setQuotaEditing(false);
-      setQuotaZoneEdits({});
       setQuotaConfigEdits({});
       setQuotaRateEdits({});
       await fetchQuotaData();
@@ -313,7 +359,7 @@ export default function SettingsPage() {
     } finally {
       setQuotaSaving(false);
     }
-  }, [quotaZoneEdits, quotaConfigEdits, quotaRateEdits, quotaSalesConfig, currentStaffId, fetchQuotaData]);
+  }, [quotaConfigEdits, quotaRateEdits, quotaSalesConfig, currentStaffId, fetchQuotaData]);
 
   const handleDeleteOverride = useCallback(async (id: string) => {
     if (!confirm("Delete this quota override?")) return;
@@ -409,6 +455,7 @@ export default function SettingsPage() {
   }, [newTagCategory]);
 
   useEffect(() => { if (settingsSection === "tags") fetchTags(); }, [settingsSection, fetchTags]);
+  useEffect(() => { if (settingsSection === "bonus_pool") fetchBonusPoolData(); }, [settingsSection, fetchBonusPoolData]);
 
   const addTag = async () => {
     const trimmed = newTagName.trim().toLowerCase();
@@ -728,6 +775,7 @@ export default function SettingsPage() {
           { key: "tags", label: "Tag Management" },
           { key: "quotas", label: "Quotas" },
           { key: "influencer_tiers", label: "Influencer Tiers" },
+          { key: "bonus_pool", label: "Bonus Pool" },
           { key: "maintenance", label: "Maintenance" },
         ].map(section => (
           <button
@@ -2385,70 +2433,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Card 1: Division Signup Quotas */}
-          <Card title="DIVISION SIGNUP QUOTAS">
-            <div style={{ padding: 16, background: "rgba(0,212,255,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(0,212,255,0.2)" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <span style={{ fontSize: 20 }}>🗺️</span>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.5 }}>
-                  Set <strong>daily</strong> signup quotas per division. Weekly, monthly, quarterly, and yearly are automatically calculated. These goals appear on the Executive dashboard and Sales page.
-                </div>
-              </div>
-            </div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Division</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>States</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Daily</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Weekly</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Quarterly</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: COLORS.textSecondary, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Yearly</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quotaZones.map(z => {
-                  const daily = quotaZoneEdits[z.id] !== undefined ? quotaZoneEdits[z.id] : z.goal;
-                  return (
-                    <tr key={z.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
-                      <td style={{ padding: "12px 12px", fontWeight: 700, fontSize: 14 }}>{z.name}</td>
-                      <td style={{ padding: "12px 12px", color: COLORS.textSecondary, fontSize: 11 }}>{(z.states || []).join(", ")}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px" }}>
-                        {quotaEditing ? (
-                          <input type="number" value={daily} onChange={e => setQuotaZoneEdits(prev => ({ ...prev, [z.id]: parseInt(e.target.value) || 0 }))} style={{ width: 70, padding: "6px 10px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.darkBg, color: "#fff", textAlign: "right", fontSize: 14, fontWeight: 700 }} />
-                        ) : (
-                          <span style={{ fontSize: 16, fontWeight: 800, color: COLORS.neonBlue }}>{daily}</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 7).toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 30).toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 90).toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", color: "rgba(255,255,255,0.6)" }}>{(daily * 365).toLocaleString()}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                {(() => {
-                  const totalDaily = quotaZones.reduce((s, z) => s + (quotaZoneEdits[z.id] !== undefined ? quotaZoneEdits[z.id] : z.goal), 0);
-                  return (
-                    <tr style={{ borderTop: "2px solid " + COLORS.cardBorder, background: "rgba(255,255,255,0.03)" }}>
-                      <td style={{ padding: "12px 12px", fontWeight: 800 }}>Total</td>
-                      <td style={{ padding: "12px 12px", color: COLORS.textSecondary, fontSize: 11 }}>{quotaZones.reduce((s, z) => s + (z.states || []).length, 0)} states</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 800, fontSize: 16, color: COLORS.neonBlue }}>{totalDaily}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 7).toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 30).toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 90).toLocaleString()}</td>
-                      <td style={{ textAlign: "right", padding: "12px 12px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>{(totalDaily * 365).toLocaleString()}</td>
-                    </tr>
-                  );
-                })()}
-              </tfoot>
-            </table>
-          </Card>
-
-          {/* Card 2: Sales Rep Quotas */}
+          {/* Sales Rep Quotas */}
           <Card title="SALES REP QUOTAS (DEFAULTS)">
             <div style={{ padding: 16, background: "rgba(57,255,20,0.08)", borderRadius: 12, marginBottom: 20, border: "1px solid rgba(57,255,20,0.2)" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -2601,6 +2586,92 @@ export default function SettingsPage() {
                 </tbody>
               </table>
             )}
+          </Card>
+        </div>
+      )}
+
+      {/* ==================== BONUS POOL ==================== */}
+      {settingsSection === "bonus_pool" && (
+        <div style={{ display: "grid", gap: 24 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            {bonusPoolEditing ? (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setBonusPoolEditing(false); setBonusPoolEdits({}); }} style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid " + COLORS.cardBorder, background: "transparent", color: COLORS.textSecondary, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                <button onClick={handleSaveBonusPool} disabled={bonusPoolSaving} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: COLORS.neonGreen, color: "#000", cursor: "pointer", fontSize: 13, fontWeight: 700, opacity: bonusPoolSaving ? 0.6 : 1 }}>{bonusPoolSaving ? "Saving..." : "Save Changes"}</button>
+              </div>
+            ) : (
+              <button onClick={() => setBonusPoolEditing(true)} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: COLORS.gradient1, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Edit Bonus Pool</button>
+            )}
+          </div>
+
+          <Card title="SIGNUP POOL CONTRIBUTIONS">
+            <div style={{ padding: "12px 16px", background: "rgba(0,212,255,0.08)", borderRadius: 10, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>💰</span>
+              <span style={{ fontSize: 13, color: COLORS.textSecondary }}>Set how much each signup type contributes to the quarterly bonus pool. These rates are used when recording sales on the Sales page.</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+              {BONUS_POOL_KEYS.slice(0, 4).map(item => {
+                const val = getBonusPoolVal(item.key, item.default);
+                const displayVal = val / 100;
+                return (
+                  <div key={item.key} style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 16 }}>{item.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{item.desc}</div>
+                      </div>
+                    </div>
+                    {bonusPoolEditing ? (
+                      <input type="number" step="0.01" min="0" value={displayVal} onChange={e => setBonusPoolEdits(prev => ({ ...prev, [item.key]: Math.round(parseFloat(e.target.value || "0") * 100) }))} style={{ width: "100%", padding: "10px 14px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonYellow, fontSize: 28, fontWeight: 900, textAlign: "center" }} />
+                    ) : (
+                      <div style={{ fontSize: 32, fontWeight: 900, color: COLORS.neonYellow, textAlign: "center" }}>${displayVal % 1 === 0 ? displayVal.toFixed(0) : displayVal.toFixed(2)}</div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      {[{ label: "Monthly (×30)", mult: 30 }, { label: "Quarterly (×90)", mult: 90 }].map(p => (
+                        <div key={p.label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 9, color: COLORS.textSecondary }}>{p.label}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>${(displayVal * p.mult).toFixed(0)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card title="ADDITIONAL POOL CONTRIBUTIONS">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+              {BONUS_POOL_KEYS.slice(4).map(item => {
+                const val = getBonusPoolVal(item.key, item.default);
+                const displayVal = val / 100;
+                return (
+                  <div key={item.key} style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 16 }}>{item.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{item.desc}</div>
+                      </div>
+                    </div>
+                    {bonusPoolEditing ? (
+                      <input type="number" step="0.01" min="0" value={displayVal} onChange={e => setBonusPoolEdits(prev => ({ ...prev, [item.key]: Math.round(parseFloat(e.target.value || "0") * 100) }))} style={{ width: "100%", padding: "10px 14px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonOrange, fontSize: 28, fontWeight: 900, textAlign: "center" }} />
+                    ) : (
+                      <div style={{ fontSize: 32, fontWeight: 900, color: COLORS.neonOrange, textAlign: "center" }}>${displayVal % 1 === 0 ? displayVal.toFixed(0) : displayVal.toFixed(2)}</div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      {[{ label: "Monthly (×30)", mult: 30 }, { label: "Quarterly (×90)", mult: 90 }].map(p => (
+                        <div key={p.label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 9, color: COLORS.textSecondary }}>{p.label}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>${(displayVal * p.mult).toFixed(0)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
         </div>
       )}

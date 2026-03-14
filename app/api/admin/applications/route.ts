@@ -103,7 +103,7 @@ export async function PATCH(req: NextRequest) {
         hire_date: new Date().toISOString().split("T")[0],
         status: "active",
         avatar,
-        individual_quota: assignmentData?.individual_quota || 60,
+        individual_quota: null,
       });
       if (repErr) {
         console.error("[admin/applications] sales_reps insert error:", repErr.message);

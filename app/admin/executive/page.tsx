@@ -33,7 +33,7 @@ function TotalRevenueCard({ data }: { data: Record<string, number> }) {
   );
 }
 
-interface ZoneData { zone: string; count: number; target: number; color: string; salesCents: number; states: { name: string; abbr: string; count: number }[] }
+interface ZoneData { zone: string; count: number; target: number; color: string; salesCents: number; signups: number; states: { name: string; abbr: string; count: number }[] }
 
 function ZoneCard({ zone }: { zone: ZoneData }) {
   const [hovered, setHovered] = useState(false);
@@ -249,24 +249,56 @@ export default function ExecutivePage() {
 
       // ---- BUSINESSES BY DIVISION ----
       const { data: businesses } = await supabaseBrowser.from("business").select("id, state, created_at");
-      // Fetch sales $ per division: sales_signups → zone_id → sales_zones.name → divisionDef
-      const { data: salesZones } = await supabaseBrowser.from("sales_zones").select("id, name, goal");
+      // Fetch sales data + compute division targets from reps
+      const { data: salesZones } = await supabaseBrowser.from("sales_zones").select("id, name, division_id");
       const { data: salesSignups } = await supabaseBrowser.from("sales_signups").select("zone_id, commission_cents, ad_spend_cents");
+      const { data: salesReps } = await supabaseBrowser.from("sales_reps").select("role, zone_id, status, hire_date");
+      const { data: salesConfig } = await supabaseBrowser.from("sales_config").select("key, value_cents").in("key", ["rep_quota_daily", "lead_quota_daily", "training_quota_daily"]);
       const salesByDivision: Record<string, number> = {};
       const goalByDivision: Record<string, number> = {};
-      if (salesSignups && salesZones) {
+      const signupsByDivision: Record<string, number> = {};
+
+      // Build per-division daily quota from active field reps
+      const FIELD_ROLES = ["sales_rep", "team_lead", "in_training"];
+      const configMap: Record<string, number> = {};
+      if (salesConfig) salesConfig.forEach(c => { configMap[c.key] = (c.value_cents || 0) / 100; });
+      const getRepDaily = (role: string) => {
+        if (role === "sales_rep") return configMap["rep_quota_daily"] || 2;
+        if (role === "team_lead") return configMap["lead_quota_daily"] || 2;
+        if (role === "in_training") return configMap["training_quota_daily"] || 1;
+        return 0;
+      };
+
+      if (salesZones) {
         const zoneNameMap: Record<string, string> = {};
-        salesZones.forEach((sz: { id: string; name: string; goal: number | null }) => { zoneNameMap[sz.id] = sz.name; if (sz.goal) goalByDivision[sz.name] = sz.goal; });
-        salesSignups.forEach((s: { zone_id: string | null; commission_cents: number | null; ad_spend_cents: number | null }) => {
-          const divName = s.zone_id ? zoneNameMap[s.zone_id] || divisionDefs[0].name : divisionDefs[0].name;
-          salesByDivision[divName] = (salesByDivision[divName] || 0) + (s.commission_cents || 0) + (s.ad_spend_cents || 0);
-        });
+        salesZones.forEach(sz => { zoneNameMap[sz.id] = sz.name; });
+
+        // Compute division daily quota from reps
+        if (salesReps) {
+          const activeFieldReps = salesReps.filter(r => r.status === "active" && FIELD_ROLES.includes(r.role));
+          activeFieldReps.forEach(rep => {
+            if (rep.zone_id) {
+              const divName = zoneNameMap[rep.zone_id];
+              if (divName) {
+                goalByDivision[divName] = (goalByDivision[divName] || 0) + getRepDaily(rep.role);
+              }
+            }
+          });
+        }
+
+        if (salesSignups) {
+          salesSignups.forEach((s: { zone_id: string | null; commission_cents: number | null; ad_spend_cents: number | null }) => {
+            const divName = s.zone_id ? zoneNameMap[s.zone_id] || divisionDefs[0].name : divisionDefs[0].name;
+            salesByDivision[divName] = (salesByDivision[divName] || 0) + (s.commission_cents || 0) + (s.ad_spend_cents || 0);
+            signupsByDivision[divName] = (signupsByDivision[divName] || 0) + 1;
+          });
+        }
       }
       if (businesses && businesses.length > 0) {
         const dm: Record<string,{count:number;states:Record<string,number>}> = {};
         divisionDefs.forEach(d => { dm[d.name] = {count:0,states:{}}; });
         businesses.forEach(b => { const d = stateToDivision[b.state]||divisionDefs[0].name; if(!dm[d]) dm[d]={count:0,states:{}}; dm[d].count++; if(b.state) dm[d].states[b.state]=(dm[d].states[b.state]||0)+1; });
-        setBusinessesByZone(divisionDefs.map(def=>({zone:def.name,count:dm[def.name]?.count||0,target:goalByDivision[def.name]||def.goal,color:def.color,salesCents:salesByDivision[def.name]||0,states:Object.entries(dm[def.name]?.states||{}).map(([a,c])=>({abbr:a,name:stateNames[a]||a,count:c}))})));
+        setBusinessesByZone(divisionDefs.map(def=>({zone:def.name,count:dm[def.name]?.count||0,target:goalByDivision[def.name]||0,color:def.color,salesCents:salesByDivision[def.name]||0,signups:signupsByDivision[def.name]||0,states:Object.entries(dm[def.name]?.states||{}).map(([a,c])=>({abbr:a,name:stateNames[a]||a,count:c}))})));
         const bm: Record<string,number> = {};
         businesses.forEach(b => { const m = new Date(b.created_at).toLocaleDateString("en-US",{month:"short"}); bm[m]=(bm[m]||0)+1; });
         setNewBusinessesByPeriod(p => ({...p, month: Object.entries(bm).slice(-6).map(([l,c])=>({label:l,count:c}))}));
@@ -596,19 +628,19 @@ export default function ExecutivePage() {
                 </thead>
                 <tbody>
                   {businessesByZone.map((z,i)=>{
-                    const pct=z.target>0?(z.count/z.target)*100:0;
+                    const pct=z.target>0?(z.signups/z.target)*100:0;
                     return (
                       <tr key={i} style={{borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
                         <td style={{padding:"10px 6px",fontWeight:700,color:z.color,fontSize:12}}>{z.zone}</td>
                         <td style={{textAlign:"right",padding:"10px 6px",color:"rgba(255,255,255,0.6)"}}>{z.target}</td>
-                        <td style={{textAlign:"right",padding:"10px 6px",fontWeight:700,color:"#fff"}}>{z.count}</td>
+                        <td style={{textAlign:"right",padding:"10px 6px",fontWeight:700,color:"#fff"}}>{z.signups}</td>
                         <td style={{textAlign:"right",padding:"10px 6px",fontWeight:800,fontSize:12,color:pct>=100?COLORS.neonGreen:pct>=50?COLORS.neonYellow:pct>0?"#ff6b6b":"rgba(255,255,255,0.3)"}}>{pct.toFixed(1)}%</td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  {(()=>{const tq=businessesByZone.reduce((s,z)=>s+z.target,0);const tc=businessesByZone.reduce((s,z)=>s+z.count,0);const tp=tq>0?(tc/tq)*100:0;return(
+                  {(()=>{const tq=businessesByZone.reduce((s,z)=>s+z.target,0);const tc=businessesByZone.reduce((s,z)=>s+z.signups,0);const tp=tq>0?(tc/tq)*100:0;return(
                     <tr style={{borderTop:"2px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.05)",borderRadius:8}}>
                       <td style={{padding:"14px 6px",fontWeight:800,fontSize:13,color:"#fff",borderBottomLeftRadius:8}}>Total</td>
                       <td style={{textAlign:"right",padding:"14px 6px",fontWeight:800,fontSize:13,color:"#fff"}}>{tq}</td>

@@ -14,7 +14,7 @@ import {
   DEFAULT_VISIT_THRESHOLDS,
   DEFAULT_CASHBACK_BPS,
 } from "@/lib/platformSettings";
-import { validateImageDimensions } from "@/lib/imageValidation";
+import { validateImageDimensions, validatePortraitOrientation } from "@/lib/imageValidation";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { EarningsBannerAnim, ReceiptAnim, CashOutAnim, HeartAnim, TabSwitchAnim, PayoutTiersAnim, LevelUpAnim, MediaAnim, GameHistoryAnim, AnalyticsAnim, ProfileAnim, SupportAnim } from "@/components/TourIllustrations";
@@ -757,6 +757,7 @@ export default function LetsGoProfile() {
   const [friendMenuOpen, setFriendMenuOpen] = useState<string | null>(null);
   const [expUploadOpen, setExpUploadOpen] = useState(false);
   const [expFile, setExpFile] = useState<File | null>(null);
+  const [expFileDims, setExpFileDims] = useState<{ width: number; height: number } | null>(null);
   const [expCaption, setExpCaption] = useState("");
   const [expBizSearch, setExpBizSearch] = useState("");
   const [expBizResults, setExpBizResults] = useState<{id:string;name:string}[]>([]);
@@ -1255,10 +1256,6 @@ export default function LetsGoProfile() {
     const maxSize = expFile.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
     const maxLabel = expFile.type.startsWith("video/") ? "50MB" : "10MB";
     if (expFile.size > maxSize) { alert(`File too large. Max ${maxLabel} for ${expFile.type.startsWith("video/") ? "videos" : "images"}.`); return; }
-    if (expFile.type.startsWith("image/")) {
-      const dimResult = await validateImageDimensions(expFile, 1080);
-      if (!dimResult.valid) { alert(`Image must be at least 1080px wide. Your image is ${dimResult.width}x${dimResult.height}px.`); return; }
-    }
     setExpUploading(true);
     const ext = expFile.name.split(".").pop() || "jpg";
     const safeName = expFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -1286,6 +1283,7 @@ export default function LetsGoProfile() {
       }
       setExpUploadOpen(false);
       setExpFile(null);
+      setExpFileDims(null);
       setExpCaption("");
       setExpSelectedBiz(null);
       setExpBizSearch("");
@@ -2297,10 +2295,38 @@ export default function LetsGoProfile() {
             {expUploadOpen && (
               <div style={{ marginBottom: 14, padding: "18px 20px", borderRadius: 4, background: `rgba(${NEON.orangeRGB},0.03)`, border: `1px solid rgba(${NEON.orangeRGB},0.12)`, animation: "fadeIn 0.2s ease" }}>
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 12 }}>Upload Photo or Video</div>
-                <input ref={expFileRef} type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) setExpFile(file); }} />
-                <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-                  <button onClick={() => expFileRef.current?.click()} style={{ padding: "10px 18px", borderRadius: 3, border: `1px solid rgba(${NEON.orangeRGB},0.25)`, background: "rgba(255,255,255,0.03)", color: NEON.orange, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", flex: 1, textAlign: "left" }}>{expFile ? expFile.name : "Choose file..."}</button>
-                </div>
+                <input ref={expFileRef} type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.type.startsWith("image/")) {
+                    const orientResult = await validatePortraitOrientation(file);
+                    if (!orientResult.valid) { alert(`Image rejected — landscape orientation is not allowed.\n\nYour image: ${orientResult.width}×${orientResult.height}px (${(file.size / 1024).toFixed(0)}KB) — landscape\nRequired: portrait orientation (height must be ≥ width)\nRecommended: 1080×1920 (9:16 ratio)\n\nTip: Crop your photo to portrait orientation before uploading.`); e.target.value = ""; return; }
+                    const dimResult = await validateImageDimensions(file, 1080);
+                    if (!dimResult.valid) { alert(`Image rejected — does not meet minimum requirements.\n\nYour image: ${dimResult.width}×${dimResult.height}px (${(file.size / 1024).toFixed(0)}KB)\nRequired: at least 1080px wide, portrait orientation (9:16 recommended)\n\nTip: Use a photo editor to resize or crop your image to at least 1080×1920 before uploading.`); e.target.value = ""; return; }
+                    setExpFileDims({ width: dimResult.width, height: dimResult.height });
+                  } else {
+                    setExpFileDims(null);
+                  }
+                  setExpFile(file);
+                }} />
+                {expFile ? (
+                  <div style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "center" }}>
+                    {expFile.type.startsWith("image/") && (
+                      <img src={URL.createObjectURL(expFile)} alt="Preview" style={{ width: 60, height: 90, borderRadius: 4, objectFit: "cover", border: `1px solid rgba(${NEON.orangeRGB},0.2)`, flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: NEON.orange, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{expFile.name}</div>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                        {expFileDims ? `${expFileDims.width}×${expFileDims.height}` : "Video"} &middot; {expFile.size < 1024 * 1024 ? `${(expFile.size / 1024).toFixed(0)}KB` : `${(expFile.size / (1024 * 1024)).toFixed(1)}MB`}
+                      </div>
+                      <button onClick={() => expFileRef.current?.click()} style={{ marginTop: 4, padding: "4px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.orangeRGB},0.2)`, background: "transparent", color: "rgba(255,255,255,0.3)", fontSize: 9, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Change</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                    <button onClick={() => expFileRef.current?.click()} style={{ padding: "10px 18px", borderRadius: 3, border: `1px solid rgba(${NEON.orangeRGB},0.25)`, background: "rgba(255,255,255,0.03)", color: NEON.orange, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", flex: 1, textAlign: "left" }}>Choose file...</button>
+                  </div>
+                )}
                 {/* Business picker */}
                 <div style={{ position: "relative", marginBottom: 12 }}>
                   {expSelectedBiz ? (
@@ -2326,7 +2352,7 @@ export default function LetsGoProfile() {
                 </div>
                 <input type="text" placeholder="Caption (optional)..." value={expCaption} onChange={(e) => setExpCaption(e.target.value)} style={{ width: "100%", padding: "9px 14px", borderRadius: 3, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 12, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button onClick={() => { setExpUploadOpen(false); setExpFile(null); setExpCaption(""); setExpSelectedBiz(null); setExpBizSearch(""); }} style={{ padding: "8px 16px", borderRadius: 3, border: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.1em" }}>Cancel</button>
+                  <button onClick={() => { setExpUploadOpen(false); setExpFile(null); setExpFileDims(null); setExpCaption(""); setExpSelectedBiz(null); setExpBizSearch(""); }} style={{ padding: "8px 16px", borderRadius: 3, border: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.1em" }}>Cancel</button>
                   <button onClick={handleExperienceUpload} disabled={expUploading || !expFile || !expSelectedBiz} style={{ padding: "8px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.orangeRGB},0.4)`, background: `rgba(${NEON.orangeRGB},0.1)`, color: NEON.orange, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.1em", opacity: (expUploading || !expFile || !expSelectedBiz) ? 0.4 : 1 }}>{expUploading ? "Uploading..." : "Upload"}</button>
                 </div>
               </div>

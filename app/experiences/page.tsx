@@ -8,6 +8,7 @@ import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { SwipeVerticalAnim, TabSwitchAnim, MediaAnim, HeartAnim, CommentBubbleAnim, ShareSendAnim, MuteVolumeAnim, PayoutTiersAnim } from "@/components/TourIllustrations";
 import { DEFAULT_VISIT_THRESHOLDS, DEFAULT_CASHBACK_BPS, getVisitRangeLabel } from "@/lib/platformSettings";
+import { validatePortraitOrientation, validateImageDimensions } from "@/lib/imageValidation";
 
 // ═══════════════════════════════════════════════════
 // LETSGO EXPERIENCES — V3 TikTok-Style Vertical Feed
@@ -918,6 +919,7 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
   const [selectedBiz, setSelectedBiz] = useState<ActiveBusiness | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFileDims, setUploadFileDims] = useState<{ width: number; height: number } | null>(null);
   const [caption, setCaption] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<TagData[]>([]);
@@ -1361,7 +1363,38 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
               type="file"
               accept="image/*,video/*"
               style={{ display: "none" }}
-              onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+              onChange={async (e) => {
+                const file = e.target.files?.[0] ?? null;
+                if (file && !file.type.startsWith("video/")) {
+                  const result = await validatePortraitOrientation(file);
+                  if (!result.valid) {
+                    alert(
+                      `Image rejected — landscape orientation is not allowed.\n\n` +
+                      `Your image: ${result.width}×${result.height}px (${(file.size / 1024).toFixed(0)}KB) — landscape\n` +
+                      `Required: portrait orientation (height must be ≥ width)\n` +
+                      `Recommended: 1080×1920 (9:16 ratio)\n\n` +
+                      `Tip: Crop your photo to portrait orientation before uploading.`
+                    );
+                    e.target.value = "";
+                    return;
+                  }
+                  const dimCheck = await validateImageDimensions(file, 1080);
+                  if (!dimCheck.valid) {
+                    alert(
+                      `Image rejected — does not meet minimum requirements.\n\n` +
+                      `Your image: ${dimCheck.width}×${dimCheck.height}px (${(file.size / 1024).toFixed(0)}KB)\n` +
+                      `Required: at least 1080px wide, portrait orientation (9:16 recommended)\n\n` +
+                      `Tip: Use a photo editor to resize or crop your image to at least 1080×1920 before uploading.`
+                    );
+                    e.target.value = "";
+                    return;
+                  }
+                  setUploadFileDims({ width: dimCheck.width, height: dimCheck.height });
+                } else {
+                  setUploadFileDims(null);
+                }
+                setUploadFile(file);
+              }}
             />
             <button
               onClick={() => fileRef.current?.click()}
@@ -1381,23 +1414,18 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
             >
               {uploadFile ? (
                 <>
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      background: `rgba(${NEON_RGB},0.15)`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill={NEON} stroke="none">
-                      <path d="M5 3l14 9-14 9V3z" />
-                    </svg>
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: NEON, fontFamily: "'DM Sans'" }}>
+                  {uploadFile.type.startsWith("image/") ? (
+                    <img src={URL.createObjectURL(uploadFile)} alt="Preview" style={{ width: 80, height: 120, borderRadius: 10, objectFit: "cover", border: `1px solid rgba(${NEON_RGB},0.3)` }} />
+                  ) : (
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: `rgba(${NEON_RGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill={NEON} stroke="none"><path d="M5 3l14 9-14 9V3z" /></svg>
+                    </div>
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 600, color: NEON, fontFamily: "'DM Sans'", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {uploadFile.name}
+                  </span>
+                  <span style={{ fontSize: 10, color: `rgba(${NEON_RGB},0.6)`, fontFamily: "'DM Sans'" }}>
+                    {uploadFileDims ? `${uploadFileDims.width}×${uploadFileDims.height}` : "Video"} &middot; {uploadFile.size < 1024 * 1024 ? `${(uploadFile.size / 1024).toFixed(0)}KB` : `${(uploadFile.size / (1024 * 1024)).toFixed(1)}MB`}
                   </span>
                   <span style={{ fontSize: 10, color: COLORS.textSecondary, fontFamily: "'DM Sans'" }}>
                     Tap to change
