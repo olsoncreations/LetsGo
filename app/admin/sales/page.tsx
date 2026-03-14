@@ -785,8 +785,12 @@ export default function SalesPage() {
       repeat_customers_cents: 0,
       projected_per_rep_cents: perRep,
       eligible_rep_ids: eligibleReps.map(r => r.id),
+      id: "current",
       quarter: `${currentMonthName} ${currentYear}`,
+      quarter_start: `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`,
+      quarter_end: `${currentYear}-${String(currentMonth).padStart(2, "0")}-${new Date(currentYear, currentMonth, 0).getDate()}`,
       status: "active",
+      paid_at: null,
     };
   }, [monthSignups, inboundSignups, currentYear, currentMonth, currentMonthName, getConfig, eligibleReps]);
 
