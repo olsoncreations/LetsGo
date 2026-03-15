@@ -64,10 +64,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
   if (existing && existing.removed_at) {
     // Re-add by clearing removed_at
-    await supabaseServer
+    const { error: rejoinErr } = await supabaseServer
       .from("group_game_players")
       .update({ removed_at: null })
       .eq("id", existing.id);
+
+    if (rejoinErr) {
+      console.error("[group-game-players] Rejoin error:", rejoinErr.message);
+      return NextResponse.json({ error: "Failed to rejoin game" }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true, rejoined: true });
   }

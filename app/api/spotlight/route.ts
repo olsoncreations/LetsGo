@@ -124,7 +124,9 @@ export async function GET(request: Request): Promise<Response> {
         .from("business_ad_campaigns")
         .update({ impressions: (campaign.impressions ?? 0) + 1 })
         .eq("id", campaign.id)
-        .then();
+        .then(({ error: impErr }) => {
+          if (impErr) console.error("[spotlight] impression increment error:", impErr.message);
+        });
 
       const config = (biz.config ?? {}) as Record<string, unknown>;
       // Use config.businessType (user-provided) → category_main fallback

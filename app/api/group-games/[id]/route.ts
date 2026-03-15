@@ -68,7 +68,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     .from("group_games")
     .select("*")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (gameErr || !game) {
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
@@ -370,7 +370,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       .from("group_games")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (!game || game.status !== "selection") {
       return NextResponse.json({ error: "Game is not in selection phase" }, { status: 400 });
@@ -401,7 +401,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       })
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
@@ -429,7 +429,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       .from("group_games")
       .select("*")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (!game || game.status !== "voting") {
       return NextResponse.json({ error: "Game is not in voting phase" }, { status: 400 });
@@ -481,7 +481,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
         })
         .eq("id", id)
         .select("*")
-        .single();
+        .maybeSingle();
 
       if (updateErr) {
         return NextResponse.json({ error: updateErr.message }, { status: 500 });
@@ -541,7 +541,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       })
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
@@ -576,7 +576,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       .update(updates)
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 });

@@ -549,3 +549,55 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 }
+
+/**
+ * PATCH /api/receipts
+ * Cancel a pending receipt. Only the submitting user can cancel, and only if status is "pending".
+ * Body: { receiptId: string }
+ */
+export async function PATCH(req: NextRequest) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  if (authErr || !user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const receiptId = String(body.receiptId || "").trim();
+  if (!receiptId) {
+    return NextResponse.json({ error: "receiptId is required" }, { status: 400 });
+  }
+
+  // Fetch the receipt to verify ownership and status
+  const { data: receipt, error: fetchErr } = await supabase
+    .from("receipts")
+    .select("id, user_id, status")
+    .eq("id", receiptId)
+    .maybeSingle();
+
+  if (fetchErr || !receipt) {
+    return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
+  }
+
+  if (receipt.user_id !== user.id) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  if (receipt.status !== "pending") {
+    return NextResponse.json({ error: "Only pending receipts can be cancelled" }, { status: 400 });
+  }
+
+  const { error: updateErr } = await supabase
+    .from("receipts")
+    .update({ status: "cancelled", payout_cents: 0 })
+    .eq("id", receiptId);
+
+  if (updateErr) {
+    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, receiptId });
+}

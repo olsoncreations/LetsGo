@@ -40,11 +40,11 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Fetch businesses for name mapping
     const { data: businesses } = await supabaseServer
       .from("business")
-      .select("id, name, public_business_name");
+      .select("id, business_name, public_business_name");
 
     const bizMap = new Map<string, string>();
-    (businesses ?? []).forEach((b: { id: string; name: string | null; public_business_name: string | null }) => {
-      bizMap.set(b.id, b.public_business_name || b.name || "Unknown Business");
+    (businesses ?? []).forEach((b: { id: string; business_name: string | null; public_business_name: string | null }) => {
+      bizMap.set(b.id, b.public_business_name || b.business_name || "Unknown Business");
     });
 
     // Generate signed URLs for receipt photos
@@ -67,9 +67,9 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     return NextResponse.json({
       receipts: receiptsWithBiz,
-      businesses: (businesses ?? []).map((b: { id: string; name: string | null; public_business_name: string | null }) => ({
+      businesses: (businesses ?? []).map((b: { id: string; business_name: string | null; public_business_name: string | null }) => ({
         id: b.id,
-        name: b.name,
+        name: b.business_name,
         public_business_name: b.public_business_name,
       })),
     });
@@ -106,22 +106,65 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, { status: 400 });
     }
 
-    // If approving, fetch receipt details first so we can credit user balances
+    // Fetch receipt details BEFORE updating status (need original status for balance logic)
     let receiptsToCredit: { id: string; user_id: string; business_id: string; payout_cents: number }[] = [];
-    if (status === "approved") {
+    let receiptsToDebit: { id: string; user_id: string; business_id: string; payout_cents: number }[] = [];
+
+    if (status === "approved" || status === "rejected") {
       const { data: receiptRows } = await supabaseServer
         .from("receipts")
         .select("id, user_id, business_id, payout_cents, status")
         .in("id", ids);
-      // Only credit receipts that aren't already approved (prevent double-credit)
-      receiptsToCredit = (receiptRows ?? [])
-        .filter((r: Record<string, unknown>) => r.status !== "approved")
-        .map((r: Record<string, unknown>) => ({
-          id: r.id as string,
-          user_id: r.user_id as string,
-          business_id: r.business_id as string,
-          payout_cents: (r.payout_cents as number) || 0,
-        }));
+
+      // Block approval for suspended businesses
+      if (status === "approved" && receiptRows && receiptRows.length > 0) {
+        const bizIds = [...new Set(receiptRows.map((r: Record<string, unknown>) => r.business_id as string))];
+        const { data: businesses } = await supabaseServer
+          .from("business")
+          .select("id, business_name, is_active")
+          .in("id", bizIds);
+        const suspended = (businesses ?? []).filter((b: Record<string, unknown>) => !b.is_active);
+        if (suspended.length > 0) {
+          const names = suspended.map((b: Record<string, unknown>) => b.business_name || b.id).join(", ");
+          return NextResponse.json(
+            { error: `Cannot approve receipts for suspended business(es): ${names}. Reactivate them first.` },
+            { status: 403 },
+          );
+        }
+      }
+
+      if (status === "approved") {
+        // Only credit receipts that aren't already approved (prevent double-credit)
+        receiptsToCredit = (receiptRows ?? [])
+          .filter((r: Record<string, unknown>) => r.status !== "approved")
+          .map((r: Record<string, unknown>) => ({
+            id: r.id as string,
+            user_id: r.user_id as string,
+            business_id: r.business_id as string,
+            payout_cents: (r.payout_cents as number) || 0,
+          }));
+      }
+
+      if (status === "rejected") {
+        // Debit receipts that WERE approved (reverse the balance credit)
+        receiptsToDebit = (receiptRows ?? [])
+          .filter((r: Record<string, unknown>) => r.status === "approved")
+          .map((r: Record<string, unknown>) => ({
+            id: r.id as string,
+            user_id: r.user_id as string,
+            business_id: r.business_id as string,
+            payout_cents: (r.payout_cents as number) || 0,
+          }));
+        // All rejected receipts go into receiptsToCredit for notification purposes
+        (receiptRows ?? []).forEach((r: Record<string, unknown>) => {
+          receiptsToCredit.push({
+            id: r.id as string,
+            user_id: r.user_id as string,
+            business_id: r.business_id as string,
+            payout_cents: 0,
+          });
+        });
+      }
     }
 
     const { data, error } = await supabaseServer
@@ -135,28 +178,38 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Reverse balance for previously-approved receipts that are now rejected
+    if (status === "rejected" && receiptsToDebit.length > 0) {
+      const userDebits = new Map<string, number>();
+      for (const r of receiptsToDebit) {
+        userDebits.set(r.user_id, (userDebits.get(r.user_id) || 0) + r.payout_cents);
+      }
+      for (const [userId, debitCents] of userDebits) {
+        const { data: profile } = await supabaseServer
+          .from("profiles")
+          .select("available_balance, lifetime_payout")
+          .eq("id", userId)
+          .maybeSingle();
+        if (profile) {
+          await supabaseServer
+            .from("profiles")
+            .update({
+              available_balance: Math.max(0, (profile.available_balance || 0) - debitCents),
+              lifetime_payout: Math.max(0, (profile.lifetime_payout || 0) - debitCents),
+            })
+            .eq("id", userId);
+        }
+      }
+    }
+
     // Look up business names for notifications
     const bizIds = new Set<string>();
     if (status === "approved") {
       for (const r of receiptsToCredit) bizIds.add(r.business_id);
     }
     if (status === "rejected") {
-      const { data: rejectedReceipts } = await supabaseServer
-        .from("receipts")
-        .select("id, user_id, business_id")
-        .in("id", ids);
-      for (const r of rejectedReceipts ?? []) bizIds.add(String(r.business_id));
-      // Store for notification below
-      (rejectedReceipts ?? []).forEach((r: Record<string, unknown>) => {
-        if (!receiptsToCredit.find(rc => rc.id === r.id)) {
-          receiptsToCredit.push({
-            id: r.id as string,
-            user_id: r.user_id as string,
-            business_id: r.business_id as string,
-            payout_cents: 0,
-          });
-        }
-      });
+      for (const r of receiptsToCredit) bizIds.add(r.business_id);
+      for (const r of receiptsToDebit) bizIds.add(r.business_id);
     }
 
     const bizNameMap = new Map<string, string>();

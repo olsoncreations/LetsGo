@@ -335,7 +335,7 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
           .from("business")
           .select("config, payout_preset")
           .eq("id", businessId)
-          .single();
+          .maybeSingle();
 
         if (!bizError && bizData?.config) {
           const cfg = bizData.config as Record<string, unknown>;

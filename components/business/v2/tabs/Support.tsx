@@ -153,7 +153,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
           .from("business")
           .select("config")
           .eq("id", businessId)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
 
@@ -185,7 +185,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
         .from("business")
         .select("config")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       if (fetchErr) throw fetchErr;
 
@@ -297,7 +297,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (convo) {
         setChatConvoId(convo.id);

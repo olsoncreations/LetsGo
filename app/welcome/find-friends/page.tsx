@@ -110,19 +110,35 @@ export default function FindFriendsPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Error state
+  const [error, setError] = useState<string | null>(null);
+
   // Auth check
   useEffect(() => {
     (async () => {
-      const t = await getToken();
-      if (!t) {
-        router.replace("/welcome");
-        return;
+      try {
+        const t = await getToken();
+        if (!t) {
+          router.replace("/welcome");
+          return;
+        }
+        setToken(t);
+        setContactPickerAvailable(hasContactPicker());
+      } catch (err) {
+        console.error("[find-friends] Auth check failed:", err);
+        setError("Failed to verify your session. Please try signing in again.");
+      } finally {
+        setLoading(false);
       }
-      setToken(t);
-      setContactPickerAvailable(hasContactPicker());
-      setLoading(false);
     })();
   }, [router]);
+
+  // Cleanup copy timer on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
+  }, []);
 
   // ─── Contact Picker ───
 
@@ -130,6 +146,7 @@ export default function FindFriendsPage() {
     if (!token || importing) return;
     setImporting(true);
 
+    setError(null);
     try {
       // Use the Contact Picker API
       const nav = navigator as Navigator & {
@@ -174,8 +191,12 @@ export default function FindFriendsPage() {
       }
       setSelectedInvites(withEmails);
     } catch (err) {
-      // User cancelled or API error
       console.error("[find-friends] Import error:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      // Don't show error for user cancellation
+      if (!message.includes("cancel") && !message.includes("abort")) {
+        setError("Failed to import contacts. Please try again.");
+      }
     }
 
     setImporting(false);
@@ -187,6 +208,7 @@ export default function FindFriendsPage() {
     if (!token || sendingFriendReq) return;
     setSendingFriendReq(userId);
 
+    setError(null);
     try {
       await apiFetch("/api/friends", token, {
         method: "POST",
@@ -195,6 +217,7 @@ export default function FindFriendsPage() {
       setFriendRequestsSent((prev) => new Set([...prev, userId]));
     } catch (err) {
       console.error("[find-friends] Friend request error:", err);
+      setError("Failed to send friend request. Please try again.");
     }
 
     setSendingFriendReq(null);
@@ -206,6 +229,7 @@ export default function FindFriendsPage() {
     if (!token || sendingInvites || selectedInvites.size === 0) return;
     setSendingInvites(true);
 
+    setError(null);
     try {
       const inviteList = unmatched
         .filter((c) => c.email && selectedInvites.has(c.email))
@@ -220,6 +244,7 @@ export default function FindFriendsPage() {
       setInvitesSent(true);
     } catch (err) {
       console.error("[find-friends] Invite send error:", err);
+      setError("Failed to send invites. Please try again.");
     }
 
     setSendingInvites(false);
@@ -237,6 +262,7 @@ export default function FindFriendsPage() {
     if (emails.length === 0) return;
     setSendingManual(true);
 
+    setError(null);
     try {
       const inviteList = emails.map((e) => ({ name: "", email: e }));
       const result = await apiFetch("/api/contacts/invite", token, {
@@ -249,6 +275,7 @@ export default function FindFriendsPage() {
       setManualEmails("");
     } catch (err) {
       console.error("[find-friends] Manual invite error:", err);
+      setError("Failed to send invites. Please try again.");
     }
 
     setSendingManual(false);
@@ -366,6 +393,30 @@ export default function FindFriendsPage() {
             Connect with friends already on LetsGo, or invite your crew to join you.
           </p>
         </div>
+
+        {/* ── Error banner ── */}
+        {error && (
+          <div style={{
+            background: "rgba(255,59,48,0.12)", border: "1px solid rgba(255,59,48,0.3)",
+            borderRadius: 12, padding: "12px 16px", marginBottom: 20,
+            display: "flex", alignItems: "center", gap: 10,
+            animation: "fadeIn 0.3s ease both",
+          }}>
+            <span style={{ fontSize: 14, color: "#ff3b30", flex: 1, fontFamily: FONT, lineHeight: 1.5 }}>
+              {error}
+            </span>
+            <button
+              onClick={() => setError(null)}
+              aria-label="Dismiss error"
+              style={{
+                background: "none", border: "none", color: "rgba(255,255,255,0.4)",
+                fontSize: 18, cursor: "pointer", padding: 4, lineHeight: 1, flexShrink: 0,
+              }}
+            >
+              &times;
+            </button>
+          </div>
+        )}
 
         {/* ── Before import ── */}
         {!imported && !invitesSent && (
@@ -501,6 +552,7 @@ export default function FindFriendsPage() {
                         <button
                           onClick={() => handleAddFriend(user.userId)}
                           disabled={sent || sendingFriendReq === user.userId}
+                          aria-label={sent ? `Friend request sent to ${user.userName}` : `Add ${user.userName} as friend`}
                           style={{
                             ...btnGreen, flexShrink: 0,
                             opacity: sent ? 0.5 : 1,
@@ -532,11 +584,11 @@ export default function FindFriendsPage() {
                     {selectedInvites.size} selected
                   </span>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={selectAllInvites} style={{
+                    <button onClick={selectAllInvites} aria-label="Select all contacts for invite" style={{
                       background: "none", border: "none", color: BLUE,
                       fontFamily: FONT, fontSize: 11, fontWeight: 600, cursor: "pointer",
                     }}>Select All</button>
-                    <button onClick={deselectAllInvites} style={{
+                    <button onClick={deselectAllInvites} aria-label="Deselect all contacts" style={{
                       background: "none", border: "none", color: TEXT_MUTED,
                       fontFamily: FONT, fontSize: 11, fontWeight: 600, cursor: "pointer",
                     }}>Deselect All</button>

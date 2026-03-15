@@ -33,7 +33,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .from("date_night_sessions")
       .select("id, user_id, status")
       .eq("id", sessionId)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });

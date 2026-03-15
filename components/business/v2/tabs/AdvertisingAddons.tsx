@@ -214,7 +214,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
     }
     async function loadBizCategory() {
       if (!businessId) return;
-      const { data } = await supabaseBrowser.from("business").select("config").eq("id", businessId).single();
+      const { data } = await supabaseBrowser.from("business").select("config").eq("id", businessId).maybeSingle();
       if (!mounted) return;
       const cfg = data?.config as Record<string, unknown> | null;
       setBusinessCategory((cfg?.businessType as string) || null);
@@ -262,7 +262,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
         .from("business")
         .select("config")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -640,7 +640,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
         .from("business")
         .select("config")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       if (fetchErr) throw fetchErr;
 

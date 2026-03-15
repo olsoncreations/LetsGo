@@ -50,7 +50,7 @@ interface ProfileData {
   stripe_connect_account_id: string | null; stripe_connect_onboarding_complete: boolean | null;
 }
 interface ReceiptDisplay {
-  id: string; business: string; businessId: string; date: string;
+  id: string; business: string; businessId: string; date: string; rawDate: string;
   amount: number; cashback: number; status: string; level: number; visitNum: number;
   photoUrl: string | null;
 }
@@ -175,7 +175,7 @@ const ReceiptUploadModal = ({open,onClose,token,userId,onSuccess}:{open:boolean;
         const{data:signedData}=await supabaseBrowser.storage.from("receipts").createSignedUrl(photoPath,3600);
         signedPhotoUrl=signedData?.signedUrl||null;
       }
-      onSuccess({id:data.receiptId||"new",business:selectedBiz.name,businessId:selectedBiz.id,date:formatDate(new Date().toISOString().split("T")[0]),amount:amt,cashback:centsToDollars(data.payoutCents||0),status:"pending",level:data.tier?.tier_index||1,visitNum:data.visitsThisWindow||1,photoUrl:signedPhotoUrl});
+      onSuccess({id:data.receiptId||"new",business:selectedBiz.name,businessId:selectedBiz.id,date:formatDate(new Date().toISOString().split("T")[0]),rawDate:new Date().toISOString().split("T")[0],amount:amt,cashback:centsToDollars(data.payoutCents||0),status:"pending",level:data.tier?.tier_index||1,visitNum:data.visitsThisWindow||1,photoUrl:signedPhotoUrl});
       onClose();setBizSearch("");setSelectedBiz(null);setSubtotal("");setFile(null);setConfirmStep(false);
     }catch(e){setErrMsg(e instanceof Error?e.message:"Submit failed");setConfirmStep(false);}finally{setSubmitting(false);}
   };
@@ -523,21 +523,21 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   const [payoutIdentifier,setPayoutIdentifier]=useState(profile?.payout_identifier||"");
   const [saving,setSaving]=useState(false);
   const [saveMsg,setSaveMsg]=useState("");
-  const [formData,setFormData]=useState({first_name:"",last_name:"",username:"",email:"",zip_code:"",bio:""});
+  const [formData,setFormData]=useState({first_name:"",last_name:"",username:"",email:"",zip_code:"",bio:"",phone:""});
   const [blockedUsers,setBlockedUsers]=useState<FriendData[]>([]);
   const [supportMsg,setSupportMsg]=useState("");
   const [supportSent,setSupportSent]=useState(false);
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [notifPrefs,setNotifPrefs]=useState<Record<string,boolean>>({push_notifications:true,email_notifications:true,sms_notifications:false,marketing_emails:false});
 
-  useEffect(()=>{if(profile){setFormData({first_name:profile.first_name||"",last_name:profile.last_name||"",username:profile.username||"",email:profile.email||"",zip_code:profile.zip_code||"",bio:profile.bio||""});setPayoutIdentifier(profile.payout_identifier||"");if(profile.preferences)setNotifPrefs(prev=>({...prev,...profile.preferences}));}},[profile]);
+  useEffect(()=>{if(profile){setFormData({first_name:profile.first_name||"",last_name:profile.last_name||"",username:profile.username||"",email:profile.email||"",zip_code:profile.zip_code||"",bio:profile.bio||"",phone:profile.phone||""});setPayoutIdentifier(profile.payout_identifier||"");if(profile.preferences)setNotifPrefs(prev=>({...prev,...profile.preferences}));}},[profile]);
 
   useEffect(()=>{
     if(!open||!token||activeTab!=="notifications"||!profile?.id)return;
     (async()=>{const blocked:FriendData[]=[];const{data:rows}=await supabaseBrowser.from("user_friends").select("id,user_id,friend_id,status").or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`).eq("status","blocked");if(rows){for(const r of rows){const otherId=r.user_id===profile.id?r.friend_id:r.user_id;const{data:p}=await supabaseBrowser.from("profiles").select("id,full_name,first_name,last_name,username").eq("id",otherId).maybeSingle();if(p)blocked.push({friendshipId:r.id,id:p.id,name:p.full_name||[p.first_name,p.last_name].filter(Boolean).join(" ")||"Unknown",username:p.username,avatarUrl:null,status:"blocked",kind:"friend"});}}setBlockedUsers(blocked);})();
   },[open,token,activeTab,profile?.id]);
 
-  const handleSaveProfile=async()=>{if(!token)return;if(!formData.first_name.trim()){setSaveMsg("First name is required");return;}if(!formData.last_name.trim()){setSaveMsg("Last name is required");return;}if(!formData.username.trim()){setSaveMsg("Username is required");return;}if(!formData.email.trim()){setSaveMsg("Email is required");return;}if(!formData.zip_code.trim()||!/^\d{5}$/.test(formData.zip_code.trim())){setSaveMsg("Zip code is required (5 digits)");return;}setSaving(true);setSaveMsg("");try{const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({first_name:formData.first_name,last_name:formData.last_name,username:formData.username,zip_code:formData.zip_code.trim(),bio:formData.bio})});const data=await res.json();if(!res.ok){setSaveMsg(data.error||"Save failed");return;}onProfileSaved(data.profile);setSaveMsg("Saved!");setTimeout(()=>setSaveMsg(""),2000);}catch{setSaveMsg("Network error");}finally{setSaving(false);}};
+  const handleSaveProfile=async()=>{if(!token)return;if(!formData.first_name.trim()){setSaveMsg("First name is required");return;}if(!formData.last_name.trim()){setSaveMsg("Last name is required");return;}if(!formData.username.trim()){setSaveMsg("Username is required");return;}if(!formData.email.trim()){setSaveMsg("Email is required");return;}if(!formData.zip_code.trim()||!/^\d{5}$/.test(formData.zip_code.trim())){setSaveMsg("Zip code is required (5 digits)");return;}if(formData.phone.trim()&&formData.phone.replace(/\D/g,"").length!==10){setSaveMsg("Phone must be a valid 10-digit number");return;}setSaving(true);setSaveMsg("");try{const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({first_name:formData.first_name,last_name:formData.last_name,username:formData.username,zip_code:formData.zip_code.trim(),bio:formData.bio,phone:formData.phone})});const data=await res.json();if(!res.ok){setSaveMsg(data.error||"Save failed");return;}onProfileSaved(data.profile);setSaveMsg("Saved!");setTimeout(()=>setSaveMsg(""),2000);}catch{setSaveMsg("Network error");}finally{setSaving(false);}};
   const handleAvatarUpload=async(file:File)=>{if(!token||!profile)return;const ext=file.name.split(".").pop()||"jpg";const path=`${profile.id}/avatar-${Date.now()}.${ext}`;const{error:upErr}=await supabaseBrowser.storage.from("avatars").upload(path,file,{upsert:true});if(upErr){setSaveMsg("Upload failed");return;}const{data:{publicUrl}}=supabaseBrowser.storage.from("avatars").getPublicUrl(path);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({avatar_url:publicUrl})});if(res.ok){const d=await res.json();onAvatarChange(publicUrl);onProfileSaved(d.profile);}};
   const handleConnectPayout=async()=>{if(!token||!payoutIdentifier.trim())return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:"venmo",payout_identifier:payoutIdentifier.trim()})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);}setSaving(false);};
   const handleDisconnectPayout=async()=>{if(!token)return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:"",payout_identifier:""})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);setPayoutIdentifier("");}setSaving(false);};
@@ -565,7 +565,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
               <div onClick={()=>settingsAvatarRef.current?.click()} style={{width:64,height:64,borderRadius:8,flexShrink:0,background:avatarUrl?`url(${avatarUrl}) center/cover no-repeat`:`linear-gradient(135deg,rgba(${NEON.primaryRGB},0.15),rgba(${NEON.purpleRGB},0.15))`,border:`2px solid rgba(${NEON.primaryRGB},0.25)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Clash Display','DM Sans',sans-serif",fontSize:22,fontWeight:700,color:NEON.primary,cursor:"pointer"}}>{!avatarUrl&&getInitials(profile?.first_name??null,profile?.last_name??null)}</div>
               <div><button onClick={()=>settingsAvatarRef.current?.click()} style={{padding:"6px 14px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.3)`,background:`rgba(${NEON.primaryRGB},0.08)`,color:NEON.primary,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:4,display:"block"}}>{avatarUrl?"Change Photo":"Upload Photo"}</button>{avatarUrl&&<button onClick={()=>onAvatarChange(null)} style={{padding:"4px 10px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"transparent",color:"rgba(255,255,255,0.25)",fontSize:9,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Remove</button>}</div>
             </div>
-            {([{label:"First Name *",key:"first_name" as const,type:"text"},{label:"Last Name *",key:"last_name" as const,type:"text"},{label:"Username *",key:"username" as const,type:"text"},{label:"Email *",key:"email" as const,type:"email"},{label:"Zip Code *",key:"zip_code" as const,type:"text"},{label:"Bio",key:"bio" as const,type:"textarea"}]).map(field=>(<div key={field.label}><label style={{display:"block",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>{field.label}</label>{field.type==="textarea"?<textarea value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} rows={2} style={{width:"100%",padding:"10px 14px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",resize:"vertical"}}/>:<input value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} type={field.type} readOnly={field.key==="email"} style={{width:"100%",padding:"10px 14px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:field.key==="email"?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>}</div>))}
+            {([{label:"First Name *",key:"first_name" as const,type:"text"},{label:"Last Name *",key:"last_name" as const,type:"text"},{label:"Username *",key:"username" as const,type:"text"},{label:"Email *",key:"email" as const,type:"email"},{label:"Zip Code *",key:"zip_code" as const,type:"text"},{label:"Phone",key:"phone" as const,type:"tel"},{label:"Bio",key:"bio" as const,type:"textarea"}]).map(field=>(<div key={field.label}><label style={{display:"block",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>{field.label}</label>{field.type==="textarea"?<textarea value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} rows={2} style={{width:"100%",padding:"10px 14px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",resize:"vertical"}}/>:<input value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} type={field.type} readOnly={field.key==="email"} style={{width:"100%",padding:"10px 14px",borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:field.key==="email"?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>}</div>))}
             {saveMsg&&<div style={{fontSize:11,color:saveMsg==="Saved!"?NEON.green:NEON.pink}}>{saveMsg}</div>}
             <button onClick={handleSaveProfile} disabled={saving} style={{alignSelf:"flex-end",padding:"8px 20px",borderRadius:3,border:`1px solid rgba(${NEON.primaryRGB},0.4)`,background:`rgba(${NEON.primaryRGB},0.1)`,color:NEON.primary,fontSize:10,fontWeight:700,letterSpacing:"0.15em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.5:1}}>{saving?"Saving...":"Save Changes"}</button>
           </div>)}
@@ -865,6 +865,24 @@ export default function LetsGoProfile() {
       if (cancelled) return;
       if (receiptRows) {
         // Generate signed URLs for receipt photos
+        // Compute visit numbers per business (count approved receipts chronologically)
+        const approvedByBiz = new Map<string, number>();
+        const sortedAsc = [...receiptRows].sort((a, b) => new Date(a.visit_date as string).getTime() - new Date(b.visit_date as string).getTime());
+        for (const r of sortedAsc) {
+          if ((r.status as string) === "approved") {
+            const bizId = r.business_id as string;
+            approvedByBiz.set(bizId, (approvedByBiz.get(bizId) || 0) + 1);
+          }
+        }
+        const visitNumMap = new Map<string, number>();
+        const bizCounters = new Map<string, number>();
+        for (const r of sortedAsc) {
+          const bizId = r.business_id as string;
+          const count = (bizCounters.get(bizId) || 0) + 1;
+          bizCounters.set(bizId, count);
+          visitNumMap.set(r.id as string, count);
+        }
+
         const receiptList = await Promise.all(receiptRows.map(async (r: Record<string, unknown>) => {
           const biz = r.business as Record<string, unknown> | null;
           const bizName = (biz?.public_business_name as string) || (biz?.business_name as string) || "Unknown";
@@ -882,11 +900,12 @@ export default function LetsGoProfile() {
             business: bizName,
             businessId: r.business_id as string,
             date: new Date(r.visit_date as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            amount: (r.receipt_total_cents as number) / 100,
-            cashback: (r.payout_cents as number) / 100,
+            rawDate: r.visit_date as string,
+            amount: ((r.receipt_total_cents as number) || 0) / 100,
+            cashback: ((r.payout_cents as number) || 0) / 100,
             status: (r.status as string) || "pending",
             level: (r.payout_tier_index as number) || 1,
-            visitNum: (r.payout_tier_index as number) || 1,
+            visitNum: visitNumMap.get(r.id as string) || 1,
             photoUrl,
           };
         }));
@@ -905,7 +924,7 @@ export default function LetsGoProfile() {
         setCashouts(cashoutRows.map((c: Record<string, unknown>) => ({
           id: c.id as string,
           date: new Date(c.requested_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          amount: (c.amount_cents as number) / 100,
+          amount: ((c.amount_cents as number) || 0) / 100,
           method: ((c.method as string) === "bank" ? "Bank" : (c.method as string) === "venmo" ? "Venmo" : (c.method as string) === "paypal" ? "PayPal" : (c.method as string)) || "Venmo",
           status: (c.status as string) || "pending",
           fee_cents: (c.fee_cents as number) || 0,
@@ -1183,7 +1202,7 @@ export default function LetsGoProfile() {
     let lastYearTotal = 0;
     for (const r of receipts) {
       if (r.status !== "approved") continue;
-      const d = new Date(r.date);
+      const d = new Date(r.rawDate);
       if (d.getFullYear() === thisYear) thisYearTotal += r.cashback;
       if (d.getFullYear() === lastYear) lastYearTotal += r.cashback;
     }
@@ -1202,30 +1221,39 @@ export default function LetsGoProfile() {
   // ─── Friend action handlers ───
   const handleAcceptFriend = useCallback(async (friendshipId: string) => {
     if (!token) return;
-    await fetch(`/api/friends/${friendshipId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status: "accepted" }),
-    });
-    setFriends(prev => prev.map(f => f.friendshipId === friendshipId ? { ...f, status: "accepted", kind: "friend" as const } : f));
+    try {
+      const res = await fetch(`/api/friends/${friendshipId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: "accepted" }),
+      });
+      if (!res.ok) return;
+      setFriends(prev => prev.map(f => f.friendshipId === friendshipId ? { ...f, status: "accepted", kind: "friend" as const } : f));
+    } catch { /* network error — state unchanged */ }
   }, [token]);
 
   const handleRemoveFriend = useCallback(async (friendshipId: string) => {
     if (!token) return;
-    await fetch(`/api/friends/${friendshipId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId));
-    setFriendMenuOpen(null);
+    try {
+      const res = await fetch(`/api/friends/${friendshipId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId));
+      setFriendMenuOpen(null);
+    } catch { /* network error — state unchanged */ }
   }, [token]);
 
   const handleBlockFriend = useCallback(async (friendshipId: string) => {
     if (!token) return;
-    await fetch(`/api/friends/${friendshipId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status: "blocked" }),
-    });
-    setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId));
-    setFriendMenuOpen(null);
+    try {
+      const res = await fetch(`/api/friends/${friendshipId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: "blocked" }),
+      });
+      if (!res.ok) return;
+      setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId));
+      setFriendMenuOpen(null);
+    } catch { /* network error — state unchanged */ }
   }, [token]);
 
   const handleAddFriend = useCallback(async (friendId: string) => {
@@ -1327,8 +1355,21 @@ export default function LetsGoProfile() {
   // ─── Receipt cancel handler ───
   const handleCancelReceipt = useCallback(async (receiptId: string) => {
     if (!token) return;
-    // Update receipt status locally (actual cancel would need API)
-    setReceipts(prev => prev.map(r => r.id === receiptId ? { ...r, status: "cancelled", cashback: 0 } : r));
+    try {
+      const res = await fetch("/api/receipts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ receiptId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        alert(data?.error || "Failed to cancel receipt");
+        return;
+      }
+      setReceipts(prev => prev.map(r => r.id === receiptId ? { ...r, status: "cancelled", cashback: 0 } : r));
+    } catch {
+      alert("Network error — could not cancel receipt");
+    }
     setCancelConfirmId(null);
   }, [token]);
 
@@ -1773,7 +1814,7 @@ export default function LetsGoProfile() {
                   <div style={{ padding: "12px 14px", borderRadius: 4, background: `rgba(${NEON.orangeRGB},0.04)`, border: `1px solid rgba(${NEON.orangeRGB},0.12)`, marginBottom: 18 }}>
                     <div style={{ fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 8 }}>Your Referral Link</div>
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Sans', monospace", wordBreak: "break-all", marginBottom: 8 }}>
-                      {typeof window !== "undefined" ? `${window.location.origin}/welcome?ref=${influencerData.influencer.code}` : `letsgo.app/welcome?ref=${influencerData.influencer.code}`}
+                      {typeof window !== "undefined" ? `${window.location.origin}/welcome?ref=${influencerData.influencer.code}` : `https://www.useletsgo.com/welcome?ref=${influencerData.influencer.code}`}
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => {

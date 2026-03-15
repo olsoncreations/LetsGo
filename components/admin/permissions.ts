@@ -4,40 +4,84 @@
  * Permission strings match ALL_PERMISSIONS in settings/page.tsx.
  * "all" grants access to everything (Administrator role).
  * null means the page is accessible to every staff member.
+ *
+ * Two-tier system:
+ *   view_<area>   → read-only page access
+ *   manage_<area> → edit/approve/create/delete actions within the page
+ *   manage_* implicitly grants view_* for the same area.
  */
 
-// Maps each admin nav key to the permission required to see/access it.
-// null = accessible to everyone (including view_only roles).
+// Maps each admin nav key to the view permission required to see/access it.
 export const NAV_PERMISSIONS: Record<string, string | null> = {
-  overview: null,
-  training: null,
-  executive: "view_analytics",
+  overview: "view_overview",
+  executive: "view_executive",
   analytics: "view_analytics",
-  health: "view_analytics",
+  health: "view_health",
   receipts: "view_receipts",
-  billing: "manage_settings",
-  onboarding: "view_businesses",
+  billing: "view_billing",
+  onboarding: "view_onboarding",
   businesses: "view_businesses",
-  events: "view_businesses",
-  ugc: "view_businesses",
+  events: "view_events",
+  ugc: "view_ugc",
   users: "view_users",
-  payouts: "approve_payouts",
-  referrals: "view_analytics",
-  sales: "manage_advertising",
-  advertising: "manage_advertising",
-  support: "manage_support",
-  fraud: "view_analytics",
-  messaging: "manage_support",
-  automation: "manage_settings",
-  promotions: "manage_advertising",
-  audit: "manage_settings",
-  settings: "manage_settings",
+  payouts: "view_payouts",
+  referrals: "view_referrals",
+  sales: "view_sales",
+  advertising: "view_advertising",
+  support: "view_support",
+  fraud: "view_fraud",
+  messaging: "view_messaging",
+  automation: "view_automation",
+  promotions: "view_promotions",
+  audit: "view_audit",
+  settings: "view_settings",
+  training: "view_training",
+  "custom-reports": "view_executive",
 };
+
+/**
+ * Legacy permission expansion map.
+ * Old permission IDs (pre-granular) automatically grant the new
+ * page-level permissions they previously covered, so existing
+ * role configs stored in the DB keep working.
+ */
+const LEGACY_EXPANSIONS: Record<string, string[]> = {
+  view_analytics: ["view_executive", "view_analytics", "view_health", "view_referrals", "view_fraud"],
+  manage_settings: ["view_billing", "view_automation", "view_audit", "view_settings", "manage_billing", "manage_automation", "manage_settings"],
+  view_businesses: ["view_businesses", "view_onboarding", "view_events", "view_ugc"],
+  edit_businesses: ["manage_businesses", "manage_onboarding", "manage_events", "manage_ugc"],
+  manage_advertising: ["view_sales", "view_advertising", "view_promotions", "manage_sales", "manage_advertising", "manage_promotions"],
+  manage_support: ["view_support", "view_messaging", "manage_support", "manage_messaging"],
+  approve_receipts: ["manage_receipts"],
+  edit_users: ["manage_users"],
+  approve_payouts: ["view_payouts", "manage_payouts"],
+  view_receipts: ["view_receipts"],
+  view_users: ["view_users"],
+};
+
+/** Expand legacy permissions into granular ones. */
+export function expandPermissions(rawPerms: string[]): string[] {
+  const expanded = new Set(rawPerms);
+  for (const p of rawPerms) {
+    const legacy = LEGACY_EXPANSIONS[p];
+    if (legacy) {
+      for (const lp of legacy) expanded.add(lp);
+    }
+  }
+  // manage_* always implies view_*
+  for (const p of Array.from(expanded)) {
+    if (p.startsWith("manage_")) {
+      expanded.add("view_" + p.slice(7));
+    }
+  }
+  return Array.from(expanded);
+}
 
 /** Returns true if the user's permissions include the required one. */
 export function hasPermission(userPerms: string[], required: string): boolean {
   if (userPerms.includes("all")) return true;
-  return userPerms.includes(required);
+  const expanded = expandPermissions(userPerms);
+  return expanded.includes(required);
 }
 
 /** Returns the permission required for a nav key, or null if open to all. */

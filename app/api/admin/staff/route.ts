@@ -83,22 +83,34 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Step 1: Find user by email via auth admin API
+    // Step 1: Find user by email — look up in profiles table first (much more efficient than listing all auth users)
     let userId: string | null = null;
     let fullName: string | null = null;
 
-    // Try auth.users first (reliable source of email)
-    const { data: listData, error: listError } = await supabaseServer.auth.admin.listUsers({
-      perPage: 1000,
-    });
+    // Try profiles table (has email from auth)
+    const { data: profileByEmail } = await supabaseServer
+      .from("profiles")
+      .select("id, full_name, first_name, last_name")
+      .ilike("email", normalizedEmail)
+      .maybeSingle();
 
-    if (!listError && listData?.users) {
-      const matchedUser = listData.users.find(
-        (u) => u.email?.toLowerCase() === normalizedEmail
-      );
-      if (matchedUser) {
-        userId = matchedUser.id;
-        fullName = (matchedUser.user_metadata?.full_name as string) || null;
+    if (profileByEmail) {
+      userId = profileByEmail.id;
+      fullName = profileByEmail.full_name || [profileByEmail.first_name, profileByEmail.last_name].filter(Boolean).join(" ") || null;
+    } else {
+      // Fallback: search auth users (handles case where profile doesn't have email column)
+      const { data: listData, error: listError } = await supabaseServer.auth.admin.listUsers({
+        perPage: 1000,
+      });
+
+      if (!listError && listData?.users) {
+        const matchedUser = listData.users.find(
+          (u) => u.email?.toLowerCase() === normalizedEmail
+        );
+        if (matchedUser) {
+          userId = matchedUser.id;
+          fullName = (matchedUser.user_metadata?.full_name as string) || null;
+        }
       }
     }
 

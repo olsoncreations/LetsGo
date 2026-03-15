@@ -15,8 +15,9 @@ export async function DELETE(req: NextRequest): Promise<Response> {
   if (!token) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { data: { user }, error: authErr } = await supabaseServer.auth.getUser(token);
   if (authErr || !user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  const { data: staff } = await supabaseServer.from("staff_users").select("user_id").eq("user_id", user.id).maybeSingle();
+  const { data: staff } = await supabaseServer.from("staff_users").select("user_id, role").eq("user_id", user.id).maybeSingle();
   if (!staff) return NextResponse.json({ error: "Staff access required" }, { status: 403 });
+  if (staff.role !== "admin") return NextResponse.json({ error: "Admin role required to delete businesses" }, { status: 403 });
 
   try {
     const body = await req.json();

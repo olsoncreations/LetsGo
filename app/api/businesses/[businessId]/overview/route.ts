@@ -70,10 +70,10 @@ export async function GET(
   const { data: business, error: businessError } = await supabase
     .from("business")
     .select(
-      "id, name, city, state, category_main, address_line1, address_line2, postal_code"
+      "id, business_name, public_business_name, city, state, category_main, address_line1, address_line2, postal_code"
     )
     .eq("id", businessId)
-    .single();
+    .maybeSingle();
 
   if (businessError || !business) {
     return NextResponse.json({ error: "Business not found" }, { status: 404 });

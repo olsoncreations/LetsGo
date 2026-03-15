@@ -263,7 +263,7 @@ export async function POST(req: NextRequest) {
 
   const senderName = senderProfile?.first_name
     ? `${senderProfile.first_name} ${((senderProfile.last_name as string) || "")[0] || ""}.`.trim()
-    : "Someone";
+    : senderProfile?.full_name || "Someone";
 
   notify({
     userId: friendId,

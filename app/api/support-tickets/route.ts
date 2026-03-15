@@ -58,7 +58,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         .from("business")
         .select("id")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       if (bizErr || !biz) {
         return NextResponse.json({ error: "Business not found" }, { status: 404 });

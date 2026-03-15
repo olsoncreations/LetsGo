@@ -5,11 +5,12 @@ import { supabaseServer as supabase } from "@/lib/supabaseServer";
 export async function GET() {
   try {
     const { data, error } = await supabase
-      .from("business") // table name is singular in your Supabase
+      .from("business")
       .select(
         `
         id,
-        name,
+        business_name,
+        public_business_name,
         is_active,
         address_line1,
         address_line2,
@@ -40,7 +41,7 @@ export async function GET() {
       `
       )
       .eq("is_active", true)
-      .order("name", { ascending: true });
+      .order("business_name", { ascending: true });
 
     if (error) {
       console.error("Supabase business query error:", error);
@@ -51,12 +52,12 @@ export async function GET() {
     }
 
     return NextResponse.json({ businesses: data ?? [] });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Unexpected /api/businesses error:", err);
     return NextResponse.json(
       {
         error: "Unexpected server error",
-        details: err?.message ?? String(err),
+        details: err instanceof Error ? err.message : String(err),
       },
       { status: 500 }
     );

@@ -113,7 +113,7 @@ export async function computeBillingBreakdowns(
     .select("business_id, payout_cents, receipt_total_cents, status, visit_date")
     .gte("visit_date", rangeStart)
     .lte("visit_date", rangeEnd)
-    .in("status", ["approved", "business_approved", "pending"]);
+    .in("status", ["approved", "business_approved"]);
 
   if (rcptErr) {
     console.error("[billingCalc] Error fetching receipts:", rcptErr);

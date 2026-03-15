@@ -362,7 +362,7 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
         .from("business")
         .select("config")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 

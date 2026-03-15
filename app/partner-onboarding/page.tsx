@@ -433,6 +433,7 @@ export default function PartnerOnboardingPage() {
   const [data, setData] = useState<OnboardingData>(initialData());
   const [error, setError] = useState<string>("");
   const [completed, setCompleted] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -675,6 +676,7 @@ export default function PartnerOnboardingPage() {
   }
 
 async function completeSignup() {
+  if (submitting) return;
   setError("");
   const v = validateStep(7, data, authUser?.email);
   if (!v.ok) {
@@ -687,6 +689,7 @@ async function completeSignup() {
     return;
   }
 
+  setSubmitting(true);
   try {
     // Save everything as JSON, plus a few helpful top-level fields
     const payload = {
@@ -721,6 +724,8 @@ async function completeSignup() {
   } catch (e) {
     console.error(e);
     setError("Could not submit your application. Please try again.");
+  } finally {
+    setSubmitting(false);
   }
 }
 
@@ -776,10 +781,9 @@ async function completeSignup() {
 
             <p className="success-help">
               Need help? Contact{" "}
-              <a href="mailto:support@letsgo.com" className="success-help-link">
-                support@letsgo.com
-              </a>{" "}
-              or call (555) 123-4567
+              <a href="mailto:support@useletsgo.com" className="success-help-link">
+                support@useletsgo.com
+              </a>
             </p>
           </div>
         </div>
@@ -843,8 +847,8 @@ async function completeSignup() {
               type="button"
               className="btn btn-primary"
               onClick={completeSignup}
-              disabled={submitDisabled}
-              title={submitDisabled ? "Complete all required checkboxes and signature to submit." : "Submit"}
+              disabled={submitDisabled || submitting}
+              title={submitDisabled ? "Complete all required checkboxes and signature to submit." : submitting ? "Submitting..." : "Submit"}
             >
               🎉 Complete Sign-Up
             </button>
@@ -2535,6 +2539,15 @@ function Step6({
 
   async function onDocFile(file: File | null) {
     if (!file) return;
+    const allowedDocTypes = ["image/jpeg", "image/png", "application/pdf"];
+    if (!allowedDocTypes.includes(file.type)) {
+      setUploadError("Document must be a PDF, JPG, or PNG file.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("Document must be under 10MB.");
+      return;
+    }
     setDocUploading(true);
     setUploadError("");
     try {
@@ -2552,6 +2565,15 @@ function Step6({
 
   async function onLogoFile(file: File | null) {
     if (!file) return;
+    const allowedLogoTypes = ["image/jpeg", "image/png"];
+    if (!allowedLogoTypes.includes(file.type)) {
+      setUploadError("Logo must be a JPG or PNG image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Logo must be under 5MB.");
+      return;
+    }
     setLogoUploading(true);
     setUploadError("");
     try {

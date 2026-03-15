@@ -58,8 +58,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Cap at 50 per request
     const capped = invites.slice(0, 50);
 
-    // Check daily rate limit (100 per user per day)
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Check daily rate limit (100 per user per calendar day UTC)
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
+    const dayAgo = todayUTC.toISOString();
     const { count: todayCount } = await supabaseServer
       .from("contact_invites")
       .select("id", { count: "exact", head: true })

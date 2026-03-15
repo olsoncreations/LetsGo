@@ -35,6 +35,7 @@ self.addEventListener("notificationclick", function (event) {
     new_message: "/profile",
     friend_request: "/profile",
     friend_accepted: "/profile",
+    friend_invite: "/welcome/find-friends",
     game_invite: "/5v3v1",
     game_advanced: "/5v3v1",
     game_complete: "/5v3v1",
@@ -44,6 +45,8 @@ self.addEventListener("notificationclick", function (event) {
     media_approved: "/experiences",
     media_rejected: "/experiences",
     receipt_submitted: "/businessprofile-v2",
+    application_approved: "/profile",
+    application_rejected: "/profile",
   };
 
   var notifType = event.notification.data && event.notification.data.type;

@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     .from("group_games")
     .select("status")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (!game || game.status !== "selection") {
     return NextResponse.json({ error: "Game is not in selection phase" }, { status: 400 });

@@ -152,6 +152,27 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Validate name fields if provided
+  for (const nameField of ["first_name", "last_name"] as const) {
+    if (updates[nameField] !== undefined) {
+      const name = updates[nameField] as string;
+      if (name.length > 50) {
+        return NextResponse.json({ error: "Name is too long (50 characters max)" }, { status: 400 });
+      }
+      if (name.length > 0 && !/^[a-zA-Z\s'-]+$/.test(name)) {
+        return NextResponse.json({ error: "Name can only contain letters, spaces, hyphens, and apostrophes" }, { status: 400 });
+      }
+    }
+  }
+
+  // Validate phone if provided
+  if (updates.phone) {
+    const digits = (updates.phone as string).replace(/\D/g, "");
+    if (digits.length !== 10) {
+      return NextResponse.json({ error: "Phone must be a valid 10-digit number" }, { status: 400 });
+    }
+  }
+
   // Validate zip code if provided
   if (updates.zip_code) {
     const zip = updates.zip_code as string;

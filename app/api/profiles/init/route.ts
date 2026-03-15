@@ -7,7 +7,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { user_id, first_name, last_name, full_name, zip_code, user_type } = body;
+    const { user_id, first_name, last_name, full_name, zip_code, phone, user_type } = body;
 
     if (!user_id) {
       return NextResponse.json({ error: "user_id is required" }, { status: 400 });
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       if (last_name) profileData.last_name = last_name.trim();
       if (full_name) profileData.full_name = full_name.trim();
       if (zip_code) profileData.zip_code = zip_code.trim();
+      if (phone) profileData.phone = phone.trim();
     } else {
       if (full_name) profileData.full_name = full_name.trim();
     }

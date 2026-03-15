@@ -12,6 +12,7 @@ import {
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 import { fetchTagsByCategory } from "@/lib/availableTags";
+import { useStaffContext } from "@/components/admin/StaffContext";
 
 // ==================== TYPES ====================
 
@@ -311,6 +312,7 @@ function renderStars(rating: number | null): string {
 // ==================== COMPONENT ====================
 
 export default function SalesProspecting({ salesReps }: ProspectingProps) {
+  const { can } = useStaffContext();
   // ---------- Search state ----------
   const locationInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1317,17 +1319,19 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           >
             {searching ? "Searching..." : "🔍 Search"}
           </button>
-          <button
-            onClick={handleGenerate}
-            disabled={generating || searching || !searchQuery.trim()}
-            style={{
-              ...btnPrimary,
-              background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
-              opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
-            }}
-          >
-            {generating ? "Generating..." : "⚡ Generate Businesses"}
-          </button>
+          {can("manage_sales") && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating || searching || !searchQuery.trim()}
+              style={{
+                ...btnPrimary,
+                background: generating ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+                opacity: generating || searching || !searchQuery.trim() ? 0.6 : 1,
+              }}
+            >
+              {generating ? "Generating..." : "⚡ Generate Businesses"}
+            </button>
+          )}
           {generating && (
             <button
               onClick={() => { generateAbortRef.current = true; }}

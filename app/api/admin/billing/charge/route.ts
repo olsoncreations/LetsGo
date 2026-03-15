@@ -85,6 +85,19 @@ export async function POST(req: NextRequest): Promise<Response> {
       const paymentMethod = (inv.payment_method as string) || "card";
       const businessName = (inv.business_name as string) || "Unknown";
 
+      // Validate amount before charging
+      if (!amountCents || amountCents < 50) {
+        failed++;
+        results.push({
+          invoiceId,
+          businessName,
+          amountCents,
+          status: "failed",
+          error: amountCents <= 0 ? "Invoice amount must be positive" : "Invoice amount must be at least $0.50",
+        });
+        continue;
+      }
+
       // Look up Stripe IDs for this business
       const bizStripe = bizMap.get(businessId);
       if (!bizStripe?.stripe_customer_id || !bizStripe?.stripe_payment_method_id) {

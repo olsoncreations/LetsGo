@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseServer } from "./supabaseServer";
-import { resend, FROM_EMAIL } from "./resend";
+import { resend, FROM_EMAIL, isResendConfigured } from "./resend";
 import { getEmailContent } from "./emailTemplates";
 import { REQUIRED_NOTIFICATION_TYPES, type NotificationType } from "./notificationTypes";
 import webpush from "web-push";
@@ -11,6 +11,8 @@ const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
 
 if (vapidPublic && vapidPrivate) {
   webpush.setVapidDetails("mailto:support@useletsgo.com", vapidPublic, vapidPrivate);
+} else {
+  console.warn("[notify] VAPID keys not configured — push notifications disabled. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.");
 }
 
 // ── Types ──────────────────────────────────────────────
@@ -84,8 +86,8 @@ export async function notify(params: NotifyParams): Promise<void> {
       .eq("id", userId)
       .maybeSingle();
 
-    // 4. Send email if enabled
-    if (emailEnabled && profile?.email) {
+    // 4. Send email if enabled and Resend is configured
+    if (emailEnabled && profile?.email && isResendConfigured) {
       try {
         const emailContent = getEmailContent(type, metadata);
         await resend.emails.send({
@@ -134,7 +136,9 @@ export async function notify(params: NotifyParams): Promise<void> {
                       .from("push_subscriptions")
                       .delete()
                       .eq("endpoint", sub.endpoint)
-                      .then(() => {});
+                      .then(({ error }) => {
+                        if (error) console.error("[notify] Failed to remove expired push subscription:", error.message);
+                      });
                   }
                 })
             )

@@ -276,10 +276,10 @@ export async function GET(req: NextRequest): Promise<Response> {
         const biz = bizMap.get(m.business_id);
         const profile = profileMap.get(m.user_id);
 
-        // Signed URL (30 min)
+        // Signed URL (24 hours — long enough for feed browsing sessions)
         const { data: signedData } = await supabaseServer.storage
           .from("user-experiences")
-          .createSignedUrl(m.storage_path, 60 * 30);
+          .createSignedUrl(m.storage_path, 60 * 60 * 24);
 
         const hours = biz
           ? resolveHoursFromColumns(biz as Record<string, unknown>)

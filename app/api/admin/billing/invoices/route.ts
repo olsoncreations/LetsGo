@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       .update(updatePayload)
       .eq("id", invoiceId)
       .select("id, status, paid_at, paid_via, sent_at, voided_at")
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       console.error("[billing-invoices] PATCH error:", updateErr);

@@ -46,7 +46,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         .from("business")
         .select("id")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       if (bizErr || !biz) {
         return NextResponse.json({ error: "Business not found" }, { status: 404 });
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       existingQuery.eq("business_id", businessId);
     }
 
-    const { data: existing } = await existingQuery.limit(1).single();
+    const { data: existing } = await existingQuery.limit(1).maybeSingle();
 
     if (existing) {
       // Add message to existing conversation instead

@@ -1415,7 +1415,8 @@ export default function EventsPage() {
       const userId = getUserId();
       if (!userId) return;
       try {
-        const res = await fetch(`/api/businesses/follow?userId=${userId}`);
+        const headers = await getAuthHeaders();
+        const res = await fetch(`/api/businesses/follow?userId=${userId}`, { headers });
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && Array.isArray(data.followedBusinessIds)) {
@@ -1586,9 +1587,10 @@ export default function EventsPage() {
       return next;
     });
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch("/api/businesses/follow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ businessId, userId }),
       });
       if (!res.ok) {
@@ -1605,7 +1607,7 @@ export default function EventsPage() {
         return next;
       });
     }
-  }, [followedBusinessIds, getUserId]);
+  }, [followedBusinessIds, getUserId, getAuthHeaders]);
 
   // ── View tracking ─────────────────────────────────────
   const trackView = useCallback((eventId: string) => {
@@ -1665,7 +1667,8 @@ export default function EventsPage() {
     }
     if (dateFilter === "this-month") {
       const d = new Date();
-      const monthEnd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-31`;
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      const monthEnd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
       return eventDate >= today && eventDate <= monthEnd;
     }
     return true;

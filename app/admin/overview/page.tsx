@@ -93,14 +93,14 @@ export default function OverviewPage() {
           .from("profiles")
           .select("full_name, first_name, last_name")
           .eq("id", user.id)
-          .single();
-        
+          .maybeSingle();
+
         // Try to get name from staff_users table
         const { data: staffData } = await supabaseBrowser
           .from("staff_users")
-          .select("name, full_name, role")
+          .select("name, role")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
         
         // Helper: check if a value is actually a name (not an email)
         const isRealName = (val: string | null | undefined): val is string => {
@@ -111,8 +111,7 @@ export default function OverviewPage() {
         const profileFullName = profileData?.full_name;
         const profileCombined = [profileData?.first_name, profileData?.last_name].filter(Boolean).join(" ");
         
-        const displayName = 
-          (isRealName(staffData?.full_name) ? staffData.full_name : null) ||
+        const displayName =
           (isRealName(staffData?.name) ? staffData.name : null) ||
           (isRealName(profileFullName) ? profileFullName : null) ||
           (isRealName(profileCombined) ? profileCombined : null) ||

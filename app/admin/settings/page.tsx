@@ -23,6 +23,9 @@ interface PlatformSettings {
   max_receipt_cents: number;
   rolling_window_days: number;
   min_payout_cents: number;
+  monthly_cashout_cap_cents: number;
+  monthly_cashout_cap_standard_cents: number;
+  cashout_cap_months: number;
   payout_processing_days: number;
   payout_methods: string[];
   // Roles & Maintenance (persisted)
@@ -107,13 +110,77 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   max_receipt_cents: 50000,
   rolling_window_days: 365,
   min_payout_cents: 2000,
+  monthly_cashout_cap_cents: 20000,
+  monthly_cashout_cap_standard_cents: 50000,
+  cashout_cap_months: 12,
   payout_processing_days: 3,
   payout_methods: ["venmo", "paypal", "bank_transfer"],
   roles_config: [
     { id: "admin", name: "Administrator", permissions: ["all"] },
-    { id: "senior_staff", name: "Senior Staff", permissions: ["view_receipts", "approve_receipts", "view_users", "view_businesses", "approve_payouts", "manage_support", "view_analytics"] },
-    { id: "staff", name: "Staff", permissions: ["view_receipts", "manage_support"] },
-    { id: "viewer", name: "Viewer", permissions: ["view_only"] },
+    { id: "operations_manager", name: "Operations Manager", permissions: [
+      "view_overview", "view_executive", "view_analytics", "view_health",
+      "view_receipts", "manage_receipts", "view_billing", "manage_billing",
+      "view_onboarding", "manage_onboarding", "view_businesses", "manage_businesses",
+      "view_events", "manage_events", "view_ugc", "manage_ugc",
+      "view_users", "manage_users", "view_payouts", "manage_payouts",
+      "view_referrals", "view_support", "manage_support",
+      "view_fraud", "manage_fraud", "view_messaging", "manage_messaging",
+      "view_automation", "view_promotions", "view_audit", "view_training",
+    ] },
+    { id: "finance_manager", name: "Finance Manager", permissions: [
+      "view_overview", "view_executive", "view_analytics", "view_health",
+      "view_receipts", "manage_receipts", "view_billing", "manage_billing",
+      "view_payouts", "manage_payouts", "view_referrals",
+      "view_fraud", "manage_fraud", "view_audit", "view_training",
+    ] },
+    { id: "sales_manager", name: "Sales Manager", permissions: [
+      "view_overview", "view_executive", "view_analytics", "view_health",
+      "view_businesses", "view_users", "view_referrals", "manage_referrals",
+      "view_sales", "manage_sales", "view_advertising", "manage_advertising",
+      "view_promotions", "manage_promotions", "view_support", "view_training",
+    ] },
+    { id: "sales_rep", name: "Sales Rep", permissions: [
+      "view_overview", "view_analytics",
+      "view_businesses", "view_referrals",
+      "view_sales", "view_advertising", "view_training",
+    ] },
+    { id: "marketing_manager", name: "Marketing Manager", permissions: [
+      "view_overview", "view_executive", "view_analytics", "view_health",
+      "view_businesses", "view_events", "manage_events",
+      "view_ugc", "manage_ugc", "view_advertising", "manage_advertising",
+      "view_promotions", "manage_promotions", "view_messaging", "manage_messaging",
+      "view_training",
+    ] },
+    { id: "content_moderator", name: "Content Moderator", permissions: [
+      "view_overview", "view_ugc", "manage_ugc",
+      "view_events", "manage_events", "view_messaging", "manage_messaging",
+      "view_support", "manage_support", "view_training",
+    ] },
+    { id: "support_agent", name: "Support Agent", permissions: [
+      "view_overview", "view_users", "view_businesses", "view_receipts",
+      "view_support", "manage_support", "view_messaging", "manage_messaging",
+      "view_training",
+    ] },
+    { id: "compliance_officer", name: "Compliance Officer", permissions: [
+      "view_overview", "view_executive", "view_analytics", "view_health",
+      "view_receipts", "view_users", "view_businesses",
+      "view_fraud", "manage_fraud", "view_audit",
+      "view_billing", "view_payouts", "view_settings", "view_training",
+    ] },
+    { id: "senior_staff", name: "Senior Staff", permissions: [
+      "view_overview", "view_executive", "view_analytics", "view_health",
+      "view_receipts", "manage_receipts", "view_users",
+      "view_businesses", "view_payouts", "manage_payouts",
+      "view_support", "manage_support", "view_fraud",
+      "view_audit", "view_training",
+    ] },
+    { id: "staff", name: "Staff", permissions: [
+      "view_overview", "view_receipts",
+      "view_support", "manage_support", "view_training",
+    ] },
+    { id: "viewer", name: "Viewer", permissions: [
+      "view_overview", "view_training",
+    ] },
   ],
   package_pricing: {
     basic_monthly_cents: 0,
@@ -153,19 +220,71 @@ const DEFAULT_EMAIL_TEMPLATES: EmailTemplate[] = [
   { id: "business_approved", name: "Business Approved", subject: "Congratulations! Your business is live!", body: "Hi {{business_name}},\n\nYour business is now live on LetsGo!\n\nBest regards,\nThe LetsGo Team", active: true },
 ];
 
-const ALL_PERMISSIONS = [
-  { id: "all", label: "Full Access (All Permissions)", color: COLORS.neonGreen },
-  { id: "view_receipts", label: "View Receipts" },
-  { id: "approve_receipts", label: "Approve/Reject Receipts" },
-  { id: "view_users", label: "View Users" },
-  { id: "edit_users", label: "Edit Users" },
-  { id: "view_businesses", label: "View Businesses" },
-  { id: "edit_businesses", label: "Edit Businesses" },
-  { id: "approve_payouts", label: "Approve Payouts" },
-  { id: "manage_support", label: "Manage Support Tickets" },
-  { id: "view_analytics", label: "View Analytics" },
-  { id: "manage_advertising", label: "Manage Advertising" },
-  { id: "manage_settings", label: "Manage Settings" },
+// ==================== PERMISSION DEFINITIONS ====================
+// Organized by section for the role modal UI.
+// "view_*" = read-only page access, "manage_*" = edit/approve/action capability.
+// manage_* implicitly grants the corresponding view_*.
+
+interface PermissionDef {
+  id: string;
+  label: string;
+  color?: string;
+  section: "full_access" | "page_access" | "management";
+}
+
+const ALL_PERMISSIONS: PermissionDef[] = [
+  // ── Full Access ──
+  { id: "all", label: "Full Access (All Permissions)", color: COLORS.neonGreen, section: "full_access" },
+
+  // ── Page Access (view_*) ──
+  { id: "view_overview", label: "Overview", section: "page_access" },
+  { id: "view_executive", label: "Executive", section: "page_access" },
+  { id: "view_analytics", label: "Staff Analytics", section: "page_access" },
+  { id: "view_health", label: "Business Health", section: "page_access" },
+  { id: "view_receipts", label: "Receipts", section: "page_access" },
+  { id: "view_billing", label: "Billing", section: "page_access" },
+  { id: "view_onboarding", label: "Onboarding", section: "page_access" },
+  { id: "view_businesses", label: "Businesses", section: "page_access" },
+  { id: "view_events", label: "Events", section: "page_access" },
+  { id: "view_ugc", label: "UGC Moderation", section: "page_access" },
+  { id: "view_users", label: "Users", section: "page_access" },
+  { id: "view_payouts", label: "Payouts", section: "page_access" },
+  { id: "view_referrals", label: "Referrals", section: "page_access" },
+  { id: "view_sales", label: "Sales", section: "page_access" },
+  { id: "view_advertising", label: "Ads & Add-ons", section: "page_access" },
+  { id: "view_support", label: "Support", section: "page_access" },
+  { id: "view_fraud", label: "Fraud Center", section: "page_access" },
+  { id: "view_messaging", label: "Messaging", section: "page_access" },
+  { id: "view_automation", label: "Automation", section: "page_access" },
+  { id: "view_promotions", label: "Discounts & Promos", section: "page_access" },
+  { id: "view_audit", label: "Audit Log", section: "page_access" },
+  { id: "view_settings", label: "Settings", section: "page_access" },
+  { id: "view_training", label: "Training", section: "page_access" },
+
+  // ── Management Actions (manage_*) ──
+  { id: "manage_receipts", label: "Approve/Reject Receipts", section: "management" },
+  { id: "manage_billing", label: "Manage Billing & Invoices", section: "management" },
+  { id: "manage_onboarding", label: "Approve Applications", section: "management" },
+  { id: "manage_businesses", label: "Edit Businesses", section: "management" },
+  { id: "manage_events", label: "Create/Edit Events", section: "management" },
+  { id: "manage_ugc", label: "Approve/Reject UGC", section: "management" },
+  { id: "manage_users", label: "Edit/Ban Users", section: "management" },
+  { id: "manage_payouts", label: "Approve/Send Payouts", section: "management" },
+  { id: "manage_referrals", label: "Manage Referrals", section: "management" },
+  { id: "manage_sales", label: "Manage Sales & Applications", section: "management" },
+  { id: "manage_advertising", label: "Manage Advertising", section: "management" },
+  { id: "manage_support", label: "Respond to Support Tickets", section: "management" },
+  { id: "manage_fraud", label: "Flag/Resolve Fraud Cases", section: "management" },
+  { id: "manage_messaging", label: "Send Messages", section: "management" },
+  { id: "manage_automation", label: "Configure Automation", section: "management" },
+  { id: "manage_promotions", label: "Create/Edit Promotions", section: "management" },
+  { id: "manage_settings", label: "Edit Platform Settings", section: "management" },
+];
+
+const PERMISSION_SECTIONS: { key: PermissionDef["section"]; label: string; color: string }[] = [
+  { key: "full_access", label: "Full Access", color: COLORS.neonGreen },
+  { key: "page_access", label: "Page Access (View Only)", color: COLORS.neonBlue },
+  { key: "management", label: "Management Actions", color: COLORS.neonOrange },
 ];
 
 // ==================== SETTINGS PAGE ====================
@@ -383,6 +502,15 @@ export default function SettingsPage() {
 
       if (settingsData) {
         const merged = { ...DEFAULT_SETTINGS, ...settingsData };
+        // Seed any missing default roles into the loaded config
+        if (Array.isArray(merged.roles_config)) {
+          const existingIds = new Set(merged.roles_config.map((r: RoleConfig) => r.id));
+          for (const defaultRole of DEFAULT_SETTINGS.roles_config) {
+            if (!existingIds.has(defaultRole.id)) {
+              merged.roles_config.push(defaultRole);
+            }
+          }
+        }
         setSettings(merged);
         originalSettingsRef.current = merged;
         // Seed schedule inputs from existing data
@@ -535,6 +663,9 @@ export default function SettingsPage() {
       { key: "platform_fee_cap_cents", label: "Fee Cap", format: v => formatCents(v) },
       { key: "cc_processing_fee_bps", label: "CC Processing Fee", format: v => bpsToPercent(v) + "%" },
       { key: "min_payout_cents", label: "Min Payout", format: v => formatCents(v) },
+      { key: "monthly_cashout_cap_cents", label: "New Acct Cap", format: v => formatCents(v) + "/mo" },
+      { key: "monthly_cashout_cap_standard_cents", label: "Standard Cap", format: v => formatCents(v) + "/mo" },
+      { key: "cashout_cap_months", label: "Probation", format: v => v + " months" },
       { key: "payout_processing_days", label: "Payout Hold", format: v => v + " days" },
       { key: "max_receipt_age_days", label: "Max Receipt Age", format: v => v + " days" },
     ];
@@ -609,6 +740,9 @@ export default function SettingsPage() {
         max_receipt_cents: settings.max_receipt_cents,
         rolling_window_days: settings.rolling_window_days,
         min_payout_cents: settings.min_payout_cents,
+        monthly_cashout_cap_cents: settings.monthly_cashout_cap_cents,
+        monthly_cashout_cap_standard_cents: settings.monthly_cashout_cap_standard_cents,
+        cashout_cap_months: settings.cashout_cap_months,
         payout_processing_days: settings.payout_processing_days,
         payout_methods: settings.payout_methods,
         package_pricing: settings.package_pricing,
@@ -1048,6 +1182,59 @@ export default function SettingsPage() {
                   <div style={{ fontSize: 28, fontWeight: 700 }}>{formatCents(settings.min_payout_cents)}</div>
                 )}
                 <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>To request withdrawal</div>
+              </div>
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Monthly Cashout Cap</div>
+                {editing ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 18, fontWeight: 700 }}>$</span>
+                    <input
+                      type="number"
+                      value={settings.monthly_cashout_cap_cents}
+                      onChange={e => setSettings({ ...settings, monthly_cashout_cap_cents: parseInt(e.target.value) || 0 })}
+                      style={{ width: 80, padding: 12, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 18, fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: 14, color: COLORS.textSecondary }}>cents</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 28, fontWeight: 700 }}>{formatCents(settings.monthly_cashout_cap_cents)}</div>
+                )}
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>Per month for new accounts</div>
+              </div>
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Standard Cashout Cap</div>
+                {editing ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 18, fontWeight: 700 }}>$</span>
+                    <input
+                      type="number"
+                      value={settings.monthly_cashout_cap_standard_cents}
+                      onChange={e => setSettings({ ...settings, monthly_cashout_cap_standard_cents: parseInt(e.target.value) || 0 })}
+                      style={{ width: 80, padding: 12, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 18, fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: 14, color: COLORS.textSecondary }}>cents</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 28, fontWeight: 700 }}>{formatCents(settings.monthly_cashout_cap_standard_cents)}</div>
+                )}
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>Per month after probation</div>
+              </div>
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Cap Duration</div>
+                {editing ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input
+                      type="number"
+                      value={settings.cashout_cap_months}
+                      onChange={e => setSettings({ ...settings, cashout_cap_months: parseInt(e.target.value) || 0 })}
+                      style={{ width: 80, padding: 12, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, fontSize: 18, fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: 14, color: COLORS.textSecondary }}>months</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 28, fontWeight: 700 }}>{settings.cashout_cap_months} mo</div>
+                )}
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>New account probation period</div>
               </div>
               <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
                 <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Payout Hold Period</div>
@@ -1508,21 +1695,25 @@ export default function SettingsPage() {
                       )}
                     </div>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {role.permissions.map(perm => (
-                      <span
-                        key={perm}
-                        style={{
-                          padding: "4px 12px",
-                          background: perm === "all" ? "rgba(57,255,20,0.2)" : COLORS.cardBg,
-                          border: "1px solid " + (perm === "all" ? COLORS.neonGreen : COLORS.cardBorder),
-                          borderRadius: 6, fontSize: 11,
-                          color: perm === "all" ? COLORS.neonGreen : COLORS.textSecondary,
-                        }}
-                      >
-                        {perm}
-                      </span>
-                    ))}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {role.permissions.map(perm => {
+                      const def = ALL_PERMISSIONS.find(p => p.id === perm);
+                      const color = perm === "all" ? COLORS.neonGreen : perm.startsWith("manage_") ? COLORS.neonOrange : COLORS.neonBlue;
+                      return (
+                        <span
+                          key={perm}
+                          style={{
+                            padding: "3px 10px",
+                            background: color + "18",
+                            border: "1px solid " + color + "60",
+                            borderRadius: 6, fontSize: 10,
+                            color,
+                          }}
+                        >
+                          {def?.label || perm}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -1626,36 +1817,66 @@ export default function SettingsPage() {
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 12, textTransform: "uppercase", fontWeight: 600 }}>Permissions</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {ALL_PERMISSIONS.map(perm => (
-                  <label
-                    key={perm.id}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, padding: 12,
-                      background: newRole.permissions.includes(perm.id) ? "rgba(57,255,20,0.1)" : COLORS.darkBg,
-                      borderRadius: 8, cursor: "pointer",
-                      border: newRole.permissions.includes(perm.id) ? "1px solid " + COLORS.neonGreen : "1px solid " + COLORS.cardBorder,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={newRole.permissions.includes(perm.id)}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setNewRole({ ...newRole, permissions: [...newRole.permissions, perm.id] });
-                        } else {
-                          setNewRole({ ...newRole, permissions: newRole.permissions.filter(p => p !== perm.id) });
-                        }
-                      }}
-                      style={{ width: 18, height: 18 }}
-                    />
-                    <span style={{ fontSize: 13, color: newRole.permissions.includes(perm.id) ? COLORS.neonGreen : COLORS.textPrimary }}>
-                      {perm.label}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              {PERMISSION_SECTIONS.map(section => {
+                const sectionPerms = ALL_PERMISSIONS.filter(p => p.section === section.key);
+                const allChecked = sectionPerms.every(p => newRole.permissions.includes(p.id));
+                return (
+                  <div key={section.key} style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                      <label style={{ fontSize: 11, color: section.color, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1 }}>{section.label}</label>
+                      {section.key !== "full_access" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (allChecked) {
+                              setNewRole({ ...newRole, permissions: newRole.permissions.filter(p => !sectionPerms.some(sp => sp.id === p)) });
+                            } else {
+                              const newPerms = new Set([...newRole.permissions, ...sectionPerms.map(sp => sp.id)]);
+                              setNewRole({ ...newRole, permissions: Array.from(newPerms) });
+                            }
+                          }}
+                          style={{ fontSize: 10, color: section.color, background: "none", border: "1px solid " + section.color, borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontWeight: 600, opacity: 0.8 }}
+                        >
+                          {allChecked ? "Deselect All" : "Select All"}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: section.key === "full_access" ? "1fr" : "1fr 1fr", gap: 8 }}>
+                      {sectionPerms.map(perm => {
+                        const checked = newRole.permissions.includes(perm.id);
+                        const accentColor = perm.color || section.color;
+                        return (
+                          <label
+                            key={perm.id}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 10, padding: 10,
+                              background: checked ? (accentColor + "18") : COLORS.darkBg,
+                              borderRadius: 8, cursor: "pointer",
+                              border: checked ? "1px solid " + accentColor : "1px solid " + COLORS.cardBorder,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setNewRole({ ...newRole, permissions: [...newRole.permissions, perm.id] });
+                                } else {
+                                  setNewRole({ ...newRole, permissions: newRole.permissions.filter(p => p !== perm.id) });
+                                }
+                              }}
+                              style={{ width: 16, height: 16 }}
+                            />
+                            <span style={{ fontSize: 12, color: checked ? accentColor : COLORS.textPrimary }}>
+                              {perm.label}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>

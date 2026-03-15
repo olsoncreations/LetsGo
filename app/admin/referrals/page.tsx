@@ -1530,7 +1530,7 @@ export default function ReferralsPage() {
   /* ==================== LINK TRACKING ==================== */
 
   function getInfluencerLink(code: string): string {
-    return `https://letsgo.app/signup?ref=${code}`;
+    return `https://www.useletsgo.com/welcome?ref=${code}`;
   }
 
   function handleCopyLink(code: string) {

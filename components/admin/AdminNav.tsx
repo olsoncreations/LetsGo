@@ -71,14 +71,14 @@ export default function AdminNav({ badges = {} }: AdminNavProps) {
             .from("staff_users")
             .select("*")
             .eq("user_id", userId)
-            .single();
-          
+            .maybeSingle();
+
           // Try to get name from profiles table
           const { data: profileData } = await supabaseBrowser
             .from("profiles")
             .select("full_name, first_name, last_name")
             .eq("id", userId)
-            .single();
+            .maybeSingle();
           
           // Helper: check if a value is actually a name (not an email)
           const isRealName = (val: string | null | undefined): val is string => {

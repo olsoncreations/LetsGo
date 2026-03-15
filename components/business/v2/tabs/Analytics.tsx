@@ -177,7 +177,7 @@ export default function Analytics({ businessId, isPremium }: BusinessTabProps) {
 
       // Calculate stats
       const pending = allReceipts.filter((r) => (r.status || '').toLowerCase() === 'pending');
-      const approved = allReceipts.filter((r) => (r.status || '').toLowerCase() === 'approved');
+      const approved = allReceipts.filter((r) => ['approved', 'business_approved'].includes((r.status || '').toLowerCase()));
       const rejected = allReceipts.filter((r) => (r.status || '').toLowerCase() === 'rejected');
 
       const totalProcessed = approved.length + rejected.length;

@@ -113,11 +113,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Add creator as game_master
-  await supabaseServer.from("group_game_players").insert({
+  const { error: gmErr } = await supabaseServer.from("group_game_players").insert({
     game_id: game.id,
     user_id: user.id,
     role: "game_master",
   });
+  if (gmErr) {
+    console.error("[group-games] Failed to add game master:", gmErr.message);
+  }
 
   // Add invited friends as players
   if (invitedFriendIds.length > 0) {
@@ -147,7 +150,10 @@ export async function POST(req: NextRequest) {
         user_id: fid,
         role: "player" as const,
       }));
-      await supabaseServer.from("group_game_players").insert(playerRows);
+      const { error: playersErr } = await supabaseServer.from("group_game_players").insert(playerRows);
+      if (playersErr) {
+        console.error("[group-games] Failed to add invited players:", playersErr.message);
+      }
 
       // Notify each invited friend
       const { data: creatorProfile } = await supabaseServer

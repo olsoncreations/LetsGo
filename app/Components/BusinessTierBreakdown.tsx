@@ -13,7 +13,8 @@ type Tier = {
 type BusinessOverview = {
   business: {
     id: string;
-    name: string;
+    business_name: string | null;
+    public_business_name: string | null;
     city: string | null;
     state: string | null;
     category_main: string | null;
@@ -134,7 +135,7 @@ export default function BusinessTierBreakdown({ businessId }: Props) {
             {business.category_main
               ? business.category_main
               : "Place"}{" "}
-            · {business.name}
+            · {business.public_business_name || business.business_name || "Unknown"}
           </span>
           <span className="text-[10px] text-white/45">
             {business.city && business.state

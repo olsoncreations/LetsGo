@@ -55,7 +55,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .from("business")
       .select("id, business_name, stripe_customer_id, config")
       .eq("id", businessId)
-      .single();
+      .maybeSingle();
 
     if (bizErr || !biz) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });
@@ -179,7 +179,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
         .from("business")
         .select("config")
         .eq("id", businessId)
-        .single();
+        .maybeSingle();
 
       const currentConfig = (currentBiz?.config || {}) as Record<string, unknown>;
       const newConfig = { ...currentConfig, paymentMethod: setPreferred };
@@ -229,7 +229,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       .from("business")
       .select("config")
       .eq("id", businessId)
-      .single();
+      .maybeSingle();
 
     const currentConfig = (currentBiz?.config || {}) as Record<string, unknown>;
     const newConfig = { ...currentConfig, ...configUpdates };

@@ -216,11 +216,11 @@ export async function GET(req: NextRequest) {
   if (businessIds.size > 0) {
     const { data: businesses } = await supabaseServer
       .from("business")
-      .select("id, public_business_name, business_name, name")
+      .select("id, public_business_name, business_name")
       .in("id", Array.from(businessIds));
 
     for (const b of businesses ?? []) {
-      const bizName = (b.public_business_name || b.business_name || b.name || "Unknown") as string;
+      const bizName = (b.public_business_name || b.business_name || "Unknown") as string;
       businessMap.set(b.id as string, bizName);
     }
   }

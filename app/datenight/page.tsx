@@ -756,8 +756,8 @@ function TheShow({ onBack }: { onBack: () => void }) {
     } catch (err) {
       console.error("[Recalculate] error:", err);
       setTimeout(() => {
+        setSadMsg({ text: "Hmm, couldn't find a replacement. Try again?", icon: "😕" });
         setRecalcTarget(null);
-        setSadMsg(null);
       }, 3000);
     }
   };

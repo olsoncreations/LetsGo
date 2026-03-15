@@ -210,7 +210,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       .update(updatePayload)
       .eq("id", statementId)
       .select("id, status, sent_at, viewed_at")
-      .single();
+      .maybeSingle();
 
     if (updateErr) {
       console.error("[billing-statements] PATCH error:", updateErr);

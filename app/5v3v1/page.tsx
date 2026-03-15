@@ -2962,6 +2962,7 @@ function FiveThreeOne() {
     setToast({ message, type });
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   };
+  useEffect(() => { return () => { if (toastTimer.current) clearTimeout(toastTimer.current); }; }, []);
 
   // ─── Onboarding tour ───
   const fiveTourSteps: TourStep[] = useMemo(() => [

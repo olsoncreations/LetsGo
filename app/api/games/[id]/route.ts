@@ -75,6 +75,9 @@ export async function PATCH(
     }
 
     const pickIds = picks.map(String);
+    if (new Set(pickIds).size !== 5) {
+      return NextResponse.json({ error: "Duplicate business IDs not allowed" }, { status: 400 });
+    }
 
     // Verify all business IDs exist
     const { data: businesses } = await supabaseServer
@@ -125,6 +128,9 @@ export async function PATCH(
     }
 
     const pickIds = picks.map(String);
+    if (new Set(pickIds).size !== 3) {
+      return NextResponse.json({ error: "Duplicate business IDs not allowed" }, { status: 400 });
+    }
     const pick5Set = new Set((game.pick5_ids as string[]) ?? []);
 
     // All 3 must be from the original 5

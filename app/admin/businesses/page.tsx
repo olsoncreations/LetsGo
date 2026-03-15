@@ -462,7 +462,7 @@ function BusinessesPage() {
       .from("platform_settings")
       .select("package_pricing")
       .eq("id", 1)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data?.package_pricing) {
           setPkgPricing(data.package_pricing as typeof pkgPricing);

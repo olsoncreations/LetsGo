@@ -403,6 +403,18 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         setError("Please fill in all fields.");
         return;
       }
+      if (firstName.trim().length < 1 || lastName.trim().length < 1) {
+        setError("Please enter a valid first and last name.");
+        return;
+      }
+      if (firstName.trim().length > 50 || lastName.trim().length > 50) {
+        setError("Name is too long (50 characters max).");
+        return;
+      }
+      if (!/^[a-zA-Z\s'-]+$/.test(firstName.trim()) || !/^[a-zA-Z\s'-]+$/.test(lastName.trim())) {
+        setError("Name can only contain letters, spaces, hyphens, and apostrophes.");
+        return;
+      }
       if (!/^\d{5}$/.test(zipCode)) {
         setError("Please enter a valid 5-digit zip code.");
         return;
@@ -485,11 +497,15 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
           body: JSON.stringify(profilePayload),
         });
         if (!profileRes.ok) {
-          console.error("Failed to save profile:", await profileRes.text());
+          const errText = await profileRes.text();
+          console.error("Failed to save profile:", errText);
+          setError("Account created but profile save failed. Please contact support if your name or zip code are missing.");
+          setLoading(false);
+          return;
         }
       }
 
-      // Attribute signup to influencer (fire-and-forget)
+      // Attribute signup to influencer (don't block signup, but log failures)
       if (refCode && refValid && data.session) {
         fetch("/api/influencers/attribute", {
           method: "POST",
@@ -498,7 +514,13 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
             Authorization: `Bearer ${data.session.access_token}`,
           },
           body: JSON.stringify({ code: refCode }),
-        }).catch(() => {}); // don't block signup on attribution errors
+        }).then(async (res) => {
+          if (!res.ok) {
+            console.error("Influencer attribution failed:", await res.text());
+          }
+        }).catch((err) => {
+          console.error("Influencer attribution network error:", err);
+        });
       }
 
       if (data.user && !data.session) {
@@ -506,8 +528,8 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
       } else if (data.session) {
         onSuccess(data.user!.id);
       }
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
@@ -562,9 +584,9 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
 
         onSuccess(data.user.id, !!businessId, businessId);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Unexpected error:", err);
-      setError(err.message || "An unexpected error occurred.");
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
@@ -840,7 +862,7 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
                   setLoading(true);
                   try {
                     const { error: resetErr } = await supabaseBrowser.auth.resetPasswordForEmail(email, {
-                      redirectTo: `${window.location.origin}/welcome`,
+                      redirectTo: `${window.location.origin}/welcome?mode=signin`,
                     });
                     if (resetErr) throw resetErr;
                     setMessage("Password reset link sent! Check your email.");
@@ -1087,7 +1109,11 @@ export default function WelcomePage() {
           const res = await fetch(`/api/auth/check-business`, {
             headers: { Authorization: `Bearer ${data.session.access_token}` },
           });
-          const { businessId } = await res.json();
+          let businessId: string | undefined;
+          if (res.ok) {
+            const json = await res.json();
+            businessId = json.businessId;
+          }
 
           if (businessId) {
             router.push(`/businessprofile-v2/${businessId}`);

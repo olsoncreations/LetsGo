@@ -36,7 +36,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .from("receipts")
       .select("id, user_id, business_id, receipt_total_cents, visit_date, created_at")
       .eq("id", receiptId)
-      .single();
+      .maybeSingle();
 
     if (receiptErr || !receipt) {
       return NextResponse.json({ error: "Receipt not found" }, { status: 404 });

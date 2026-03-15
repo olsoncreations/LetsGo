@@ -32,18 +32,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
-  // Read minimum cashout from platform_settings (default $20.00)
+  // Read platform settings
   const { data: ps } = await supabaseServer
     .from("platform_settings")
-    .select("min_payout_cents")
+    .select("min_payout_cents, monthly_cashout_cap_cents, monthly_cashout_cap_standard_cents, cashout_cap_months")
     .eq("id", 1)
     .maybeSingle();
   const minCashoutCents = (ps?.min_payout_cents as number) || 2000;
+  const monthlyCashoutCapCents = (ps?.monthly_cashout_cap_cents as number) || 20000; // $200 default (new accounts)
+  const monthlyCashoutCapStandardCents = (ps?.monthly_cashout_cap_standard_cents as number) || 50000; // $500 default (after probation)
+  const cashoutCapMonths = (ps?.cashout_cap_months as number) || 12; // 12-month probation default
 
   // Fetch current profile
   const { data: profile, error: profileErr } = await supabaseServer
     .from("profiles")
-    .select("available_balance, payout_method, payout_identifier, payout_verified, status, stripe_connect_account_id, stripe_connect_onboarding_complete")
+    .select("available_balance, payout_method, payout_identifier, payout_verified, status, stripe_connect_account_id, stripe_connect_onboarding_complete, created_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -104,6 +107,49 @@ export async function POST(req: NextRequest) {
       { error: `Insufficient balance. Available: $${(availableBalance / 100).toFixed(2)}` },
       { status: 400 },
     );
+  }
+
+  // Monthly cashout cap (fraud prevention)
+  // New accounts (<12 months): $200/month | Established accounts: $500/month
+  const accountCreated = profile.created_at ? new Date(profile.created_at as string) : new Date();
+  const accountAgeMs = Date.now() - accountCreated.getTime();
+  const accountAgeMonths = accountAgeMs / (30.44 * 24 * 60 * 60 * 1000); // avg days/month
+  const isNewAccount = accountAgeMonths < cashoutCapMonths;
+  const activeCap = isNewAccount ? monthlyCashoutCapCents : monthlyCashoutCapStandardCents;
+  const capLabel = isNewAccount
+    ? `$${(monthlyCashoutCapCents / 100).toFixed(2)}/month for the first ${cashoutCapMonths} months`
+    : `$${(monthlyCashoutCapStandardCents / 100).toFixed(2)}/month`;
+
+  {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01T00:00:00`;
+
+    const { data: monthCashouts } = await supabaseServer
+      .from("user_payouts")
+      .select("amount_cents")
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing", "completed"])
+      .gte("requested_at", monthStart);
+
+    const cashedThisMonth = (monthCashouts || []).reduce(
+      (sum, c) => sum + ((c.amount_cents as number) || 0), 0
+    );
+
+    const remainingCap = activeCap - cashedThisMonth;
+
+    if (remainingCap <= 0) {
+      return NextResponse.json(
+        { error: `Monthly cashout limit reached (${capLabel}). Resets next month.` },
+        { status: 400 },
+      );
+    }
+
+    if (requestedAmount > remainingCap) {
+      return NextResponse.json(
+        { error: `Monthly cashout limit: $${(remainingCap / 100).toFixed(2)} remaining this month (${capLabel}).` },
+        { status: 400 },
+      );
+    }
   }
 
   // Calculate fee (3% for Venmo, free for bank)
@@ -210,12 +256,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to create cashout request" }, { status: 500 });
   }
 
+  // Re-read balance to mitigate race conditions between validation and update
+  const { data: freshProfile } = await supabaseServer
+    .from("profiles")
+    .select("available_balance, pending_payout")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const freshBalance = (freshProfile?.available_balance as number) || 0;
+  const freshPending = (freshProfile?.pending_payout as number) || 0;
+
+  if (freshBalance < requestedAmount) {
+    // Balance changed between validation and update — roll back the payout record
+    await supabaseServer.from("user_payouts").delete().eq("id", payout.id);
+    return NextResponse.json(
+      { error: "Balance changed. Please try again." },
+      { status: 409 },
+    );
+  }
+
   // Subtract from available balance, add to pending
   const { error: balanceErr } = await supabaseServer
     .from("profiles")
     .update({
-      available_balance: availableBalance - requestedAmount,
-      pending_payout: ((profile as Record<string, unknown>).pending_payout as number || 0) + requestedAmount,
+      available_balance: freshBalance - requestedAmount,
+      pending_payout: freshPending + requestedAmount,
     })
     .eq("id", user.id);
 

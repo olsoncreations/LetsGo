@@ -51,7 +51,7 @@ interface BusinessRecord {
   city: string | null;
   state: string | null;
   contact_email: string | null;
-  plan: string | null;
+  billing_plan: string | null;
   status: string | null;
   payout_preset: string | null;
   payout_tiers: number[] | null;
@@ -244,7 +244,7 @@ export default function PayoutsPage() {
     try {
       const { data: bizData } = await supabaseBrowser
         .from("business")
-        .select("id, public_business_name, business_name, city, state, contact_email, plan, status, payout_preset, payout_tiers, custom_payout_tiers, payout_changes_this_year, payout_change_limit, payout_staff_override")
+        .select("id, public_business_name, business_name, city, state, contact_email, billing_plan, status, payout_preset, payout_tiers, custom_payout_tiers, payout_changes_this_year, payout_change_limit, payout_staff_override")
         .order("public_business_name", { ascending: true });
       if (bizData) setBusinesses(bizData as BusinessRecord[]);
     } catch (err) {
@@ -286,7 +286,7 @@ export default function PayoutsPage() {
       name.toLowerCase().includes(q) ||
       (b.city || "").toLowerCase().includes(q) ||
       (b.contact_email || "").toLowerCase().includes(q);
-    const matchesPlan = tierPlanFilter === "all" || b.plan === tierPlanFilter;
+    const matchesPlan = tierPlanFilter === "all" || b.billing_plan === tierPlanFilter;
     return matchesSearch && matchesPlan;
   });
 
@@ -323,10 +323,20 @@ export default function PayoutsPage() {
     try {
       await supabaseBrowser.rpc("increment_balance", { p_user_id: selectedPayout.user_id, p_amount: selectedPayout.amount_cents });
     } catch {
-      // If RPC doesn't exist, do manual update
+      // If RPC doesn't exist, fetch current balance and add back the denied amount
+      const { data: currentProfile } = await supabaseBrowser
+        .from("profiles")
+        .select("available_balance, pending_payout")
+        .eq("id", selectedPayout.user_id)
+        .maybeSingle();
+      const currentBalance = (currentProfile?.available_balance as number) || 0;
+      const currentPending = (currentProfile?.pending_payout as number) || 0;
       await supabaseBrowser
         .from("profiles")
-        .update({ available_balance: selectedPayout.amount_cents, pending_payout: 0 })
+        .update({
+          available_balance: currentBalance + selectedPayout.amount_cents,
+          pending_payout: Math.max(0, currentPending - selectedPayout.amount_cents),
+        })
         .eq("id", selectedPayout.user_id);
     }
     logAudit({ action: "deny_payout", tab: AUDIT_TABS.PAYOUTS, subTab: "Payout Queue", targetType: "user_payout", targetId: selectedPayout.id, entityName: selectedPayout.user_name || selectedPayout.account, fieldName: "status", oldValue: "pending", newValue: "failed", details: `Amount: ${formatMoney(selectedPayout.amount_cents)}, Reason: ${denyReason}` });
@@ -353,6 +363,21 @@ export default function PayoutsPage() {
       .update({ status: "completed", processed_at: new Date().toISOString() })
       .eq("id", payout.id);
     if (error) { alert("Error: " + error.message); return; }
+    // Decrement pending_payout now that the payout is complete
+    try {
+      const { data: profile } = await supabaseBrowser
+        .from("profiles")
+        .select("pending_payout")
+        .eq("id", payout.user_id)
+        .maybeSingle();
+      if (profile) {
+        const currentPending = (profile.pending_payout as number) || 0;
+        await supabaseBrowser
+          .from("profiles")
+          .update({ pending_payout: Math.max(0, currentPending - payout.amount_cents) })
+          .eq("id", payout.user_id);
+      }
+    } catch { /* logged but non-blocking */ }
     logAudit({ action: "complete_payout", tab: AUDIT_TABS.PAYOUTS, subTab: "Payout Queue", targetType: "user_payout", targetId: payout.id, entityName: payout.user_name || payout.account, fieldName: "status", oldValue: "processing", newValue: "completed", details: `Amount: ${formatMoney(payout.amount_cents)}` });
     alert("✅ Payout marked as completed.");
     await fetchPayouts();
@@ -1062,7 +1087,7 @@ export default function PayoutsPage() {
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <Badge status={b.plan || "basic"} />
+                          <Badge status={b.billing_plan || "basic"} />
                           <Badge status={b.status || "active"} />
                         </div>
                       </div>

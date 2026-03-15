@@ -106,15 +106,20 @@ export async function POST(req: NextRequest): Promise<Response> {
         .update(updateData)
         .eq("id", payoutId);
 
-      // Update user balance: subtract from pending_payout, add to lifetime_payout
-      const pendingPayout = (profile?.pending_payout as number) || 0;
-      const lifetimePayout = (profile?.lifetime_payout as number) || 0;
+      // Update user balance: subtract from pending_payout
+      // Note: lifetime_payout was already credited when the receipt was approved,
+      // so we do NOT add to it again here (that would double-count earnings)
+      const { data: freshProfile } = await supabaseServer
+        .from("profiles")
+        .select("pending_payout")
+        .eq("id", payout.user_id)
+        .maybeSingle();
+      const currentPending = (freshProfile?.pending_payout as number) || 0;
 
       await supabaseServer
         .from("profiles")
         .update({
-          pending_payout: Math.max(0, pendingPayout - payout.amount_cents),
-          lifetime_payout: lifetimePayout + payout.amount_cents,
+          pending_payout: Math.max(0, currentPending - payout.amount_cents),
         })
         .eq("id", payout.user_id);
 
@@ -172,21 +177,21 @@ export async function POST(req: NextRequest): Promise<Response> {
         })
         .eq("id", payoutId);
 
-      // Return balance to user
-      const pendingPayout = (profile?.pending_payout as number) || 0;
+      // Return balance to user — re-fetch current values to avoid race conditions
       const { data: currentProfile } = await supabaseServer
         .from("profiles")
-        .select("available_balance")
+        .select("available_balance, pending_payout")
         .eq("id", payout.user_id)
         .maybeSingle();
 
       const currentBalance = (currentProfile?.available_balance as number) || 0;
+      const currentPending = (currentProfile?.pending_payout as number) || 0;
 
       await supabaseServer
         .from("profiles")
         .update({
           available_balance: currentBalance + payout.amount_cents,
-          pending_payout: Math.max(0, pendingPayout - payout.amount_cents),
+          pending_payout: Math.max(0, currentPending - payout.amount_cents),
         })
         .eq("id", payout.user_id);
 

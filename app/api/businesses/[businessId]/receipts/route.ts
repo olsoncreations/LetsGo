@@ -119,6 +119,29 @@ export async function PATCH(
       return NextResponse.json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, { status: 400 });
     }
 
+    // When business approves, verify the business is active and has a valid payment method
+    if (status === "business_approved") {
+      const { data: biz } = await supabaseServer
+        .from("business")
+        .select("is_active, stripe_customer_id, stripe_payment_method_id")
+        .eq("id", businessId)
+        .maybeSingle();
+
+      if (!biz?.is_active) {
+        return NextResponse.json(
+          { error: "This business is currently suspended. Receipts cannot be approved until the business is reactivated." },
+          { status: 403 },
+        );
+      }
+
+      if (!biz?.stripe_customer_id || !biz?.stripe_payment_method_id) {
+        return NextResponse.json(
+          { error: "A valid payment method must be on file before you can approve receipts. Please update your billing information in the Billing tab." },
+          { status: 400 },
+        );
+      }
+    }
+
     // When business approves, record the timestamp for 30-day dispute window
     const updatePayload: Record<string, string> = { status };
     if (status === "business_approved") {

@@ -1218,6 +1218,11 @@ function DiscoveryPage() {
     } catch { return null; }
   }, []);
 
+  const getAuthToken = useCallback(async (): Promise<string | null> => {
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    return session?.access_token ?? null;
+  }, []);
+
   // Load user's saved home zip as default location
   useEffect(() => {
     (async () => {
@@ -1252,7 +1257,11 @@ function DiscoveryPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/businesses/follow?userId=${userId}`);
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch(`/api/businesses/follow?userId=${userId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && Array.isArray(data.followedBusinessIds)) {
@@ -1261,7 +1270,7 @@ function DiscoveryPage() {
       } catch { /* silent — non-critical */ }
     })();
     return () => { cancelled = true; };
-  }, [getUserId]);
+  }, [getUserId, getAuthToken]);
 
   const handleToggleFollow = useCallback(async (businessId: string) => {
     const userId = getUserId();
@@ -1276,9 +1285,11 @@ function DiscoveryPage() {
       return next;
     });
     try {
+      const token = await getAuthToken();
+      if (!token) { alert("Please log in to follow businesses."); return; }
       const res = await fetch("/api/businesses/follow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ businessId, userId }),
       });
       if (!res.ok) {
@@ -1295,7 +1306,7 @@ function DiscoveryPage() {
         return next;
       });
     }
-  }, [followedIds, getUserId]);
+  }, [followedIds, getUserId, getAuthToken]);
 
   // Fetch businesses + media on mount
   useEffect(() => {
@@ -1312,7 +1323,7 @@ function DiscoveryPage() {
           .select(`
             id, business_name, public_business_name,
             contact_phone, website, street_address, city, state, zip,
-            name, phone_number, website_url, address_line1,
+            phone_number, website_url, address_line1,
             category_main, config, blurb,
             payout_tiers, payout_preset,
             mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,

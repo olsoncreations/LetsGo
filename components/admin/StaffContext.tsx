@@ -13,9 +13,70 @@ interface RoleConfig {
 // Must match the defaults in settings/page.tsx DEFAULT_SETTINGS.roles_config
 const DEFAULT_ROLES: RoleConfig[] = [
   { id: "admin", name: "Administrator", permissions: ["all"] },
-  { id: "senior_staff", name: "Senior Staff", permissions: ["view_receipts", "approve_receipts", "view_users", "view_businesses", "approve_payouts", "manage_support", "view_analytics"] },
-  { id: "staff", name: "Staff", permissions: ["view_receipts", "manage_support"] },
-  { id: "viewer", name: "Viewer", permissions: ["view_only"] },
+  { id: "operations_manager", name: "Operations Manager", permissions: [
+    "view_overview", "view_executive", "view_analytics", "view_health",
+    "view_receipts", "manage_receipts", "view_billing", "manage_billing",
+    "view_onboarding", "manage_onboarding", "view_businesses", "manage_businesses",
+    "view_events", "manage_events", "view_ugc", "manage_ugc",
+    "view_users", "manage_users", "view_payouts", "manage_payouts",
+    "view_referrals", "view_support", "manage_support",
+    "view_fraud", "manage_fraud", "view_messaging", "manage_messaging",
+    "view_automation", "view_promotions", "view_audit", "view_training",
+  ] },
+  { id: "finance_manager", name: "Finance Manager", permissions: [
+    "view_overview", "view_executive", "view_analytics", "view_health",
+    "view_receipts", "manage_receipts", "view_billing", "manage_billing",
+    "view_payouts", "manage_payouts", "view_referrals",
+    "view_fraud", "manage_fraud", "view_audit", "view_training",
+  ] },
+  { id: "sales_manager", name: "Sales Manager", permissions: [
+    "view_overview", "view_executive", "view_analytics", "view_health",
+    "view_businesses", "view_users", "view_referrals", "manage_referrals",
+    "view_sales", "manage_sales", "view_advertising", "manage_advertising",
+    "view_promotions", "manage_promotions", "view_support", "view_training",
+  ] },
+  { id: "sales_rep", name: "Sales Rep", permissions: [
+    "view_overview", "view_analytics",
+    "view_businesses", "view_referrals",
+    "view_sales", "view_advertising", "view_training",
+  ] },
+  { id: "marketing_manager", name: "Marketing Manager", permissions: [
+    "view_overview", "view_executive", "view_analytics", "view_health",
+    "view_businesses", "view_events", "manage_events",
+    "view_ugc", "manage_ugc", "view_advertising", "manage_advertising",
+    "view_promotions", "manage_promotions", "view_messaging", "manage_messaging",
+    "view_training",
+  ] },
+  { id: "content_moderator", name: "Content Moderator", permissions: [
+    "view_overview", "view_ugc", "manage_ugc",
+    "view_events", "manage_events", "view_messaging", "manage_messaging",
+    "view_support", "manage_support", "view_training",
+  ] },
+  { id: "support_agent", name: "Support Agent", permissions: [
+    "view_overview", "view_users", "view_businesses", "view_receipts",
+    "view_support", "manage_support", "view_messaging", "manage_messaging",
+    "view_training",
+  ] },
+  { id: "compliance_officer", name: "Compliance Officer", permissions: [
+    "view_overview", "view_executive", "view_analytics", "view_health",
+    "view_receipts", "view_users", "view_businesses",
+    "view_fraud", "manage_fraud", "view_audit",
+    "view_billing", "view_payouts", "view_settings", "view_training",
+  ] },
+  { id: "senior_staff", name: "Senior Staff", permissions: [
+    "view_overview", "view_executive", "view_analytics", "view_health",
+    "view_receipts", "manage_receipts", "view_users",
+    "view_businesses", "view_payouts", "manage_payouts",
+    "view_support", "manage_support", "view_fraud",
+    "view_audit", "view_training",
+  ] },
+  { id: "staff", name: "Staff", permissions: [
+    "view_overview", "view_receipts",
+    "view_support", "manage_support", "view_training",
+  ] },
+  { id: "viewer", name: "Viewer", permissions: [
+    "view_overview", "view_training",
+  ] },
 ];
 
 interface StaffContextValue {

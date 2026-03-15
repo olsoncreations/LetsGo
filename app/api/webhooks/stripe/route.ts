@@ -59,8 +59,8 @@ export async function POST(req: Request): Promise<Response> {
     }
   } catch (err) {
     console.error(`[stripe-webhook] Error handling ${event.type}:`, err);
-    // Return 200 anyway to prevent Stripe from retrying (we logged the error)
-    return NextResponse.json({ received: true, error: "Handler error" });
+    // Return 500 so Stripe retries — handlers are idempotent so retries are safe
+    return NextResponse.json({ error: "Handler error" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

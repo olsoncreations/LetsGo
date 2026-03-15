@@ -2623,7 +2623,11 @@ export default function ExperiencesPage() {
       const uid = await getUserId();
       if (!uid) return;
       try {
-        const res = await fetch(`/api/businesses/follow?userId=${uid}`);
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch(`/api/businesses/follow?userId=${uid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (res.ok) {
           const data = await res.json();
           setFollowedBizIds(new Set<string>(data.followedBusinessIds ?? []));
@@ -2654,9 +2658,11 @@ export default function ExperiencesPage() {
     });
 
     try {
+      const token = await getAuthToken();
+      if (!token) { alert("Please sign in to follow businesses."); return; }
       const res = await fetch("/api/businesses/follow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ businessId: bizId, userId: uid }),
       });
       if (!res.ok) {

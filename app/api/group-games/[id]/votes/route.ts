@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     .from("group_games")
     .select("status, current_round, advance_per_round")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (!game || game.status !== "voting") {
     return NextResponse.json({ error: "Game is not in voting phase" }, { status: 400 });
@@ -71,6 +71,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   const maxVotes = advanceIdx < advancePerRound.length
     ? advancePerRound[advanceIdx]
     : advancePerRound[advancePerRound.length - 1] ?? 1;
+
+  // Deduplicate business IDs
+  const uniqueBusinessIds = [...new Set(businessIds as string[])];
+  if (uniqueBusinessIds.length !== businessIds.length) {
+    return NextResponse.json({ error: "Duplicate business IDs not allowed" }, { status: 400 });
+  }
 
   if (businessIds.length > maxVotes) {
     return NextResponse.json(

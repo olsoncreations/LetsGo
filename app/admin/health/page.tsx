@@ -300,7 +300,7 @@ export default function HealthPage() {
     try {
       const { data: { user } } = await supabaseBrowser.auth.getUser();
       if (user) {
-        const { data: staffUser } = await supabaseBrowser.from("staff_users").select("name").eq("user_id", user.id).single();
+        const { data: staffUser } = await supabaseBrowser.from("staff_users").select("name").eq("user_id", user.id).maybeSingle();
         if (staffUser?.name) staffName = staffUser.name;
       }
     } catch { /* use default */ }

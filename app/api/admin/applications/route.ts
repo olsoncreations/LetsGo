@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest) {
     .from("role_applications")
     .select("*")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (fetchError || !app) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
