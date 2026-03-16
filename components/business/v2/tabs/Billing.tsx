@@ -55,6 +55,101 @@ type InvoiceLine = {
   quantity?: number | null;
 };
 
+// ==================== PENDING ADJUSTMENTS COMPONENT ====================
+function PendingAdjustments({ businessId, colors }: { businessId: string; colors: Record<string, string> }) {
+  const [adjustments, setAdjustments] = useState<{ id: string; amount_cents: number; type: string; description: string; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session?.access_token) { if (mounted) setLoading(false); return; }
+
+        const res = await fetch(`/api/businesses/adjustments?business_id=${encodeURIComponent(businessId)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok && mounted) {
+          const json = await res.json();
+          setAdjustments(json.adjustments || []);
+        }
+      } catch { /* API may not be available */ }
+      finally { if (mounted) setLoading(false); }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [businessId]);
+
+  if (loading || adjustments.length === 0) return null;
+
+  const totalCredits = adjustments.filter(a => a.type === "credit").reduce((s, a) => s + Math.abs(a.amount_cents), 0);
+  const totalCharges = adjustments.filter(a => a.type === "charge").reduce((s, a) => s + Math.abs(a.amount_cents), 0);
+
+  return (
+    <div
+      style={{
+        background: "rgba(255, 255, 255, 0.03)",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
+        borderRadius: "16px",
+        padding: "1.5rem 2rem",
+        marginBottom: "1.5rem",
+      }}
+    >
+      <div style={{ fontSize: "1rem", fontWeight: 800, marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <DollarSign size={18} style={{ color: colors.primary }} />
+        Pending Account Adjustments
+      </div>
+      <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginBottom: "1rem" }}>
+        These adjustments will be applied to your next invoice.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {adjustments.map(adj => (
+          <div
+            key={adj.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "0.75rem 1rem",
+              background: adj.type === "credit" ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+              border: `1px solid ${adj.type === "credit" ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+              borderRadius: "10px",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff" }}>{adj.description}</div>
+              <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", marginTop: "2px" }}>
+                {new Date(adj.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </div>
+            </div>
+            <div style={{
+              fontSize: "1rem",
+              fontWeight: 800,
+              color: adj.type === "credit" ? colors.success : "#ef4444",
+            }}>
+              {adj.type === "credit" ? "-" : "+"}${(Math.abs(adj.amount_cents) / 100).toFixed(2)}
+            </div>
+          </div>
+        ))}
+      </div>
+      {(totalCredits > 0 || totalCharges > 0) && (
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "1.5rem", marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          {totalCredits > 0 && (
+            <div style={{ fontSize: "0.8rem", color: colors.success, fontWeight: 700 }}>
+              Credits: -${(totalCredits / 100).toFixed(2)}
+            </div>
+          )}
+          {totalCharges > 0 && (
+            <div style={{ fontSize: "0.8rem", color: "#ef4444", fontWeight: 700 }}>
+              Charges: +${(totalCharges / 100).toFixed(2)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Billing({ businessId, isPremium }: BusinessTabProps) {
   const colors = useMemo(
     () => ({
@@ -141,6 +236,31 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
   const [tpmsActiveCents, setTpmsActiveCents] = useState(0);
   const [progressivePayoutsCents, setProgressivePayoutsCents] = useState(0);
   const [platformFeesCents, setPlatformFeesCents] = useState(0);
+
+  // Pending account adjustments (credits/charges not yet on an invoice)
+  const [pendingAdjustments, setPendingAdjustments] = useState<{ id: string; amount_cents: number; type: string; description: string; created_at: string }[]>([]);
+  const [pendingAdjTotalCents, setPendingAdjTotalCents] = useState(0);
+  useEffect(() => {
+    let mounted = true;
+    async function loadAdjustments() {
+      try {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/businesses/adjustments?business_id=${encodeURIComponent(businessId)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok && mounted) {
+          const json = await res.json();
+          const adjs = json.adjustments || [];
+          setPendingAdjustments(adjs);
+          // Sum: credits are negative (reduce bill), charges are positive (increase bill)
+          setPendingAdjTotalCents(adjs.reduce((s: number, a: { amount_cents: number }) => s + a.amount_cents, 0));
+        }
+      } catch { /* table may not exist */ }
+    }
+    loadAdjustments();
+    return () => { mounted = false; };
+  }, [businessId]);
 
   useEffect(() => {
     let mounted = true;
@@ -611,14 +731,17 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
   const ccFeeEstimateCents = paymentType === "card" ? Math.round(subtotalBeforeCcFee * ccFeeBps / 10_000) : 0;
   // Combined Advertising & Add-ons (includes TPMS)
   const advertisingAddOnsCents = activeAddOnsCents + activeCampaignsCents + tpmsActiveCents;
-  const realTimeTotal = subtotalBeforeCcFee + ccFeeEstimateCents;
+  const realTimeTotal = subtotalBeforeCcFee + ccFeeEstimateCents + pendingAdjTotalCents;
 
   // Use the higher of: invoice total (if exists) or real-time estimate
   const expectedTotal = currentMonthBill
-    ? Math.max(currentMonthBill.totalCents, realTimeTotal)
+    ? Math.max(currentMonthBill.totalCents + pendingAdjTotalCents, realTimeTotal)
     : realTimeTotal;
 
   // Build breakdown from real-time data (more accurate than invoice alone)
+  // Combine invoice-applied adjustments + pending adjustments
+  const totalAdjCents = (currentMonthBill?.adjustmentsCents ?? 0) + pendingAdjTotalCents;
+
   const breakdown = currentMonthBill
     ? [
         { label: "Plan Fee", cents: Math.max(currentMonthBill.premiumFeeCents + currentMonthBill.basicFeesCents, planCostCents), color: colors.primary },
@@ -626,7 +749,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
         { label: "Advertising & Add-ons", cents: Math.max(currentMonthBill.addOnsCents + currentMonthBill.advertisingCents + currentMonthBill.tpmsCents, advertisingAddOnsCents), color: colors.secondary },
         { label: "LetsGo Fees", cents: !isPremium ? Math.max(currentMonthBill.basicFeesCents, letsGoFeesCents) : 0, color: "#fb7185" },
         { label: "Credit Card Fees", cents: paymentType === "card" ? Math.max(currentMonthBill.ccFeesCents, ccFeeEstimateCents) : 0, color: colors.warning },
-        { label: "Adjustments", cents: currentMonthBill.adjustmentsCents, color: "rgba(255,255,255,0.6)" },
+        { label: "Adjustments", cents: totalAdjCents, color: totalAdjCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
       ]
     : [
         { label: isPremium ? "Premium Subscription" : "Basic (Pay-per-receipt)", cents: planCostCents, color: colors.primary },
@@ -634,6 +757,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
         { label: "Advertising & Add-ons", cents: advertisingAddOnsCents, color: colors.secondary },
         { label: "LetsGo Fees (10%)", cents: letsGoFeesCents, color: "#fb7185" },
         { label: `Credit Card Fees (${(ccFeeBps / 100).toFixed(1)}%)`, cents: ccFeeEstimateCents, color: colors.warning },
+        ...(pendingAdjTotalCents !== 0 ? [{ label: "Adjustments", cents: pendingAdjTotalCents, color: pendingAdjTotalCents < 0 ? colors.success : "rgba(255,255,255,0.6)" }] : []),
       ];
 
   return (
@@ -705,6 +829,9 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
           </div>
         )}
       </div>
+
+      {/* Pending Account Adjustments (credits/charges) */}
+      <PendingAdjustments businessId={businessId} colors={colors} />
 
       {/* Choose Your Plan */}
       <div

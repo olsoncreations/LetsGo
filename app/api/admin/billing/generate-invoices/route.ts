@@ -205,6 +205,50 @@ export async function POST(req: NextRequest): Promise<Response> {
         });
       }
 
+      // Pull in pending billing adjustments for this business
+      const { data: pendingAdj } = await supabaseServer
+        .from("billing_adjustments")
+        .select("id, amount_cents, type, description")
+        .eq("business_id", biz.businessId)
+        .eq("status", "pending");
+
+      let adjustmentTotalCents = 0;
+      if (pendingAdj && pendingAdj.length > 0) {
+        for (const adj of pendingAdj) {
+          lineItems.push({
+            invoice_id: invoiceId,
+            line_type: "adjustment",
+            description: `${adj.type === "credit" ? "Credit" : "Charge"}: ${adj.description}`,
+            amount_cents: adj.amount_cents,
+            quantity: 1,
+            reference_id: adj.id,
+            reference_type: "billing_adjustment",
+          });
+          adjustmentTotalCents += adj.amount_cents;
+        }
+
+        // Mark adjustments as applied
+        const adjIds = pendingAdj.map(a => a.id);
+        await supabaseServer
+          .from("billing_adjustments")
+          .update({
+            status: "applied",
+            applied_to_invoice_id: invoiceId,
+            applied_at: new Date().toISOString(),
+          })
+          .in("id", adjIds);
+      }
+
+      // Update invoice total if adjustments changed it
+      if (adjustmentTotalCents !== 0) {
+        const newTotal = biz.totalCents + adjustmentTotalCents;
+        await supabaseServer
+          .from("invoices")
+          .update({ total_cents: newTotal })
+          .eq("id", invoiceId);
+        biz.totalCents = newTotal;
+      }
+
       // Insert all line items
       if (lineItems.length > 0) {
         const { error: linesErr } = await supabaseServer
