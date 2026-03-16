@@ -529,6 +529,14 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   const [supportSent,setSupportSent]=useState(false);
   const [faqOpen,setFaqOpen]=useState<number|null>(null);
   const [notifPrefs,setNotifPrefs]=useState<Record<string,boolean>>({push_notifications:true,email_notifications:true,sms_notifications:false,marketing_emails:false});
+  const [pwCurrent,setPwCurrent]=useState("");
+  const [pwNew,setPwNew]=useState("");
+  const [pwConfirm,setPwConfirm]=useState("");
+  const [pwSaving,setPwSaving]=useState(false);
+  const [pwMsg,setPwMsg]=useState<{text:string;ok:boolean}|null>(null);
+  const [showPwCurrent,setShowPwCurrent]=useState(false);
+  const [showPwNew,setShowPwNew]=useState(false);
+  const [showPwConfirm,setShowPwConfirm]=useState(false);
 
   useEffect(()=>{if(profile){setFormData({first_name:profile.first_name||"",last_name:profile.last_name||"",username:profile.username||"",email:profile.email||"",zip_code:profile.zip_code||"",bio:profile.bio||"",phone:profile.phone||""});setPayoutIdentifier(profile.payout_identifier||"");if(profile.preferences)setNotifPrefs(prev=>({...prev,...profile.preferences}));}},[profile]);
 
@@ -546,6 +554,26 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   const handleSendSupport=async()=>{if(!token||!supportMsg.trim())return;setSaving(true);const res=await fetch("/api/conversations",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({message:supportMsg.trim(),subject:"Support Request"})});if(res.ok){setSupportSent(true);setSupportMsg("");}setSaving(false);};
   const [settingPreferred,setSettingPreferred]=useState(false);
   const handleSetPreferred=async(method:"venmo"|"bank")=>{if(!token)return;setSettingPreferred(true);try{const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:method})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);}}catch{}finally{setSettingPreferred(false);}};
+
+  const handleChangePassword=async()=>{
+    setPwMsg(null);
+    if(!pwCurrent.trim()){setPwMsg({text:"Please enter your current password.",ok:false});return;}
+    if(pwNew.length<8){setPwMsg({text:"New password must be at least 8 characters.",ok:false});return;}
+    if(pwNew!==pwConfirm){setPwMsg({text:"New passwords do not match.",ok:false});return;}
+    if(pwCurrent===pwNew){setPwMsg({text:"New password must be different from current password.",ok:false});return;}
+    setPwSaving(true);
+    try{
+      // Re-authenticate with current password to verify identity
+      const{error:signInErr}=await supabaseBrowser.auth.signInWithPassword({email:profile?.email||"",password:pwCurrent});
+      if(signInErr){setPwMsg({text:"Current password is incorrect.",ok:false});setPwSaving(false);return;}
+      // Update to new password
+      const{error:updateErr}=await supabaseBrowser.auth.updateUser({password:pwNew});
+      if(updateErr){setPwMsg({text:updateErr.message||"Failed to update password.",ok:false});setPwSaving(false);return;}
+      setPwMsg({text:"Password updated successfully!",ok:true});
+      setPwCurrent("");setPwNew("");setPwConfirm("");
+      setShowPwCurrent(false);setShowPwNew(false);setShowPwConfirm(false);
+    }catch{setPwMsg({text:"Network error. Please try again.",ok:false});}finally{setPwSaving(false);}
+  };
 
   const hasVenmoConnected=!!(profile?.payout_identifier);
   const preferredMethod=profile?.payout_method||"";
@@ -656,6 +684,42 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                 </button>
               )}
             </div>
+
+            {/* Change Password */}
+            <div style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:24}}>
+              <div style={{fontSize:18,fontWeight:900,display:"flex",alignItems:"center",gap:8,marginBottom:20,color:"#fff"}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Change Password
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {/* Current Password */}
+                <div>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>Current Password</label>
+                  <div style={{position:"relative"}}>
+                    <input type={showPwCurrent?"text":"password"} value={pwCurrent} onChange={e=>setPwCurrent(e.target.value)} placeholder="Enter current password" style={{width:"100%",padding:"10px 40px 10px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                    <button type="button" onClick={()=>setShowPwCurrent(!showPwCurrent)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",padding:4,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>{showPwCurrent?"HIDE":"SHOW"}</button>
+                  </div>
+                </div>
+                {/* New Password */}
+                <div>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>New Password</label>
+                  <div style={{position:"relative"}}>
+                    <input type={showPwNew?"text":"password"} value={pwNew} onChange={e=>setPwNew(e.target.value)} placeholder="At least 8 characters" style={{width:"100%",padding:"10px 40px 10px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                    <button type="button" onClick={()=>setShowPwNew(!showPwNew)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",padding:4,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>{showPwNew?"HIDE":"SHOW"}</button>
+                  </div>
+                </div>
+                {/* Confirm New Password */}
+                <div>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>Confirm New Password</label>
+                  <div style={{position:"relative"}}>
+                    <input type={showPwConfirm?"text":"password"} value={pwConfirm} onChange={e=>setPwConfirm(e.target.value)} placeholder="Re-enter new password" style={{width:"100%",padding:"10px 40px 10px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                    <button type="button" onClick={()=>setShowPwConfirm(!showPwConfirm)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",padding:4,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>{showPwConfirm?"HIDE":"SHOW"}</button>
+                  </div>
+                </div>
+                {pwMsg&&<div style={{fontSize:12,color:pwMsg.ok?NEON.green:NEON.pink}}>{pwMsg.text}</div>}
+                <button onClick={handleChangePassword} disabled={pwSaving||!pwCurrent||!pwNew||!pwConfirm} style={{alignSelf:"flex-end",padding:"10px 24px",borderRadius:8,border:"1px solid rgba(245,158,11,0.4)",background:"rgba(245,158,11,0.1)",color:"#f59e0b",fontSize:12,fontWeight:900,letterSpacing:"0.1em",textTransform:"uppercase",cursor:pwSaving||!pwCurrent||!pwNew||!pwConfirm?"default":"pointer",fontFamily:"'DM Sans',sans-serif",opacity:pwSaving||!pwCurrent||!pwNew||!pwConfirm?0.4:1}}>{pwSaving?"Updating...":"Update Password"}</button>
+              </div>
+            </div>
           </div>)}
           {activeTab==="help"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
             {/* FAQ Section */}
@@ -672,6 +736,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
                 {q:"Why was my receipt rejected?",a:"Receipts can be rejected if the photo is blurry or unreadable, the receipt is from a different business, the date or amount doesn't match, or the receipt is older than 7 days. You can resubmit with a clearer photo if needed."},
                 {q:"How does the 365-day rolling window work?",a:"Your visit count for each business is based on the last 365 days from the date of your signup (anniversary), not a calendar year. If you visited a business 25 times in the past year, you're at tier 3. Every year, on your anniversary, all of your Progressive Tiers will change to zero."},
                 {q:"Can I earn rewards at multiple businesses?",a:"Yes! Each business tracks your visits and tiers independently. You could be a Starter at one place and a VIP at another. Visit more places to earn more cash back across the board."},
+                {q:"How do I change my password?",a:"Go to Settings → Account tab and scroll down below the Cash Out Methods section. You'll see a \"Change Password\" form where you can enter your current password, then type and confirm your new password. Your new password must be at least 8 characters long. Click \"Update Password\" to save the change."},
               ]).map((item,i)=>(
                 <div key={i} style={{marginBottom:2}}>
                   <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} style={{width:"100%",textAlign:"left",padding:"12px 14px",borderRadius:faqOpen===i?"4px 4px 0 0":"4px",border:`1px solid ${faqOpen===i?`rgba(${NEON.primaryRGB},0.2)`:"rgba(255,255,255,0.06)"}`,borderBottom:faqOpen===i?"none":`1px solid ${faqOpen===i?`rgba(${NEON.primaryRGB},0.2)`:"rgba(255,255,255,0.06)"}`,background:faqOpen===i?`rgba(${NEON.primaryRGB},0.05)`:"rgba(255,255,255,0.02)",color:faqOpen===i?NEON.primary:"rgba(255,255,255,0.5)",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
