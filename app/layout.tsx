@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import ActivityTracker from "@/components/ActivityTracker";
 import NotificationProvider from "@/components/NotificationProvider";
+import InstallBanner from "@/components/InstallBanner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -64,6 +65,7 @@ export default function RootLayout({
         <ActivityTracker />
         <NotificationProvider>
           {children}
+          <InstallBanner />
         </NotificationProvider>
       </body>
     </html>
