@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { LaunchBanner } from "@/components/LaunchBanner";
 import {
   BarChart3,
   TrendingUp,
@@ -231,6 +232,9 @@ export default function Overview({ businessId, isPremium, setActiveTab }: Overvi
 
   return (
     <div>
+      {/* Launch phase banner */}
+      <LaunchBanner variant="business" />
+
       {/* Load note banner */}
       {loadNote && (
         <div

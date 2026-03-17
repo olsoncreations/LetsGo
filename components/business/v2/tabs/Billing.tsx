@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { BarChart3, CheckCircle, CreditCard, DollarSign, Download, AlertCircle, RefreshCw } from "lucide-react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { BillingBanner } from "@/components/LaunchBanner";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -762,6 +763,9 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
 
   return (
     <div>
+      {/* Billing timeline banner */}
+      <BillingBanner />
+
       {/* Expected Monthly Bill */}
       <div
         style={{

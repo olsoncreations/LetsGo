@@ -19,6 +19,7 @@ import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { EarningsBannerAnim, ReceiptAnim, CashOutAnim, HeartAnim, TabSwitchAnim, PayoutTiersAnim, LevelUpAnim, MediaAnim, GameHistoryAnim, AnalyticsAnim, ProfileAnim, SupportAnim } from "@/components/TourIllustrations";
 import OpportunityCTA from "@/components/OpportunityCTA";
+import { LaunchBanner, CashoutBanner } from "@/components/LaunchBanner";
 
 // ═══════════════════════════════════════════════════
 // NEON PALETTE
@@ -464,7 +465,7 @@ const CashOutModal = ({mode,onClose,onGoToSettings,amount,token,onSuccess,minCas
           <button onClick={onClose} style={{padding:"10px 22px",borderRadius:3,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
           {canSubmit&&<button onClick={handleConfirm} disabled={processing} style={{padding:"10px 22px",borderRadius:3,border:`1px solid rgba(${selectedMethod==="venmo"?NEON.yellowRGB:NEON.greenRGB},0.5)`,background:`rgba(${selectedMethod==="venmo"?NEON.yellowRGB:NEON.greenRGB},0.12)`,color:selectedMethod==="venmo"?NEON.yellow:NEON.green,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:processing?0.5:1}}>{processing?"Processing...":`Confirm ${selectedMethod==="venmo"?"Venmo":"Bank"} Cash Out`}</button>}
         </div>
-        <div style={{marginTop:16,fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:"0.05em",textAlign:"center"}}>*${(minCashoutCents/100).toFixed(2)} minimum to cash out</div>
+        <div style={{marginTop:16,fontSize:11,color:"rgba(255,255,255,0.45)",letterSpacing:"0.04em",textAlign:"center"}}>*${(minCashoutCents/100).toFixed(2)} minimum to cash out</div>
       </div>
     </div>
   );
@@ -1942,6 +1943,10 @@ export default function LetsGoProfile() {
           )}
 
           {/* EARNINGS BANNER */}
+          {/* Launch phase + cashout countdown banners */}
+          <div style={{ marginBottom: 16 }}><LaunchBanner variant="user" /></div>
+          <div style={{ marginBottom: 16 }}><CashoutBanner /></div>
+
           <div data-tour="earnings-banner" style={{ animation: "cardSlideUp 0.7s cubic-bezier(0.23, 1, 0.32, 1) 0.3s both", marginBottom: 32 }}>
             <NeonBorderCard neon={NEON.green} neonRGB={NEON.greenRGB}>
               <div className="earnings-banner" style={{ padding: "20px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

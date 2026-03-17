@@ -56,7 +56,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Fetch user profile for name/email and Stripe Connect ID
     const { data: profile } = await supabaseServer
       .from("profiles")
-      .select("full_name, first_name, last_name, pending_payout, lifetime_payout, stripe_connect_account_id")
+      .select("full_name, first_name, last_name, stripe_connect_account_id")
       .eq("id", payout.user_id)
       .maybeSingle();
 
@@ -69,6 +69,12 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Compute net amount (for older records that may not have it)
     const feeCents = (payout.fee_cents as number) || 0;
     const netAmountCents = (payout.net_amount_cents as number) || (payout.amount_cents - feeCents);
+
+    // Re-verify fee calculation matches expected values
+    const expectedFee = payout.method === "venmo" ? Math.round(payout.amount_cents * 0.03) : 0;
+    if (feeCents !== expectedFee) {
+      console.warn("[admin/payouts/send] Fee mismatch — stored:", feeCents, "expected:", expectedFee, "for payout:", payoutId);
+    }
 
     // Send payout via appropriate provider
     const result = await sendPayout({
@@ -96,34 +102,30 @@ export async function POST(req: NextRequest): Promise<Response> {
         notes: `Sent via ${result.provider}. Transaction: ${result.transaction_id || "N/A"}`,
       };
 
-      // Save Stripe transfer ID for bank payouts
       if (payout.method === "bank" && result.transaction_id) {
         updateData.stripe_transfer_id = result.transaction_id;
       }
 
-      await supabaseServer
+      const { error: statusErr } = await supabaseServer
         .from("user_payouts")
         .update(updateData)
         .eq("id", payoutId);
 
-      // Update user balance: subtract from pending_payout
-      // Note: lifetime_payout was already credited when the receipt was approved,
-      // so we do NOT add to it again here (that would double-count earnings)
-      const { data: freshProfile } = await supabaseServer
-        .from("profiles")
-        .select("pending_payout")
-        .eq("id", payout.user_id)
-        .maybeSingle();
-      const currentPending = (freshProfile?.pending_payout as number) || 0;
+      if (statusErr) {
+        console.error("[admin/payouts/send] CRITICAL: Payout sent but status update failed:", statusErr);
+      }
 
-      await supabaseServer
-        .from("profiles")
-        .update({
-          pending_payout: Math.max(0, currentPending - payout.amount_cents),
-        })
-        .eq("id", payout.user_id);
+      // Atomic balance update: subtract from pending_payout
+      const { error: balErr } = await supabaseServer.rpc("complete_payout_balance", {
+        p_user_id: payout.user_id,
+        p_amount_cents: payout.amount_cents,
+      });
 
-      // Notify user
+      if (balErr) {
+        console.error("[admin/payouts/send] CRITICAL: Payout sent but pending_payout update failed:", balErr);
+      }
+
+      // Notify user of success
       const amountStr = `$${(payout.amount_cents / 100).toFixed(2)}`;
       const methodLabel = payout.method === "venmo" ? "Venmo" : "bank account";
       const timeNote = payout.method === "venmo"
@@ -177,23 +179,46 @@ export async function POST(req: NextRequest): Promise<Response> {
         })
         .eq("id", payoutId);
 
-      // Return balance to user — re-fetch current values to avoid race conditions
-      const { data: currentProfile } = await supabaseServer
-        .from("profiles")
-        .select("available_balance, pending_payout")
-        .eq("id", payout.user_id)
-        .maybeSingle();
+      // Atomic balance refund: restore available_balance from pending_payout
+      const { error: refundErr } = await supabaseServer.rpc("refund_failed_payout", {
+        p_user_id: payout.user_id,
+        p_amount_cents: payout.amount_cents,
+      });
 
-      const currentBalance = (currentProfile?.available_balance as number) || 0;
-      const currentPending = (currentProfile?.pending_payout as number) || 0;
+      if (refundErr) {
+        console.error("[admin/payouts/send] CRITICAL: Payout failed but refund failed:", refundErr);
+      }
 
-      await supabaseServer
-        .from("profiles")
-        .update({
-          available_balance: currentBalance + payout.amount_cents,
-          pending_payout: Math.max(0, currentPending - payout.amount_cents),
-        })
-        .eq("id", payout.user_id);
+      // Notify user that their cashout failed with explanation
+      const amountStr = `$${(payout.amount_cents / 100).toFixed(2)}`;
+      const methodLabel = payout.method === "venmo" ? "Venmo" : "bank account";
+      const reason = result.error || "Payment provider error";
+
+      // Build a user-friendly explanation
+      let userExplanation: string;
+      if (reason.includes("Receiver is invalid") || reason.includes("does not match")) {
+        userExplanation = `Your ${amountStr} cashout to ${methodLabel} could not be completed because the account information couldn't be verified. Please update your ${methodLabel} details in Settings and try again.`;
+      } else if (reason.includes("Insufficient funds") || reason.includes("nsufficient")) {
+        userExplanation = `Your ${amountStr} cashout to ${methodLabel} is temporarily delayed. Our team has been notified and will process it shortly.`;
+      } else if (reason.includes("account") && reason.includes("connect")) {
+        userExplanation = `Your ${amountStr} cashout to ${methodLabel} could not be completed. Please reconnect your bank account in Settings and try again.`;
+      } else {
+        userExplanation = `Your ${amountStr} cashout to ${methodLabel} could not be completed. Your balance has been restored. Please try again or contact support if this continues.`;
+      }
+
+      notify({
+        userId: payout.user_id,
+        type: NOTIFICATION_TYPES.PAYOUT_PROCESSED,
+        title: "Cashout Could Not Be Completed",
+        body: userExplanation,
+        metadata: {
+          payoutId: payout.id,
+          amountCents: payout.amount_cents,
+          method: payout.method,
+          failed: true,
+          href: "/profile",
+        },
+      });
 
       // Audit log
       await supabaseServer.from("audit_logs").insert({

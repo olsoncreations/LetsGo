@@ -144,6 +144,15 @@ export default function ExecutivePage() {
   const [totalAdRevenue, setTotalAdRevenue] = useState(0);
   const [totalSurgeFees, setTotalSurgeFees] = useState(0);
 
+  // Payment processing revenue
+  const [venmoFeesCollected, setVenmoFeesCollected] = useState(0);
+  const [venmoPayoutCount, setVenmoPayoutCount] = useState(0);
+  const [bankPayoutCount, setBankPayoutCount] = useState(0);
+  const [bankTransferCosts, setBankTransferCosts] = useState(0);
+  const [ccFeesFromBusinesses, setCcFeesFromBusinesses] = useState(0);
+  const [stripeCardCostEstimate, setStripeCardCostEstimate] = useState(0);
+  const [achCostEstimate, setAchCostEstimate] = useState(0);
+
   // Custom tier metrics
   const [customTierCount, setCustomTierCount] = useState(0);
   const [customTierAdoptionPct, setCustomTierAdoptionPct] = useState(0);
@@ -455,6 +464,42 @@ export default function ExecutivePage() {
           setTopWinningBusinesses((gs.topBusinesses || []).map((b: { name: string; wins: number }, i: number) => ({ name: b.name, wins: b.wins, color: rankColors[i] || COLORS.neonPink })));
         }
       } catch { /* game stats API may not be available */ }
+
+      // ---- PAYMENT PROCESSING REVENUE ----
+      try {
+        // User cashout fees (from user_payouts)
+        const { data: completedPayouts } = await supabaseBrowser
+          .from("user_payouts")
+          .select("method, fee_cents, amount_cents")
+          .eq("status", "completed");
+
+        if (completedPayouts) {
+          const venmo = completedPayouts.filter((p: Record<string, unknown>) => p.method === "venmo");
+          const bank = completedPayouts.filter((p: Record<string, unknown>) => p.method === "bank");
+          setVenmoFeesCollected(venmo.reduce((s: number, p: Record<string, unknown>) => s + ((p.fee_cents as number) || 0), 0));
+          setVenmoPayoutCount(venmo.length);
+          setBankPayoutCount(bank.length);
+          setBankTransferCosts(bank.length * 25); // $0.25 per transfer
+        }
+
+        // Business CC processing fees (from invoices)
+        const { data: paidInvoices } = await supabaseBrowser
+          .from("invoices")
+          .select("total_cents, payment_method")
+          .eq("status", "paid");
+
+        if (paidInvoices) {
+          const cardInvoices = paidInvoices.filter((inv: Record<string, unknown>) => inv.payment_method === "card");
+          const bankInvoices = paidInvoices.filter((inv: Record<string, unknown>) => inv.payment_method === "bank");
+          // CC fee revenue: 3.5% we charge on card payments
+          const ccRevenue = cardInvoices.reduce((s: number, inv: Record<string, unknown>) => s + Math.round(((inv.total_cents as number) || 0) * 350 / 10000), 0);
+          setCcFeesFromBusinesses(ccRevenue);
+          // Stripe cost on card: ~2.9% + $0.30
+          setStripeCardCostEstimate(cardInvoices.reduce((s: number, inv: Record<string, unknown>) => s + Math.round(((inv.total_cents as number) || 0) * 0.029) + 30, 0));
+          // ACH cost: ~$0.80 per payment
+          setAchCostEstimate(bankInvoices.length * 80);
+        }
+      } catch { /* payment data tables may not exist yet */ }
 
     } catch (err) {
       console.error("Error fetching executive data:", err);
@@ -807,6 +852,67 @@ export default function ExecutivePage() {
       </Card>
 
       {/* SURGE PRICING & AD CAMPAIGNS */}
+      {/* PAYMENT PROCESSING REVENUE */}
+      <SectionTitle icon="💳">Payment Processing Revenue</SectionTitle>
+      {(() => {
+        const netUserCashout = venmoFeesCollected - bankTransferCosts;
+        const netBusinessProcessing = ccFeesFromBusinesses - stripeCardCostEstimate - achCostEstimate;
+        const totalNetProcessing = netUserCashout + netBusinessProcessing;
+        return (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
+              <StatCard value={formatMoney(venmoFeesCollected)} label={`Venmo Fees (${venmoPayoutCount} payouts)`} gradient="linear-gradient(135deg, #bf5fff, #ff2d92)" />
+              <StatCard value={formatMoney(bankTransferCosts)} label={`Bank Costs (${bankPayoutCount} transfers)`} gradient="linear-gradient(135deg, #ff6b35, #ff3131)" />
+              <StatCard value={formatMoney(ccFeesFromBusinesses)} label="CC Fees from Businesses" gradient="linear-gradient(135deg, #ffff00, #ff6b35)" />
+              <StatCard value={formatMoney(totalNetProcessing)} label="Net Processing Revenue" gradient={totalNetProcessing >= 0 ? COLORS.gradient2 : "linear-gradient(135deg, #ff3131, #990000)"} />
+            </div>
+            <Card>
+              <div style={{ padding: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.05em" }}>Breakdown</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                  {/* User Cashouts */}
+                  <div>
+                    <div style={{ fontSize: 12, color: COLORS.neonPurple, fontWeight: 700, marginBottom: 12 }}>User Cashouts</div>
+                    {[
+                      { label: "Venmo fees collected (3%)", value: venmoFeesCollected, color: COLORS.neonGreen },
+                      { label: `Bank transfer costs (${bankPayoutCount} × $0.25)`, value: -bankTransferCosts, color: COLORS.neonRed || "#ff3131" },
+                      { label: "Net from user cashouts", value: netUserCashout, color: netUserCashout >= 0 ? COLORS.neonGreen : COLORS.neonRed || "#ff3131" },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.label}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: row.color, fontFamily: '"Space Mono", monospace' }}>{row.value < 0 ? `-${formatMoney(Math.abs(row.value))}` : formatMoney(row.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Business Billing */}
+                  <div>
+                    <div style={{ fontSize: 12, color: COLORS.neonBlue, fontWeight: 700, marginBottom: 12 }}>Business Billing</div>
+                    {[
+                      { label: "CC processing fees charged (3.5%)", value: ccFeesFromBusinesses, color: COLORS.neonGreen },
+                      { label: "Stripe card costs (~2.9% + $0.30)", value: -stripeCardCostEstimate, color: COLORS.neonRed || "#ff3131" },
+                      { label: `ACH costs (${Math.round(achCostEstimate / 80)} × $0.80)`, value: -achCostEstimate, color: COLORS.neonRed || "#ff3131" },
+                      { label: "Net from business billing", value: netBusinessProcessing, color: netBusinessProcessing >= 0 ? COLORS.neonGreen : COLORS.neonRed || "#ff3131" },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.label}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: row.color, fontFamily: '"Space Mono", monospace' }}>{row.value < 0 ? `-${formatMoney(Math.abs(row.value))}` : formatMoney(row.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: `2px solid ${COLORS.cardBorder}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>Total Net Payment Processing Revenue</span>
+                  <span style={{ fontSize: 22, fontWeight: 900, color: totalNetProcessing >= 0 ? COLORS.neonGreen : COLORS.neonRed || "#ff3131", fontFamily: '"Space Mono", monospace' }}>
+                    {totalNetProcessing < 0 ? `-${formatMoney(Math.abs(totalNetProcessing))}` : formatMoney(totalNetProcessing)}
+                  </span>
+                </div>
+              </div>
+            </Card>
+            <div style={{ height: 24 }} />
+          </>
+        );
+      })()}
+
       <SectionTitle icon="⚡">Surge Pricing & Ad Campaigns</SectionTitle>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
         <StatCard value={totalSurgeEvents.toString()} label="Total Surge Events" gradient={COLORS.gradient3} />

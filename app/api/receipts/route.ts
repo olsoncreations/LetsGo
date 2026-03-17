@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { notify } from "@/lib/notify";
 import { NOTIFICATION_TYPES } from "@/lib/notificationTypes";
+import { isSoftLaunch } from "@/lib/launchDates";
 
 type TierRow = {
   tier_index: number;
@@ -14,6 +15,7 @@ type TierRow = {
 
 // Receipt amount ceiling: $10,000 (1,000,000 cents)
 const MAX_RECEIPT_CENTS = 1_000_000;
+
 // Max receipt submissions per user per hour
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -420,19 +422,27 @@ export async function POST(req: NextRequest): Promise<Response> {
           appliedPromoIds.push(promo.id);
 
           // Atomic increment of uses_count with guard against exceeding max_uses
-          await supabase.rpc("increment_promotion_uses", { promo_id: promo.id }).then(
-            // If RPC doesn't exist, fall back to direct update
-            ({ error: rpcErr }) => {
-              if (rpcErr) {
-                return supabase
-                  .from("promotions")
-                  .update({ uses_count: (promo.uses_count || 0) + 1 })
-                  .eq("id", promo.id);
-              }
-            }
-          );
+          const { data: incrementOk, error: rpcErr } = await supabase.rpc("increment_promotion_uses", {
+            p_promotion_id: promo.id,
+          });
+
+          if (rpcErr) {
+            console.error("[receipts] increment_promotion_uses RPC error:", rpcErr.message);
+            // If the RPC returns false, max_uses was already reached — skip this promo
+          } else if (incrementOk === false) {
+            // max_uses reached between our check and the atomic increment — undo bonus
+            payoutCents -= bonusCents;
+            bonusCents = 0;
+            appliedPromoIds.pop();
+          }
         }
       }
+    }
+
+    // Soft launch override: $0 payout, visits still count toward tier progress
+    const softLaunch = isSoftLaunch();
+    if (softLaunch) {
+      payoutCents = 0;
     }
 
     // 5) Insert receipt record
@@ -537,6 +547,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         receiptTotalCents,
         payoutCents,
         promotionsApplied: appliedPromoIds.length,
+        softLaunch,
       },
       { status: 200 }
     );

@@ -31,15 +31,16 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "businessId is required" }, { status: 400 });
     }
 
-    // Verify user has access to this business (owner or manager)
+    // Verify user has access to this business (owner or manager only — staff cannot change payment methods)
     const { data: access } = await supabaseServer
       .from("business_users")
       .select("role")
       .eq("business_id", businessId)
       .eq("user_id", user.id)
+      .in("role", ["owner", "manager"])
       .maybeSingle();
 
-    // Also check staff
+    // Also check platform staff
     const { data: staff } = await supabaseServer
       .from("staff_users")
       .select("user_id")
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .maybeSingle();
 
     if (!access && !staff) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      return NextResponse.json({ error: "Only business owners and managers can update payment methods" }, { status: 403 });
     }
 
     // Get business info
@@ -154,12 +155,13 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "paymentMethodId, manualBank, or setPreferred required" }, { status: 400 });
     }
 
-    // Verify access
+    // Verify access (owner or manager only — staff cannot change payment methods)
     const { data: access } = await supabaseServer
       .from("business_users")
       .select("role")
       .eq("business_id", businessId)
       .eq("user_id", user.id)
+      .in("role", ["owner", "manager"])
       .maybeSingle();
     const { data: staff } = await supabaseServer
       .from("staff_users")
@@ -167,7 +169,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       .eq("user_id", user.id)
       .maybeSingle();
     if (!access && !staff) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+      return NextResponse.json({ error: "Only business owners and managers can update payment methods" }, { status: 403 });
     }
 
     const configUpdates: Record<string, unknown> = {};
@@ -211,6 +213,23 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       stripePaymentMethodId = paymentMethodId;
       const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
 
+      // Verify the payment method belongs to this business's Stripe customer (prevent card hijacking)
+      const { data: bizForVerify } = await supabaseServer
+        .from("business")
+        .select("stripe_customer_id")
+        .eq("id", businessId)
+        .maybeSingle();
+
+      if (bizForVerify?.stripe_customer_id && pm.customer && pm.customer !== bizForVerify.stripe_customer_id) {
+        console.error("[update-payment-method] PM customer mismatch:", {
+          pmCustomer: pm.customer,
+          bizCustomer: bizForVerify.stripe_customer_id,
+          businessId,
+          userId: user.id,
+        });
+        return NextResponse.json({ error: "Payment method does not belong to this business" }, { status: 403 });
+      }
+
       configUpdates.paymentMethod = paymentType || (pm.type === "us_bank_account" ? "bank" : "card");
 
       if (pm.type === "card" && pm.card) {
@@ -249,6 +268,23 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       console.error("[update-payment-method] Update error:", updateErr);
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
     }
+
+    // Audit log the payment method change
+    await supabaseServer.from("audit_logs").insert({
+      action: "payment_method_updated",
+      entity_type: "business",
+      entity_id: businessId,
+      performed_by: user.id,
+      details: {
+        payment_type: configUpdates.paymentMethod || setPreferred,
+        stripe_payment_method_id: stripePaymentMethodId || null,
+        manual_bank: manualBank ? true : false,
+        card_last4: configUpdates.cardLast4 || null,
+        bank_name: configUpdates.bankName || null,
+      },
+    }).then(({ error: auditErr }) => {
+      if (auditErr) console.error("[update-payment-method] Audit log error:", auditErr);
+    });
 
     return NextResponse.json({ ok: true, paymentType: configUpdates.paymentMethod });
   } catch (err) {

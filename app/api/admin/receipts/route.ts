@@ -179,26 +179,19 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     }
 
     // Reverse balance for previously-approved receipts that are now rejected
+    // Uses atomic RPC to prevent race conditions
     if (status === "rejected" && receiptsToDebit.length > 0) {
       const userDebits = new Map<string, number>();
       for (const r of receiptsToDebit) {
         userDebits.set(r.user_id, (userDebits.get(r.user_id) || 0) + r.payout_cents);
       }
       for (const [userId, debitCents] of userDebits) {
-        const { data: profile } = await supabaseServer
-          .from("profiles")
-          .select("available_balance, lifetime_payout")
-          .eq("id", userId)
-          .maybeSingle();
-        if (profile) {
-          await supabaseServer
-            .from("profiles")
-            .update({
-              available_balance: Math.max(0, (profile.available_balance || 0) - debitCents),
-              lifetime_payout: Math.max(0, (profile.lifetime_payout || 0) - debitCents),
-            })
-            .eq("id", userId);
-        }
+        const { error: debitErr } = await supabaseServer.rpc("debit_user_balance", {
+          p_user_id: userId,
+          p_amount_cents: debitCents,
+          p_receipt_count: receiptsToDebit.filter(r => r.user_id === userId).length,
+        });
+        if (debitErr) console.error("[admin/receipts] Debit error for user", userId, debitErr);
       }
     }
 
@@ -227,6 +220,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     }
 
     // Credit user balances for newly approved receipts
+    // Uses atomic RPC to prevent race conditions
     if (status === "approved" && receiptsToCredit.length > 0) {
       // Group by user_id to batch updates
       const userCredits = new Map<string, { payout: number; count: number }>();
@@ -237,24 +231,14 @@ export async function PATCH(req: NextRequest): Promise<Response> {
         userCredits.set(r.user_id, existing);
       }
 
-      // Update each user's profile balance
+      // Atomically update each user's profile balance
       for (const [userId, credit] of userCredits) {
-        const { data: profile } = await supabaseServer
-          .from("profiles")
-          .select("available_balance, lifetime_payout, pending_payout, total_receipts")
-          .eq("id", userId)
-          .maybeSingle();
-
-        if (profile) {
-          await supabaseServer
-            .from("profiles")
-            .update({
-              available_balance: (profile.available_balance || 0) + credit.payout,
-              lifetime_payout: (profile.lifetime_payout || 0) + credit.payout,
-              total_receipts: (profile.total_receipts || 0) + credit.count,
-            })
-            .eq("id", userId);
-        }
+        const { error: creditErr } = await supabaseServer.rpc("credit_user_balance", {
+          p_user_id: userId,
+          p_amount_cents: credit.payout,
+          p_receipt_count: credit.count,
+        });
+        if (creditErr) console.error("[admin/receipts] Credit error for user", userId, creditErr);
       }
 
       // Notify each user about approved receipts + detect tier level-ups

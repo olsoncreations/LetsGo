@@ -12,6 +12,7 @@ import {
   formatMoney,
   formatDateTime,
 } from "@/components/admin/components";
+import { AdminLaunchTimeline, LaunchBanner } from "@/components/LaunchBanner";
 
 // ==================== TYPES ====================
 interface Notification {
@@ -477,6 +478,10 @@ export default function OverviewPage() {
         </span>
         !
       </h1>
+
+      {/* Launch Timeline */}
+      <AdminLaunchTimeline />
+      <LaunchBanner variant="admin" />
 
       {/* Overview Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>

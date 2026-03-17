@@ -299,6 +299,14 @@ export default function PayoutsPage() {
   const totalPending = payouts.filter((p) => p.status === "pending").reduce((s, p) => s + p.amount_cents, 0);
   const totalCompleted = payouts.filter((p) => p.status === "completed").reduce((s, p) => s + p.amount_cents, 0);
 
+  // Payment processing revenue stats
+  const completedPayouts = payouts.filter((p) => p.status === "completed");
+  const venmoCompleted = completedPayouts.filter((p) => p.method === "venmo");
+  const bankCompleted = completedPayouts.filter((p) => p.method === "bank");
+  const totalVenmoFeesCollected = venmoCompleted.reduce((s, p) => s + (p.fee_cents || 0), 0);
+  const totalBankTransferCost = bankCompleted.length * 25; // $0.25 per transfer
+  const netCashoutRevenue = totalVenmoFeesCollected - totalBankTransferCost;
+
   /* ==================== PAYOUT ACTIONS ==================== */
 
   async function handleApprove(payout: UserPayout) {
@@ -649,6 +657,15 @@ export default function PayoutsPage() {
             <StatCard icon="❌" value={failedCount.toString()} label="Failed" gradient="linear-gradient(135deg, #ff3131, #990000)" />
             <StatCard icon="💰" value={formatMoney(totalPending)} label="Pending $" gradient={COLORS.gradient4} />
             <StatCard icon="📊" value={formatMoney(totalCompleted)} label="Total Paid" gradient={COLORS.gradient2} />
+          </div>
+
+          {/* Cashout Fee Revenue */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 24 }}>
+            <StatCard icon="💜" value={formatMoney(totalVenmoFeesCollected)} label="Venmo Fees Collected" gradient="linear-gradient(135deg, #bf5fff, #ff2d92)" />
+            <StatCard icon="🏦" value={formatMoney(totalBankTransferCost)} label="Bank Transfer Costs" gradient="linear-gradient(135deg, #ff6b35, #ff3131)" />
+            <StatCard icon="📈" value={formatMoney(netCashoutRevenue)} label="Net Cashout Revenue" gradient={netCashoutRevenue >= 0 ? COLORS.gradient2 : "linear-gradient(135deg, #ff3131, #990000)"} />
+            <StatCard icon="📱" value={`${venmoCompleted.length} Venmo`} label={`${formatMoney(venmoCompleted.reduce((s, p) => s + p.amount_cents, 0))} sent`} gradient="linear-gradient(135deg, #bf5fff, #6b5fff)" />
+            <StatCard icon="🏧" value={`${bankCompleted.length} Bank`} label={`${formatMoney(bankCompleted.reduce((s, p) => s + p.amount_cents, 0))} sent`} gradient="linear-gradient(135deg, #00d4ff, #0088cc)" />
           </div>
 
           {/* Filters */}

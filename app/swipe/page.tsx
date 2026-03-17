@@ -10,6 +10,7 @@ import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { SwipeVerticalAnim, SwipeLeftAnim, FilterAnim, HeartAnim, ScrollIndicatorAnim } from "@/components/TourIllustrations";
 import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips } from "@/lib/zipUtils";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
+import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import {
   type BusinessRow, type MediaRow, type DiscoveryImage, type DiscoveryBusiness,
@@ -1543,6 +1544,13 @@ function DiscoveryPage() {
       )}
       <FloatingOrbs />
       <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showFollowedOnly={showFollowedOnly} setShowFollowedOnly={setShowFollowedOnly} followedCount={followedIds.size} />
+
+      {/* Launch phase banner */}
+      <div style={{ position: "absolute", bottom: 60, left: 0, right: 0, zIndex: 60, pointerEvents: "none" }}>
+        <div style={{ pointerEvents: "auto" }}>
+          <LaunchBanner variant="user" />
+        </div>
+      </div>
 
       {/* Loading state */}
       {loading && (

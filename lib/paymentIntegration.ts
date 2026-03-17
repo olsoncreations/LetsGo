@@ -54,6 +54,17 @@ export type PaymentMethod = "venmo" | "bank";
 export async function sendPayout(
   request: PayoutRequest
 ): Promise<PayoutResult> {
+  // Validate request before sending to any provider
+  const validationError = validatePayoutRequest(request);
+  if (validationError) {
+    return {
+      success: false,
+      provider: "validation",
+      error: validationError,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   if (request.payment_method === "venmo") {
     return sendViaPayPal(request);
   }
@@ -111,17 +122,22 @@ async function sendViaStripeConnect(request: PayoutRequest): Promise<PayoutResul
       payoutId: request.payout_id,
     });
 
-    const transfer = await stripe.transfers.create({
-      amount: amountToTransfer,
-      currency: "usd",
-      destination: request.stripe_connect_account_id,
-      description: `LetsGo cashout - ${request.recipient_name}`,
-      metadata: {
-        payout_id: request.payout_id,
-        user_id: request.user_id,
-        platform: "letsgo",
+    const transfer = await stripe.transfers.create(
+      {
+        amount: amountToTransfer,
+        currency: "usd",
+        destination: request.stripe_connect_account_id,
+        description: `LetsGo cashout - ${request.recipient_name}`,
+        metadata: {
+          payout_id: request.payout_id,
+          user_id: request.user_id,
+          platform: "letsgo",
+        },
       },
-    });
+      {
+        idempotencyKey: `letsgo-transfer-${request.payout_id}`,
+      }
+    );
 
     console.log("[Stripe Connect] Transfer created:", transfer.id);
 
@@ -191,10 +207,20 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
     const accessToken = await getPayPalAccessToken();
     const amountStr = (request.net_amount_cents / 100).toFixed(2);
 
+    // Auto-detect recipient type: email, phone, or Venmo user ID
+    const receiver = (request.payment_details || "").trim().replace(/^@/, "");
+    let recipientType = "EMAIL";
+    if (/^\+?\d[\d\s()-]{6,}$/.test(receiver)) {
+      recipientType = "PHONE";
+    } else if (!receiver.includes("@")) {
+      // Not an email and not a phone — treat as Venmo user ID
+      recipientType = "USER_ID";
+    }
+
     const payoutItem: Record<string, unknown> = {
-      recipient_type: "EMAIL",
+      recipient_type: recipientType,
       amount: { value: amountStr, currency: "USD" },
-      receiver: request.payment_details,
+      receiver,
       note: request.memo || `LetsGo cashout - ${request.recipient_name}`,
       sender_item_id: request.payout_id,
       recipient_wallet: "VENMO",
@@ -202,7 +228,7 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
 
     const body = {
       sender_batch_header: {
-        sender_batch_id: `LETSGO-${request.payout_id}-${Date.now()}`,
+        sender_batch_id: `LETSGO-${request.payout_id}`,
         email_subject: "You've received a LetsGo cashout!",
         email_message: `Hi ${request.recipient_name}, your LetsGo cashout of $${amountStr} has been sent!`,
       },
@@ -211,6 +237,8 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
 
     console.log("[PayPal] Sending Venmo payout:", {
       amount: amountStr,
+      receiver,
+      recipientType,
       payoutId: request.payout_id,
     });
 
