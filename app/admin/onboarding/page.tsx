@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
   COLORS,
@@ -868,6 +869,19 @@ function OnboardingActionModal({
 /* ==================== MAIN PAGE ==================== */
 
 export default function OnboardingPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user) { router.replace("/admin/login"); return; }
+      const { data: staff } = await supabaseBrowser.from("staff_users").select("user_id").eq("user_id", session.user.id).maybeSingle();
+      if (!staff) { router.replace("/admin/login"); return; }
+      setAuthChecked(true);
+    })();
+  }, [router]);
+
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1537,6 +1551,8 @@ export default function OnboardingPage() {
   }
 
   /* ==================== RENDER ==================== */
+
+  if (!authChecked) return null;
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 60px)" }}>

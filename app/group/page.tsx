@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
@@ -2795,6 +2796,8 @@ function transformGame(g: APIGame, userId?: string): Game {
 // MAIN APP SHELL
 // ═══════════════════════════════════════════════════════════════
 export default function GroupVote() {
+  const router = useRouter();
+
   // ── Platform settings (visit thresholds) ──
   const [visitThresholds, setVisitThresholds] = useState<VisitThreshold[]>(DEFAULT_VISIT_THRESHOLDS);
   useEffect(() => {
@@ -2854,13 +2857,15 @@ export default function GroupVote() {
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabaseBrowser.auth.getSession();
-      if (session?.user && session.access_token) {
-        setUser({ id: session.user.id });
-        setToken(session.access_token);
+      if (!session?.user || !session.access_token) {
+        router.replace("/welcome");
+        return;
       }
+      setUser({ id: session.user.id });
+      setToken(session.access_token);
       setAuthLoading(false);
     })();
-  }, []);
+  }, [router]);
 
   // ── Fetch games ──
   const fetchGames = useCallback(async () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
   COLORS,
@@ -69,6 +70,19 @@ function inferTab(targetType: string): string {
 
 // ==================== AUDIT PAGE ====================
 export default function AuditPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user) { router.replace("/admin/login"); return; }
+      const { data: staff } = await supabaseBrowser.from("staff_users").select("user_id").eq("user_id", session.user.id).maybeSingle();
+      if (!staff) { router.replace("/admin/login"); return; }
+      setAuthChecked(true);
+    })();
+  }, [router]);
+
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -285,6 +299,8 @@ export default function AuditPage() {
       </div>
     );
   }
+
+  if (!authChecked) return null;
 
   return (
     <div style={{ flex: 1, padding: 32, overflowY: "auto" }}>

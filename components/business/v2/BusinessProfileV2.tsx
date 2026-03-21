@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 // Tabs
@@ -121,6 +122,21 @@ function normalizeErr(e: unknown): string {
 }
 
 export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props) {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // ── Auth guard ──
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user || !session.access_token) {
+        router.replace("/welcome");
+        return;
+      }
+      setAuthChecked(true);
+    })();
+  }, [router]);
+
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -342,6 +358,8 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
   }
 }
 
+
+  if (!authChecked) return null;
 
   return (
     <div

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
@@ -98,6 +99,19 @@ function timeAgo(date: Date): string {
 
 // ==================== ANALYTICS PAGE ====================
 export default function AnalyticsPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user) { router.replace("/admin/login"); return; }
+      const { data: staff } = await supabaseBrowser.from("staff_users").select("user_id").eq("user_id", session.user.id).maybeSingle();
+      if (!staff) { router.replace("/admin/login"); return; }
+      setAuthChecked(true);
+    })();
+  }, [router]);
+
   const [salesReps, setSalesReps] = useState<SalesRep[]>([]);
   const [staffOnline, setStaffOnline] = useState<StaffMember[]>([]);
   const [workloadData, setWorkloadData] = useState<WorkloadData[]>([]);
@@ -371,6 +385,8 @@ export default function AnalyticsPage() {
   if (loading) {
     return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.textSecondary }}>Loading analytics...</div>;
   }
+
+  if (!authChecked) return null;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: 32 }}>

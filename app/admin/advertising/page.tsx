@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 import {
@@ -198,6 +199,20 @@ const btnSecondary: React.CSSProperties = {
 
 // ==================== MAIN COMPONENT ====================
 export default function AdvertisingPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // ── Auth guard ──
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user) { router.replace("/admin/login"); return; }
+      const { data: staff } = await supabaseBrowser.from("staff_users").select("user_id").eq("user_id", session.user.id).maybeSingle();
+      if (!staff) { router.replace("/admin/login"); return; }
+      setAuthChecked(true);
+    })();
+  }, [router]);
+
   // Data
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
   const [pushCampaigns, setPushCampaigns] = useState<PushCampaign[]>([]);
@@ -665,6 +680,8 @@ export default function AdvertisingPage() {
     { key: "history", label: "📋 Marketing History", count: campaigns.length + pushCampaigns.length + addonSubs.length },
     { key: "forecast", label: "📈 Marketing Forecast", count: surgeEvents.filter(e => e.is_active).length },
   ];
+
+  if (!authChecked) return null;
 
   return (
     <div style={{ flex: 1, padding: 32, overflowY: "auto" }}>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import {
   COLORS,
@@ -45,6 +46,19 @@ interface StaffMember {
 
 // ==================== SUPPORT PAGE ====================
 export default function SupportPage() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user) { router.replace("/admin/login"); return; }
+      const { data: staff } = await supabaseBrowser.from("staff_users").select("user_id").eq("user_id", session.user.id).maybeSingle();
+      if (!staff) { router.replace("/admin/login"); return; }
+      setAuthChecked(true);
+    })();
+  }, [router]);
+
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -317,6 +331,8 @@ export default function SupportPage() {
       alert("Failed to reopen ticket.");
     }
   };
+
+  if (!authChecked) return null;
 
   if (loading) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.textSecondary }}>Loading support data...</div>;
 
