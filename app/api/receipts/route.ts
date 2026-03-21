@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { notify } from "@/lib/notify";
 import { NOTIFICATION_TYPES } from "@/lib/notificationTypes";
-import { isSoftLaunch } from "@/lib/launchDates";
 
 type TierRow = {
   tier_index: number;
@@ -439,12 +438,6 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     }
 
-    // Soft launch override: $0 payout, visits still count toward tier progress
-    const softLaunch = isSoftLaunch();
-    if (softLaunch) {
-      payoutCents = 0;
-    }
-
     // 5) Insert receipt record
     const { data: inserted, error: insertError } = await supabase
       .from("receipts")
@@ -547,7 +540,6 @@ export async function POST(req: NextRequest): Promise<Response> {
         receiptTotalCents,
         payoutCents,
         promotionsApplied: appliedPromoIds.length,
-        softLaunch,
       },
       { status: 200 }
     );

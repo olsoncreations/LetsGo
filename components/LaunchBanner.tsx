@@ -38,32 +38,20 @@ function getBannerConfig(phase: LaunchPhase): BannerConfig | null {
       return {
         emoji: "\u{1F6A7}",
         title: "Coming Soon!",
-        subtitle: `Soft launch starts in ${countdownLabel(LAUNCH_DATES.SOFT_LAUNCH)}. Get ready to explore and earn!`,
+        subtitle: "LetsGo launches May 1st! Get ready to explore and discover.",
         gradient: "linear-gradient(135deg, #ff6b35 0%, #ff2d92 100%)",
         glowColor: "rgba(255,107,53,0.3)",
         accentColor: "#ff6b35",
       };
-    case "soft_launch":
-      return {
-        emoji: "\u{1F680}",
-        title: "Soft Launch is LIVE!",
-        subtitle: `Explore and visit \u2014 cashback rewards activate ${countdownLabel(LAUNCH_DATES.FULL_LAUNCH) === "now" ? "now" : `in ${countdownLabel(LAUNCH_DATES.FULL_LAUNCH)}`}!`,
-        gradient: "linear-gradient(135deg, #bf5fff 0%, #00d4ff 100%)",
-        glowColor: "rgba(191,95,255,0.3)",
-        accentColor: "#bf5fff",
-      };
-    case "full_launch":
+    case "live":
       return {
         emoji: "\u{1F389}",
         title: "We're LIVE!",
-        subtitle: "Cashback rewards are active! Visit, upload receipts, and start earning.",
+        subtitle: "Visit, upload receipts, and start earning cash-back rewards!",
         gradient: "linear-gradient(135deg, #39ff14 0%, #00d4ff 100%)",
         glowColor: "rgba(57,255,20,0.3)",
         accentColor: "#39ff14",
       };
-    case "bills_due":
-      // Only relevant for business context — user sees the same as full_launch
-      return null;
     case "fully_live":
       return null; // No banner needed — everything is running normally
   }
@@ -73,19 +61,17 @@ function getBusinessBillingBanner(): BannerConfig | null {
   const phase = getCurrentPhase();
   const d = daysUntil(LAUNCH_DATES.BILLS_DUE);
 
-  if (phase === "soft_launch" || phase === "full_launch") {
+  if (phase === "live" && d > 0) {
     return {
       emoji: "\u{1F4B3}",
       title: "First Billing Cycle",
-      subtitle: d <= 0
-        ? "Your first bill is ready! Check your billing details below."
-        : `First bills are due in ${countdownLabel(LAUNCH_DATES.BILLS_DUE)}. Make sure your payment method is set up!`,
+      subtitle: `First bills are due in ${countdownLabel(LAUNCH_DATES.BILLS_DUE)}. Make sure your payment method is set up!`,
       gradient: "linear-gradient(135deg, #ffff00 0%, #ff6b35 100%)",
       glowColor: "rgba(255,255,0,0.2)",
       accentColor: "#ffff00",
     };
   }
-  if (phase === "bills_due") {
+  if (phase === "live" && d <= 0) {
     return {
       emoji: "\u{1F4B0}",
       title: "Bills Are Due!",
@@ -352,8 +338,7 @@ interface TimelinePhase {
 }
 
 const TIMELINE_PHASES: TimelinePhase[] = [
-  { label: "Soft Launch", date: LAUNCH_DATES.SOFT_LAUNCH, emoji: "\u{1F680}", color: "#bf5fff" },
-  { label: "Full Launch", date: LAUNCH_DATES.FULL_LAUNCH, emoji: "\u{1F389}", color: "#39ff14" },
+  { label: "Launch", date: LAUNCH_DATES.LAUNCH, emoji: "\u{1F389}", color: "#39ff14" },
   { label: "Bills Due", date: LAUNCH_DATES.BILLS_DUE, emoji: "\u{1F4B3}", color: "#ffff00" },
   { label: "Cashouts Open", date: LAUNCH_DATES.CASHOUTS_OPEN, emoji: "\u{1F4B8}", color: "#00d4ff" },
 ];
@@ -366,10 +351,8 @@ export function AdminLaunchTimeline() {
   const phaseIndex = (() => {
     switch (phase) {
       case "pre_launch": return -1;
-      case "soft_launch": return 0;
-      case "full_launch": return 1;
-      case "bills_due": return 2;
-      case "fully_live": return 4;
+      case "live": return 0;
+      case "fully_live": return 3;
       default: return -1;
     }
   })();
@@ -416,10 +399,10 @@ export function AdminLaunchTimeline() {
             position: "absolute",
             top: 20,
             left: 40,
-            width: phaseIndex >= 3 ? "calc(100% - 80px)" : `${Math.max(0, ((phaseIndex + 1) / 4) * 100)}%`,
+            width: phaseIndex >= 3 ? "calc(100% - 80px)" : `${Math.max(0, ((phaseIndex + 1) / 3) * 100)}%`,
             maxWidth: "calc(100% - 80px)",
             height: 3,
-            background: "linear-gradient(90deg, #bf5fff, #39ff14, #ffff00, #00d4ff)",
+            background: "linear-gradient(90deg, #39ff14, #ffff00, #00d4ff)",
             borderRadius: 2,
             transition: "width 0.5s ease",
           }}
