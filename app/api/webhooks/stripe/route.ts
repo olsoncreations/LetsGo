@@ -37,13 +37,21 @@ export async function POST(req: Request): Promise<Response> {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const pi = event.data.object as Stripe.PaymentIntent;
-        await handlePaymentSuccess(pi);
+        if (pi.metadata?.source === "tier_extension_purchase") {
+          await handleUserPaymentSuccess(pi);
+        } else {
+          await handlePaymentSuccess(pi);
+        }
         break;
       }
 
       case "payment_intent.payment_failed": {
         const pi = event.data.object as Stripe.PaymentIntent;
-        await handlePaymentFailure(pi);
+        if (pi.metadata?.source === "tier_extension_purchase") {
+          await handleUserPaymentFailure(pi);
+        } else {
+          await handlePaymentFailure(pi);
+        }
         break;
       }
 
@@ -157,4 +165,63 @@ async function handleAccountUpdated(account: Stripe.Account) {
       .eq("id", userId)
       .eq("stripe_connect_account_id", account.id);
   }
+}
+
+/**
+ * Handle successful user payment (tier extension purchase via card/bank).
+ * Idempotent — safe if the sync API response already created the extension.
+ */
+async function handleUserPaymentSuccess(pi: Stripe.PaymentIntent) {
+  const attemptId = pi.metadata?.user_payment_attempt_id;
+  if (!attemptId) {
+    console.warn("[stripe-webhook] tier_extension payment_intent.succeeded missing attempt ID:", pi.id);
+    return;
+  }
+
+  // Update payment attempt
+  await supabaseServer
+    .from("user_payment_attempts")
+    .update({
+      status: "succeeded",
+      stripe_payment_intent_id: pi.id,
+      processor_response: {
+        transaction_id: pi.id,
+        processor: "stripe",
+        amount_received: pi.amount_received,
+      },
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", attemptId)
+    .in("status", ["pending"]); // Only update if still pending (idempotent)
+}
+
+/**
+ * Handle failed user payment (tier extension purchase).
+ */
+async function handleUserPaymentFailure(pi: Stripe.PaymentIntent) {
+  const attemptId = pi.metadata?.user_payment_attempt_id;
+  if (!attemptId) {
+    console.warn("[stripe-webhook] tier_extension payment_intent.payment_failed missing attempt ID:", pi.id);
+    return;
+  }
+
+  const lastError = pi.last_payment_error;
+  const errorMsg = lastError?.message || "Payment failed";
+
+  await supabaseServer
+    .from("user_payment_attempts")
+    .update({
+      status: "failed",
+      stripe_payment_intent_id: pi.id,
+      processor_response: {
+        transaction_id: pi.id,
+        processor: "stripe",
+        error_code: lastError?.code,
+        decline_code: lastError?.decline_code,
+      },
+      error_message: errorMsg,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", attemptId)
+    .in("status", ["pending"]); // Only update if still pending
 }

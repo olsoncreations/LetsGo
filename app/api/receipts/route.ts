@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer as supabase } from "@/lib/supabaseServer";
 import { notify } from "@/lib/notify";
 import { NOTIFICATION_TYPES } from "@/lib/notificationTypes";
+import { getAnniversaryWindowStart } from "@/lib/anniversaryWindow";
 
 type TierRow = {
   tier_index: number;
@@ -38,29 +39,7 @@ function pickTier(tiers: TierRow[], visitCount: number): TierRow | null {
   return current;
 }
 
-/**
- * Computes the anniversary-based visit window for a user.
- * The window resets every year on the user's account creation anniversary.
- * Returns the start date (YYYY-MM-DD) of the current window.
- */
-function getAnniversaryWindowStart(accountCreatedAt: string): string {
-  const created = new Date(accountCreatedAt);
-  const now = new Date();
-
-  // Build this year's anniversary date
-  const anniversaryThisYear = new Date(
-    now.getFullYear(),
-    created.getMonth(),
-    created.getDate()
-  );
-
-  // If the anniversary hasn't happened yet this year, the window started last year's anniversary
-  const windowStart = anniversaryThisYear <= now
-    ? anniversaryThisYear
-    : new Date(now.getFullYear() - 1, created.getMonth(), created.getDate());
-
-  return windowStart.toISOString().slice(0, 10);
-}
+// getAnniversaryWindowStart imported from @/lib/anniversaryWindow
 
 /**
  * Runs fraud detection checks inline after receipt insertion.
@@ -278,7 +257,27 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     // 2) Count approved visits in the current anniversary window for this business
-    const windowStart = getAnniversaryWindowStart(profile.created_at);
+    let windowStart = getAnniversaryWindowStart(profile.created_at);
+
+    // Check if user has an active tier extension for this business (or Gold for all)
+    const { data: activeExtension } = await supabase
+      .from("tier_extensions")
+      .select("protected_tier_index, effective_until")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .or(`business_id.eq.${businessId},business_id.is.null`)
+      .gte("effective_until", todayStr)
+      .order("effective_until", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeExtension) {
+      // Extension active: push window back to include previous year's visits
+      // This preserves the user's visit count so their tier level stays high
+      const ws = new Date(windowStart);
+      windowStart = new Date(ws.getFullYear() - 1, ws.getMonth(), ws.getDate())
+        .toISOString().slice(0, 10);
+    }
 
     const { count: visitCount, error: visitError } = await supabase
       .from("receipts")

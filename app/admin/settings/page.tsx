@@ -294,6 +294,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [settingsSection, setSettingsSection] = useState("tiers");
   const [settings, setSettings] = useState<PlatformSettings>(DEFAULT_SETTINGS);
+  const [extConfig, setExtConfig] = useState({ silver6: 60, silver12: 50, goldDiscount: 15, letsgoSplit: 90, churnDays: 60 });
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
   const [currentStaffId, setCurrentStaffId] = useState("");
 
@@ -910,6 +911,7 @@ export default function SettingsPage() {
           { key: "quotas", label: "Quotas" },
           { key: "influencer_tiers", label: "Influencer Tiers" },
           { key: "bonus_pool", label: "Bonus Pool" },
+          { key: "extensions", label: "Tier Extensions" },
           { key: "maintenance", label: "Maintenance" },
         ].map(section => (
           <button
@@ -2892,6 +2894,92 @@ export default function SettingsPage() {
                   </div>
                 );
               })}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ==================== TIER EXTENSIONS ==================== */}
+      {settingsSection === "extensions" && (
+        <div style={{ display: "grid", gap: 24 }}>
+          <Card title="PREMIUM TIER EXTENSION SETTINGS">
+            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 20, lineHeight: 1.6 }}>
+              Configure pricing and revenue split for Premium Tier Extensions. Users purchase these to prevent their progressive payout tiers from resetting when their 365-day window expires.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {/* Silver 6 Fee % */}
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8 }}>Silver 6-Month Fee %</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>Percentage of lost reward value charged for 6-month extensions</div>
+                <input
+                  type="number" min="10" max="90" step="5"
+                  value={extConfig.silver6}
+                  onChange={(e) => { setExtConfig((prev) => ({ ...prev, silver6: Number(e.target.value) })); setEditing(true); }}
+                  style={{ width: 80, padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonYellow, fontSize: 16, fontWeight: 700, textAlign: "center" }}
+                />
+                <span style={{ marginLeft: 8, fontSize: 14, color: COLORS.textSecondary }}>%</span>
+              </div>
+              {/* Silver 12 Fee % */}
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8 }}>Silver 12-Month Fee %</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>Percentage of lost reward value charged for 12-month extensions (lower = better deal for user)</div>
+                <input
+                  type="number" min="10" max="90" step="5"
+                  value={extConfig.silver12}
+                  onChange={(e) => { setExtConfig((prev) => ({ ...prev, silver12: Number(e.target.value) })); setEditing(true); }}
+                  style={{ width: 80, padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonGreen, fontSize: 16, fontWeight: 700, textAlign: "center" }}
+                />
+                <span style={{ marginLeft: 8, fontSize: 14, color: COLORS.textSecondary }}>%</span>
+              </div>
+              {/* Gold Bundle Discount % */}
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8 }}>Gold Bundle Discount %</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>Discount for buying all businesses at once (vs individual Silvers)</div>
+                <input
+                  type="number" min="0" max="50" step="5"
+                  value={extConfig.goldDiscount}
+                  onChange={(e) => { setExtConfig((prev) => ({ ...prev, goldDiscount: Number(e.target.value) })); setEditing(true); }}
+                  style={{ width: 80, padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonBlue, fontSize: 16, fontWeight: 700, textAlign: "center" }}
+                />
+                <span style={{ marginLeft: 8, fontSize: 14, color: COLORS.textSecondary }}>%</span>
+              </div>
+              {/* LetsGo / Business Split */}
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8 }}>LetsGo Revenue Split %</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>LetsGo keeps this %, business gets the rest as a bill credit</div>
+                <input
+                  type="number" min="50" max="100" step="5"
+                  value={extConfig.letsgoSplit}
+                  onChange={(e) => { setExtConfig((prev) => ({ ...prev, letsgoSplit: Number(e.target.value) })); setEditing(true); }}
+                  style={{ width: 80, padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonPink, fontSize: 16, fontWeight: 700, textAlign: "center" }}
+                />
+                <span style={{ marginLeft: 8, fontSize: 14, color: COLORS.textSecondary }}>%</span>
+                <div style={{ marginTop: 8, fontSize: 11, color: COLORS.textSecondary }}>
+                  Business gets {100 - (extConfig.letsgoSplit)}% as bill credit
+                </div>
+              </div>
+              {/* Churn Window */}
+              <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8 }}>Churn Window (Days)</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>Days after tier reset to wait before counting a user as churned</div>
+                <input
+                  type="number" min="14" max="180" step="7"
+                  value={extConfig.churnDays}
+                  onChange={(e) => { setExtConfig((prev) => ({ ...prev, churnDays: Number(e.target.value) })); setEditing(true); }}
+                  style={{ width: 80, padding: "8px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonOrange, fontSize: 16, fontWeight: 700, textAlign: "center" }}
+                />
+                <span style={{ marginLeft: 8, fontSize: 14, color: COLORS.textSecondary }}>days</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 24, padding: 16, background: "rgba(0,212,255,0.05)", border: "1px solid rgba(0,212,255,0.15)", borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.neonBlue, marginBottom: 6 }}>How Pricing Works</div>
+              <div style={{ fontSize: 11, color: COLORS.textSecondary, lineHeight: 1.8 }}>
+                Silver 6 = (lost rewards over 6 months) x {extConfig.silver6}%<br/>
+                Silver 12 = (lost rewards over 12 months) x {extConfig.silver12}%<br/>
+                Gold = sum of all Silvers - {extConfig.goldDiscount}% bundle discount<br/>
+                Revenue: LetsGo {extConfig.letsgoSplit}% / Business {100 - (extConfig.letsgoSplit)}%
+              </div>
             </div>
           </Card>
         </div>

@@ -64,6 +64,8 @@ export default function OverviewPage() {
   const [activeSurgeEvents, setActiveSurgeEvents] = useState(0);
   const [activeAdCampaigns, setActiveAdCampaigns] = useState(0);
   const [customTierBusinesses, setCustomTierBusinesses] = useState(0);
+  const [activeTierExtensions, setActiveTierExtensions] = useState(0);
+  const [extensionRevThisMonth, setExtensionRevThisMonth] = useState(0);
   
   // Live activity
   const [liveStatsEnabled, setLiveStatsEnabled] = useState(true);
@@ -287,6 +289,24 @@ export default function OverviewPage() {
         setCustomTierBusinesses(customTierCount || 0);
       } catch { setCustomTierBusinesses(0); }
 
+      // Tier extension metrics
+      try {
+        const { count: extCount } = await supabaseBrowser
+          .from("tier_extensions")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "active");
+        setActiveTierExtensions(extCount || 0);
+
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const { data: monthExts } = await supabaseBrowser
+          .from("tier_extensions")
+          .select("price_cents")
+          .gte("created_at", monthStart.toISOString());
+        setExtensionRevThisMonth((monthExts ?? []).reduce((s, e) => s + (e.price_cents ?? 0), 0));
+      } catch { setActiveTierExtensions(0); setExtensionRevThisMonth(0); }
+
       // Generate notifications based on real data
       const notifs: Notification[] = [];
       
@@ -498,6 +518,10 @@ export default function OverviewPage() {
         <StatCard icon="⚡" value={activeSurgeEvents} label="Active Surge Events" gradient={COLORS.gradient3} />
         <StatCard icon="📺" value={activeAdCampaigns} label="Active Ad Campaigns" gradient={COLORS.gradient2} />
         <StatCard icon="🎯" value={customTierBusinesses} label="Custom Tier Businesses" gradient={COLORS.gradient4} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, marginBottom: 32 }}>
+        <StatCard icon="🛡" value={activeTierExtensions} label="Active Tier Extensions" gradient={COLORS.gradient2} />
+        <StatCard icon="💎" value={`$${(extensionRevThisMonth / 100).toFixed(0)}`} label="Extension Revenue (Month)" gradient={COLORS.gradient3} />
       </div>
 
       {/* Quick Actions */}

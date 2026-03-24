@@ -20,6 +20,7 @@ import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { EarningsBannerAnim, ReceiptAnim, CashOutAnim, HeartAnim, TabSwitchAnim, PayoutTiersAnim, LevelUpAnim, MediaAnim, GameHistoryAnim, AnalyticsAnim, ProfileAnim, SupportAnim } from "@/components/TourIllustrations";
 import OpportunityCTA from "@/components/OpportunityCTA";
 import { LaunchBanner, CashoutBanner } from "@/components/LaunchBanner";
+import UserPaymentMethod from "@/components/profile/UserPaymentMethod";
 
 // ═══════════════════════════════════════════════════
 // NEON PALETTE
@@ -49,6 +50,10 @@ interface ProfileData {
   referral_code: string | null; tax_id_on_file: boolean | null;
   w9_status: string | null; tax_1099_years: string[] | null;
   stripe_connect_account_id: string | null; stripe_connect_onboarding_complete: boolean | null;
+  stripe_customer_id: string | null; stripe_payment_method_id: string | null;
+  payment_method_type: string | null; payment_card_brand: string | null; payment_card_last4: string | null;
+  payment_card_exp_month: number | null; payment_card_exp_year: number | null;
+  payment_bank_name: string | null; payment_bank_last4: string | null;
 }
 interface ReceiptDisplay {
   id: string; business: string; businessId: string; date: string; rawDate: string;
@@ -686,6 +691,34 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
               )}
             </div>
 
+            {/* Payment Method for Purchases */}
+            <div style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:24}}>
+              <div style={{fontSize:18,fontWeight:900,display:"flex",alignItems:"center",gap:8,marginBottom:12,color:"#fff"}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                Payment Method
+              </div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginBottom:16}}>For tier extension purchases and other in-app payments</div>
+              {token && (
+                <UserPaymentMethod
+                  token={token}
+                  paymentMethod={profile ? {
+                    type: profile.payment_method_type,
+                    cardBrand: profile.payment_card_brand,
+                    cardLast4: profile.payment_card_last4,
+                    cardExpMonth: profile.payment_card_exp_month,
+                    cardExpYear: profile.payment_card_exp_year,
+                    bankName: profile.payment_bank_name,
+                    bankLast4: profile.payment_bank_last4,
+                  } : null}
+                  onUpdated={async () => {
+                    if (!token) return;
+                    const res = await fetch("/api/users/profile", { headers: { Authorization: `Bearer ${token}` } });
+                    if (res.ok) { const d = await res.json(); if (d.profile) onProfileSaved(d.profile); }
+                  }}
+                />
+              )}
+            </div>
+
             {/* Change Password */}
             <div style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:24}}>
               <div style={{fontSize:18,fontWeight:900,display:"flex",alignItems:"center",gap:8,marginBottom:20,color:"#fff"}}>
@@ -843,6 +876,27 @@ export default function LetsGoProfile() {
   const [rateWouldGoAgain, setRateWouldGoAgain] = useState(true);
   const [rateSaving, setRateSaving] = useState(false);
   const [editingRatingId, setEditingRatingId] = useState<string | null>(null);
+
+  // Tier extension state
+  const [tierExtPricing, setTierExtPricing] = useState<{
+    silvers: {
+      businessId: string; businessName: string; currentTierIndex: number;
+      lostPerVisitCents: number; lostPerMonthCents: number;
+      lostOver6MoCents: number; lostOver12MoCents: number;
+      silver6PriceCents: number; silver12PriceCents: number;
+      nothingToProtect: boolean; hasActiveExtension: boolean;
+      activeExtensionUntil: string | null;
+      avgTicketCents: number; visitsPerMonth: number;
+    }[];
+    gold: { gold6PriceCents: number; gold12PriceCents: number; gold6SavingsCents: number; gold12SavingsCents: number } | null;
+    daysUntilExpiry: number;
+    nextAnniversary: string;
+    config: { silver6FeePct: number; silver12FeePct: number; goldDiscountPct: number };
+  } | null>(null);
+  const [tierExtModalBiz, setTierExtModalBiz] = useState<string | null>(null); // business_id for Silver modal, "gold" for Gold
+  const [tierExtPurchasing, setTierExtPurchasing] = useState(false);
+  const [tierExtSuccess, setTierExtSuccess] = useState<string | null>(null);
+  const [tierExtLegalAccepted, setTierExtLegalAccepted] = useState(false);
 
   // Influencer dashboard
   const [influencerData, setInfluencerData] = useState<{
@@ -1134,6 +1188,16 @@ export default function LetsGoProfile() {
         }
       } catch { /* influencer tables may not exist yet */ }
 
+      // Fetch tier extension pricing
+      try {
+        const extRes = await fetch("/api/tier-extensions/prices", { headers: { Authorization: `Bearer ${tk}` } });
+        if (cancelled) return;
+        if (extRes.ok) {
+          const extData = await extRes.json();
+          setTierExtPricing(extData);
+        }
+      } catch { /* tier extensions may not be set up yet */ }
+
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -1253,12 +1317,52 @@ export default function LetsGoProfile() {
   const filteredPayouts = useMemo(() => {
     let p = [...payoutBusinesses];
     if (payoutSearch) p = p.filter(x => x.name.toLowerCase().includes(payoutSearch.toLowerCase()));
-    if (payoutSort === "visits") p.sort((a, b) => b.visits - a.visits);
+    if (payoutSort === "at_risk") {
+      // Filter to only businesses above tier 1 that don't have active protection
+      p = p.filter(x => {
+        const ext = tierExtPricing?.silvers?.find((s) => s.businessId === x.id);
+        return ext && !ext.nothingToProtect && !ext.hasActiveExtension;
+      });
+      p.sort((a, b) => b.level - a.level);
+    } else if (payoutSort === "visits") p.sort((a, b) => b.visits - a.visits);
     else if (payoutSort === "earned") p.sort((a, b) => b.earned - a.earned);
     else if (payoutSort === "level") p.sort((a, b) => b.level - a.level);
-    else if (payoutSort === "balance") p.sort((a, b) => b.balance - a.balance);
     return p;
-  }, [payoutSearch, payoutSort, payoutBusinesses]);
+  }, [payoutSearch, payoutSort, payoutBusinesses, tierExtPricing]);
+
+  // Tier extension purchase handler
+  const handleTierExtPurchase = useCallback(async (productType: string, businessId: string | null, paymentMethod: string = "balance") => {
+    if (!token || tierExtPurchasing || !tierExtLegalAccepted) return;
+    setTierExtPurchasing(true);
+    setTierExtSuccess(null);
+    try {
+      const res = await fetch("/api/tier-extensions/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ product_type: productType, business_id: businessId, payment_method: paymentMethod }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Purchase failed");
+        setTierExtPurchasing(false);
+        return;
+      }
+      setTierExtSuccess(`Tier protected until ${data.effectiveUntil}!`);
+      setTierExtModalBiz(null);
+      // Refresh pricing data
+      const extRes = await fetch("/api/tier-extensions/prices", { headers: { Authorization: `Bearer ${token}` } });
+      if (extRes.ok) setTierExtPricing(await extRes.json());
+      // Refresh profile balance
+      const profRes = await fetch("/api/users/profile", { headers: { Authorization: `Bearer ${token}` } });
+      if (profRes.ok) {
+        const profData = await profRes.json();
+        if (profData.profile) setProfile(profData.profile);
+      }
+    } catch {
+      alert("Purchase failed. Please try again.");
+    }
+    setTierExtPurchasing(false);
+  }, [token, tierExtPurchasing, tierExtLegalAccepted]);
 
   const yearlyEarnings = useMemo(() => {
     const now = new Date();
@@ -1507,6 +1611,24 @@ export default function LetsGoProfile() {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         @keyframes cardSlideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,214,0,0.3); } 50% { box-shadow: 0 0 12px 2px rgba(255,214,0,0.2); } }
+        @keyframes starBlink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.7); } }
+        .tier-ext-legal-flash { border-color: #FF6B2D !important; background: rgba(255,107,45,0.12) !important; box-shadow: 0 0 16px rgba(255,107,45,0.3); animation: legalFlash 0.4s ease-in-out 3; }
+        @keyframes legalFlash { 0%, 100% { border-color: #FF6B2D; } 50% { border-color: #FFD600; } }
+        @keyframes goldShift {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        .gold-protect-btn::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 6px;
+          background: linear-gradient(90deg, #FF2D78, #FF6B2D, #FFD600, #00FF87, #00E5FF, #D050FF, #FF2D78, #FF6B2D, #FFD600, #00FF87, #00E5FF, #D050FF);
+          background-size: 200% 100%;
+          animation: goldShift 4s linear infinite;
+          z-index: 0;
+        }
         @keyframes marqueeScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         @keyframes logoGlow {
           0%, 100% { filter: drop-shadow(0 0 10px #FF2D78) drop-shadow(0 0 25px #FF2D7850); }
@@ -1707,9 +1829,14 @@ export default function LetsGoProfile() {
 
                 <div className="hero-actions" style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
                   <button onClick={() => setSettingsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.primaryRGB},0.3)`, background: `rgba(${NEON.primaryRGB},0.08)`, color: NEON.primary, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>Edit Profile</button>
-                  <button onClick={() => { const opening = !heroFriendsOpen; setHeroFriendsOpen(opening); if (opening) { setAddFriendOpen(true); setTimeout(() => friendsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); } }} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${heroFriendsOpen ? 0.5 : 0.3})`, background: heroFriendsOpen ? `rgba(${NEON.purpleRGB},0.12)` : `rgba(${NEON.purpleRGB},0.06)`, color: NEON.purple, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s ease" }}>
+                  <button onClick={() => { const opening = !heroFriendsOpen; setHeroFriendsOpen(opening); if (opening) { setAddFriendOpen(true); setTimeout(() => friendsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); } }} style={{ position: "relative", padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${heroFriendsOpen ? 0.5 : 0.3})`, background: heroFriendsOpen ? `rgba(${NEON.purpleRGB},0.12)` : `rgba(${NEON.purpleRGB},0.06)`, color: NEON.purple, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s ease" }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={NEON.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8.5" cy="7" r="4" stroke={NEON.purple} strokeWidth="2"/></svg>
                     Friends
+                    {friends.filter(f => f.kind === "pending").length > 0 && (
+                      <span style={{ position: "absolute", top: -6, right: -6, minWidth: 16, height: 16, borderRadius: 8, background: "#FF2D78", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxShadow: "0 0 8px rgba(255,45,120,0.6)", animation: "notifPulse 2s ease-in-out infinite" }}>
+                        {friends.filter(f => f.kind === "pending").length > 99 ? "99+" : friends.filter(f => f.kind === "pending").length}
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -2297,10 +2424,15 @@ export default function LetsGoProfile() {
 
           {/* PROGRESSIVE PAYOUTS BY PLACE */}
           <div data-tour="level-progress" style={{ marginBottom: 48, animation: "cardSlideUp 0.7s cubic-bezier(0.23, 1, 0.32, 1) 0.45s both" }}>
-            <div onClick={() => setProgressiveOpen(!progressiveOpen)} style={{ cursor: "pointer" }}>
+            <div onClick={() => setProgressiveOpen(!progressiveOpen)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+              {tierExtPricing && tierExtPricing.daysUntilExpiry <= 60 && tierExtPricing.silvers.some((s) => !s.nothingToProtect && !s.hasActiveExtension) && (
+                <span style={{ fontSize: 56, animation: "starBlink 1.5s ease-in-out infinite", lineHeight: 1, flexShrink: 0 }}>{"\u2B50"}</span>
+              )}
+              <div style={{ flex: 1 }}>
               <SectionHeader icon={"\u25C8"} label="Progressive Payouts by Place" neon={NEON.yellow} neonRGB={NEON.yellowRGB} count={payoutBusinesses.length} rightElement={
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ transition: "transform 0.2s ease", transform: progressiveOpen ? "rotate(180deg)" : "rotate(0deg)" }}><path d="M6 9l6 6 6-6" stroke={NEON.yellow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               } />
+              </div>
             </div>
 
             {progressiveOpen && (<>
@@ -2310,13 +2442,46 @@ export default function LetsGoProfile() {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }}><circle cx="11" cy="11" r="8" stroke="rgba(255,255,255,0.15)" strokeWidth="2" /><path d="M21 21l-4.35-4.35" stroke="rgba(255,255,255,0.15)" strokeWidth="2" strokeLinecap="round" /></svg>
               </div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {[{ key: "visits", label: "Most Visits" }, { key: "earned", label: "Most Earned" }, { key: "level", label: "Highest Level" }, { key: "balance", label: "Balance" }].map((s) => (
-                  <GlassPill key={s.key} active={payoutSort === s.key} onClick={() => setPayoutSort(s.key)} neon={NEON.yellow} neonRGB={NEON.yellowRGB}>{s.label}</GlassPill>
+                {[{ key: "visits", label: "Most Visits" }, { key: "earned", label: "Most Earned" }, { key: "level", label: "Highest Level" }, { key: "at_risk", label: "At Risk" }].map((s) => (
+                  <GlassPill key={s.key} active={payoutSort === s.key} onClick={() => setPayoutSort(s.key)} neon={s.key === "at_risk" ? NEON.orange : NEON.yellow} neonRGB={s.key === "at_risk" ? NEON.orangeRGB : NEON.yellowRGB}>{s.label}</GlassPill>
                 ))}
               </div>
             </div>
 
             {payoutBusinesses.length === 0 && <div style={{ padding: "30px 0", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>No payout data yet. Upload receipts to start building your levels!</div>}
+
+            {/* Gold — Protect All Tiers banner */}
+            {tierExtPricing?.gold && (() => {
+              const atRiskCount = tierExtPricing.silvers.filter((s) => !s.nothingToProtect && !s.hasActiveExtension).length;
+              if (atRiskCount < 2) return null;
+              return (
+                <div style={{ marginBottom: 12, padding: "14px 20px", borderRadius: 6, background: "linear-gradient(135deg, rgba(255,214,0,0.08), rgba(255,45,120,0.08))", border: "1px solid rgba(255,214,0,0.2)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: NEON.yellow, fontFamily: "'Clash Display', 'DM Sans', sans-serif" }}>Protect All {atRiskCount} Tiers at Once</div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>Save {tierExtPricing.config.goldDiscountPct}% with Gold vs buying individually</div>
+                  </div>
+                  <button onClick={() => { setTierExtLegalAccepted(false); setTierExtModalBiz("gold"); }} className="gold-protect-btn" style={{
+                    flexShrink: 0, padding: "12px 26px", borderRadius: 8,
+                    border: "2px solid rgba(255,255,255,0.3)",
+                    background: "#1a1a2e",
+                    color: "#fff", fontSize: 11, fontWeight: 800,
+                    letterSpacing: "0.08em", textTransform: "uppercase",
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap",
+                    boxShadow: "0 4px 0 rgba(208,80,255,0.5), 0 6px 20px rgba(255,214,0,0.3), 0 2px 4px rgba(0,0,0,0.4)",
+                    transform: "translateY(-2px)",
+                    transition: "all 0.15s ease",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = "translateY(1px)"; e.currentTarget.style.boxShadow = "0 1px 0 rgba(208,80,255,0.5), 0 2px 8px rgba(255,214,0,0.2), 0 1px 2px rgba(0,0,0,0.3)"; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 0 rgba(208,80,255,0.5), 0 6px 20px rgba(255,214,0,0.3), 0 2px 4px rgba(0,0,0,0.4)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 0 rgba(208,80,255,0.5), 0 6px 20px rgba(255,214,0,0.3), 0 2px 4px rgba(0,0,0,0.4)"; }}
+                  >
+                    <span style={{ position: "relative", zIndex: 1, textShadow: "0 0 10px rgba(255,255,255,0.8), 0 1px 3px rgba(0,0,0,0.5)" }}>Protect All — ${(tierExtPricing.gold.gold12PriceCents / 100).toFixed(2)}</span>
+                  </button>
+                </div>
+              );
+            })()}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {filteredPayouts.map((biz) => {
@@ -2336,14 +2501,72 @@ export default function LetsGoProfile() {
                           <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: "'DM Sans', sans-serif" }}>{biz.name}</div>
                           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>{biz.type} {"\u00b7"} {biz.visits} visits {"\u00b7"} {biz.rates[biz.level - 1]}% back</div>
                         </div>
+                        {/* Countdown to tier reset */}
+                        {tierExtPricing && biz.level > 1 && (() => {
+                          const extInfo = tierExtPricing.silvers?.find((s) => s.businessId === biz.id);
+                          if (extInfo?.hasActiveExtension && extInfo.activeExtensionUntil) {
+                            const extDate = new Date(extInfo.activeExtensionUntil);
+                            const extDays = Math.max(0, Math.ceil((extDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                            return (
+                              <div style={{ textAlign: "center", flexShrink: 0 }}>
+                                <div style={{ fontSize: 9, color: NEON.green, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>Protected</div>
+                                <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, color: NEON.green }}>{extDays}d</div>
+                              </div>
+                            );
+                          }
+                          const days = tierExtPricing.daysUntilExpiry;
+                          if (days > 365) return null;
+                          return (
+                            <div style={{ textAlign: "center", flexShrink: 0 }}>
+                              <div style={{ fontSize: 9, color: days <= 30 ? NEON.orange : days <= 90 ? NEON.yellow : "rgba(255,255,255,0.2)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>Resets in</div>
+                              <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 14, fontWeight: 700, color: days <= 30 ? NEON.orange : days <= 90 ? NEON.yellow : "rgba(255,255,255,0.35)" }}>{days}d</div>
+                            </div>
+                          );
+                        })()}
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Earned</div>
                           <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 16, fontWeight: 700, color: NEON.green }}>${biz.earned.toFixed(2)}</div>
                         </div>
-                        <div style={{ textAlign: "right", flexShrink: 0, minWidth: 70 }}>
-                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Balance</div>
-                          <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 16, fontWeight: 700, color: biz.balance >= 20 ? NEON.yellow : "rgba(255,255,255,0.4)" }}>${biz.balance.toFixed(2)}</div>
-                        </div>
+                        {/* Protect Tier button — always visible on the banner */}
+                        {(() => {
+                          const extD = tierExtPricing?.silvers?.find((s) => s.businessId === biz.id);
+                          if (!extD || extD.nothingToProtect) return null;
+                          if (extD.hasActiveExtension) {
+                            return (
+                              <div style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 3, background: "rgba(57,255,20,0.08)", border: "1px solid rgba(57,255,20,0.25)" }}>
+                                <div style={{ fontSize: 8, fontWeight: 700, color: NEON.green, letterSpacing: "0.08em", textTransform: "uppercase" }}>Protected</div>
+                                <div style={{ fontSize: 7, color: "rgba(57,255,20,0.5)" }}>until {extD.activeExtensionUntil}</div>
+                              </div>
+                            );
+                          }
+                          const nextColor = LEVEL_COLORS[biz.level] || LEVEL_COLORS[6];
+                          return (
+                            <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 20 }}>
+                              <button onClick={(e) => { e.stopPropagation(); setTierExtLegalAccepted(false); setTierExtModalBiz(biz.id); }} style={{
+                                padding: "8px 18px", borderRadius: 6,
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                background: `linear-gradient(135deg, ${levelColor}, ${nextColor})`,
+                                color: "#fff", fontSize: 9, fontWeight: 800,
+                                letterSpacing: "0.08em", textTransform: "uppercase",
+                                cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap",
+                                textShadow: "0 1px 3px rgba(0,0,0,0.4)",
+                                boxShadow: `0 4px 0 ${levelColor}90, 0 6px 16px ${levelColor}40, 0 2px 4px rgba(0,0,0,0.4)`,
+                                transform: "translateY(-2px)",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseDown={(e) => { e.currentTarget.style.transform = "translateY(1px)"; e.currentTarget.style.boxShadow = `0 1px 0 ${levelColor}90, 0 2px 8px ${levelColor}30, 0 1px 2px rgba(0,0,0,0.3)`; }}
+                              onMouseUp={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 0 ${levelColor}90, 0 6px 16px ${levelColor}40, 0 2px 4px rgba(0,0,0,0.4)`; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 0 ${levelColor}90, 0 6px 16px ${levelColor}40, 0 2px 4px rgba(0,0,0,0.4)`; }}
+                              >
+                                Protect Tier
+                              </button>
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>from</div>
+                                <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>${(extD.silver6PriceCents / 100).toFixed(2)}</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, transition: "transform 0.3s ease", transform: isExpanded ? "rotate(180deg)" : "rotate(0)" }}><path d="M6 9l6 6 6-6" stroke="rgba(255,255,255,0.2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                       </div>
 
@@ -2368,15 +2591,17 @@ export default function LetsGoProfile() {
                               );
                             })}
                           </div>
-                          {biz.balance >= minCashoutCents / 100 && (
-                            <div style={{ marginTop: 14, padding: "10px 16px", borderRadius: 4, background: `rgba(${NEON.yellowRGB},0.06)`, border: `1px solid rgba(${NEON.yellowRGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                              <span style={{ fontSize: 11, color: NEON.yellow, fontWeight: 600, textShadow: `0 0 6px ${NEON.yellow}40` }}>{"\uD83D\uDCB0"} Balance of ${biz.balance.toFixed(2)} is ready to cash out!</span>
-                              <button onClick={(e) => { e.stopPropagation(); setCashOutModal(paymentConnected ? "confirm" : "noPayment"); }} style={{ padding: "5px 14px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.4)`, background: `rgba(${NEON.yellowRGB},0.1)`, color: NEON.yellow, fontSize: 9, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cash Out</button>
-                            </div>
-                          )}
-                          {biz.balance < minCashoutCents / 100 && biz.balance > 0 && (
-                            <div style={{ marginTop: 12, fontSize: 10, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>${(minCashoutCents / 100 - biz.balance).toFixed(2)} more to reach the ${(minCashoutCents/100).toFixed(0)} cash out minimum</div>
-                          )}
+                          {/* Tier reset info (expanded view only) */}
+                          {(() => {
+                            const extData = tierExtPricing?.silvers?.find((s) => s.businessId === biz.id);
+                            const daysLeft = tierExtPricing?.daysUntilExpiry ?? 999;
+                            if (!extData || extData.nothingToProtect || extData.hasActiveExtension) return null;
+                            return (
+                              <div style={{ marginTop: 14, padding: "10px 16px", borderRadius: 4, background: "rgba(255,214,0,0.04)", border: "1px solid rgba(255,214,0,0.1)" }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>Level {biz.level} resets in {daysLeft} days — you&apos;d lose ${(extData.lostPerMonthCents / 100).toFixed(2)}/mo in rewards</div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -2740,6 +2965,169 @@ export default function LetsGoProfile() {
         {/* Bottom ambient bar */}
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, ${NEON.orange}, ${NEON.purple}, ${NEON.green}, ${NEON.yellow}, ${NEON.primary}, ${NEON.pink}, ${NEON.orange})`, backgroundSize: "200% 100%", animation: "marqueeScroll 24s linear infinite", boxShadow: `0 0 15px rgba(${NEON.purpleRGB},0.3), 0 0 40px rgba(${NEON.greenRGB},0.15)` }} />
       </div>
+
+      {/* Tier Extension Purchase Modal */}
+      {tierExtModalBiz && tierExtPricing && (() => {
+        const isGold = tierExtModalBiz === "gold";
+        const silverData = !isGold ? tierExtPricing.silvers.find((s) => s.businessId === tierExtModalBiz) : null;
+        const goldData = tierExtPricing.gold;
+        const availBal = (profile?.available_balance ?? 0) / 100;
+        if (!isGold && (!silverData || silverData.nothingToProtect)) return null;
+        if (isGold && !goldData) return null;
+
+        const s6 = isGold ? (goldData?.gold6PriceCents ?? 0) : (silverData?.silver6PriceCents ?? 0);
+        const s12 = isGold ? (goldData?.gold12PriceCents ?? 0) : (silverData?.silver12PriceCents ?? 0);
+        const lostMo = isGold ? tierExtPricing.silvers.reduce((sum, s) => sum + (s.nothingToProtect ? 0 : s.lostPerMonthCents), 0) : (silverData?.lostPerMonthCents ?? 0);
+        const tierIdx = isGold ? null : silverData?.currentTierIndex;
+        const bizName = isGold ? "all businesses" : silverData?.businessName;
+
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={() => !tierExtPurchasing && setTierExtModalBiz(null)}>
+            <div style={{ background: "#1a1a2e", border: "1px solid rgba(255,214,0,0.2)", borderRadius: 8, padding: 28, maxWidth: 420, width: "90%", maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: NEON.yellow, marginBottom: 4, fontFamily: "'Clash Display', 'DM Sans', sans-serif" }}>
+                {isGold ? "Protect All Tiers" : "Protect Your Tier"}
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 20 }}>
+                {isGold ? "Keep your tier level at every business" : `Keep Level ${tierIdx} at ${bizName}`}
+              </div>
+
+              <div style={{ fontSize: 11, color: NEON.orange, marginBottom: 6, fontWeight: 600 }}>Don&apos;t miss out on higher rewards! Add an Extension today!</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 16 }}>Resets in {tierExtPricing.daysUntilExpiry} days ({tierExtPricing.nextAnniversary})</div>
+
+              {tierExtSuccess && (
+                <div style={{ padding: "10px 16px", borderRadius: 4, background: "rgba(57,255,20,0.1)", border: "1px solid rgba(57,255,20,0.3)", color: NEON.green, fontSize: 12, fontWeight: 600, marginBottom: 16, textAlign: "center" }}>{tierExtSuccess}</div>
+              )}
+
+              {/* 6-month option */}
+              <div style={{ padding: 16, borderRadius: 6, border: "1px solid rgba(255,214,0,0.15)", background: "rgba(255,214,0,0.04)", marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>6-Month Extension</div>
+                    <div style={{ fontSize: 10, color: NEON.yellow }}>Don&apos;t give up ${(lostMo * 6 / 100).toFixed(2)} in future rewards!</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: NEON.yellow }}>${(s6 / 100).toFixed(2)}</div>
+                  </div>
+                </div>
+                {availBal >= s6 / 100 ? (
+                  <button
+                    disabled={tierExtPurchasing}
+                    onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz); }}
+                    style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #FFD600, #FF6B35)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+                  >
+                    {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {availBal > 0 && (
+                      <button
+                        disabled={tierExtPurchasing}
+                        onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz); }}
+                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #FFD600, #FF6B35)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
+                      </button>
+                    )}
+                    {profile?.stripe_payment_method_id ? (
+                      <button
+                        disabled={tierExtPurchasing}
+                        onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz, profile?.payment_method_type || "card"); }}
+                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "1px solid rgba(0,229,255,0.3)", background: "rgba(0,229,255,0.08)", color: NEON.primary, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        {tierExtPurchasing ? "Processing..." : `Pay with ${profile.payment_method_type === "card" ? `${(profile.payment_card_brand || "Card").toUpperCase()} ••${profile.payment_card_last4}` : `Bank ••${profile.payment_bank_last4}`} (+$${(Math.ceil(s6 * 350 / 10000) / 100).toFixed(2)} fee)`}
+                      </button>
+                    ) : (
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "8px 0" }}>
+                        Add a payment method in your account settings to pay with card or bank
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 12-month option */}
+              {(() => {
+                // Savings = cost of two 6-month extensions minus the 12-month price (the 10% discount)
+                const twoSixMonthCents = s6 * 2;
+                const savingsCents = twoSixMonthCents - s12;
+                return (
+                  <div style={{ padding: 16, borderRadius: 6, border: "1px solid rgba(57,255,20,0.2)", background: "rgba(57,255,20,0.04)", marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>12-Month Extension <span style={{ fontSize: 9, color: NEON.green, fontWeight: 600, background: "rgba(57,255,20,0.1)", padding: "2px 6px", borderRadius: 3, marginLeft: 6 }}>Best Value</span></div>
+                        <div style={{ fontSize: 10, color: NEON.green }}>Don&apos;t give up ${(lostMo * 12 / 100).toFixed(2)} in future rewards!</div>
+                        {savingsCents > 0 && <div style={{ fontSize: 9, color: "rgba(57,255,20,0.6)", marginTop: 2 }}>Save ${(savingsCents / 100).toFixed(2)} vs two 6-month extensions</div>}
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: NEON.green }}>${(s12 / 100).toFixed(2)}</div>
+                      </div>
+                    </div>
+                    {availBal >= s12 / 100 ? (
+                      <button
+                        disabled={tierExtPurchasing}
+                        onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz); }}
+                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #39ff14, #00E5FF)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", marginTop: 8 }}
+                      >
+                        {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                        {availBal > 0 && (
+                          <button
+                            disabled={tierExtPurchasing}
+                            onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz); }}
+                            style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #39ff14, #00E5FF)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+                          >
+                            {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
+                          </button>
+                        )}
+                        {profile?.stripe_payment_method_id ? (
+                          <button
+                            disabled={tierExtPurchasing}
+                            onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz, profile?.payment_method_type || "card"); }}
+                            style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "1px solid rgba(0,229,255,0.3)", background: "rgba(0,229,255,0.08)", color: NEON.primary, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+                          >
+                            {tierExtPurchasing ? "Processing..." : `Pay with ${profile.payment_method_type === "card" ? `${(profile.payment_card_brand || "Card").toUpperCase()} ••${profile.payment_card_last4}` : `Bank ••${profile.payment_bank_last4}`} (+$${(Math.ceil(s12 * 350 / 10000) / 100).toFixed(2)} fee)`}
+                          </button>
+                        ) : (
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "8px 0" }}>
+                            Add a payment method in your account settings to pay with card or bank
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {isGold && goldData && (
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", marginBottom: 12 }}>
+                  Gold saves you ${(goldData.gold12SavingsCents / 100).toFixed(2)} vs buying each business separately
+                </div>
+              )}
+
+              {/* Legal agreement checkbox */}
+              <div id="tier-ext-legal" style={{ padding: "12px 14px", borderRadius: 6, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", marginBottom: 12, transition: "all 0.3s ease" }}>
+                <label style={{ display: "flex", gap: 10, cursor: "pointer", alignItems: "flex-start" }}>
+                  <input
+                    type="checkbox"
+                    checked={tierExtLegalAccepted}
+                    onChange={(e) => setTierExtLegalAccepted(e.target.checked)}
+                    style={{ marginTop: 2, flexShrink: 0, accentColor: NEON.yellow, width: 14, height: 14 }}
+                  />
+                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", lineHeight: 1.6 }}>
+                    I understand and agree: This purchase is <strong style={{ color: "rgba(255,255,255,0.5)" }}>non-refundable</strong>. The extension protects my tier level, not the payout percentage — businesses may adjust their reward rates at any time. Pricing is based on my current visit history and average spending; future rewards are <strong style={{ color: "rgba(255,255,255,0.5)" }}>estimates only</strong> and are not guaranteed. Actual rewards depend on my continued visits, receipt approvals, and the business&apos;s active payout structure. By purchasing, I agree to the LetsGo{" "}
+                    <a href="/terms" target="_blank" style={{ color: NEON.primary, textDecoration: "underline" }}>Terms of Service</a> and{" "}
+                    <a href="/privacy" target="_blank" style={{ color: NEON.primary, textDecoration: "underline" }}>Privacy Policy</a>.
+                  </span>
+                </label>
+              </div>
+
+              <button onClick={() => setTierExtModalBiz(null)} style={{ display: "block", margin: "16px auto 0", padding: "6px 20px", borderRadius: 3, border: "1px solid rgba(255,255,255,0.08)", background: "transparent", color: "rgba(255,255,255,0.3)", fontSize: 10, cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {tour.isTouring && tour.currentStep && (
         <OnboardingTooltip
