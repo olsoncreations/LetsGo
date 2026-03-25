@@ -158,6 +158,13 @@ export default function ExecutivePage() {
   const [customTierAdoptionPct, setCustomTierAdoptionPct] = useState(0);
   const [recentTierChanges, setRecentTierChanges] = useState(0);
 
+  // QR scan metrics
+  const [qrTotalScans, setQrTotalScans] = useState(0);
+  const [qrBusinessScans, setQrBusinessScans] = useState(0);
+  const [qrUserScans, setQrUserScans] = useState(0);
+  const [qrScansToday, setQrScansToday] = useState(0);
+  const [qrScansByDay, setQrScansByDay] = useState<{ label: string; business: number; user: number }[]>([]);
+
   // Game engagement metrics
   const [total5v3v1Games, setTotal5v3v1Games] = useState(0);
   const [totalGroupGames, setTotalGroupGames] = useState(0);
@@ -500,6 +507,40 @@ export default function ExecutivePage() {
           setAchCostEstimate(bankInvoices.length * 80);
         }
       } catch { /* payment data tables may not exist yet */ }
+
+      // ---- QR SCAN TRACKING ----
+      try {
+        const { data: allScans } = await supabaseBrowser.from("qr_scans").select("campaign, scanned_at");
+        if (allScans) {
+          setQrTotalScans(allScans.length);
+          setQrBusinessScans(allScans.filter(s => s.campaign === "business").length);
+          setQrUserScans(allScans.filter(s => s.campaign === "user").length);
+          const todayStr = new Date().toISOString().slice(0, 10);
+          setQrScansToday(allScans.filter(s => s.scanned_at?.slice(0, 10) === todayStr).length);
+
+          // Group by day for chart (last 30 days)
+          const dayMap: Record<string, { business: number; user: number }> = {};
+          const now = new Date();
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            dayMap[key] = { business: 0, user: 0 };
+          }
+          allScans.forEach(s => {
+            const day = s.scanned_at?.slice(0, 10);
+            if (day && dayMap[day]) {
+              if (s.campaign === "business") dayMap[day].business++;
+              else if (s.campaign === "user") dayMap[day].user++;
+            }
+          });
+          setQrScansByDay(Object.entries(dayMap).map(([k, v]) => ({
+            label: new Date(k + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            business: v.business,
+            user: v.user,
+          })));
+        }
+      } catch { /* qr_scans table may not exist yet */ }
 
     } catch (err) {
       console.error("Error fetching executive data:", err);
@@ -945,6 +986,32 @@ export default function ExecutivePage() {
           </div>
         </Card>
       </div>
+
+      {/* QR CODE SCAN TRACKING */}
+      <SectionTitle icon="📱">QR Code Scan Tracking</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+        <StatCard value={qrTotalScans.toLocaleString()} label="Total Scans" gradient={COLORS.gradient1} />
+        <StatCard value={qrBusinessScans.toLocaleString()} label="Business Scans" gradient={COLORS.gradient2} />
+        <StatCard value={qrUserScans.toLocaleString()} label="User Scans" gradient={COLORS.gradient3} />
+        <StatCard value={qrScansToday.toLocaleString()} label="Scans Today" gradient={COLORS.gradient4} />
+      </div>
+      <Card title="Scans by Day (Last 30 Days)" style={{ marginBottom: 24 }} actions={<ExportButtons data={qrScansByDay} filename="qr_scans_by_day" />}>
+        <div style={{ height: 280 }}>
+          {qrScansByDay.length === 0 ? <EmptyChart message="No QR scan data yet" /> : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={qrScansByDay}>
+                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.cardBorder} />
+                <XAxis dataKey="label" tick={{ fill: COLORS.textSecondary, fontSize: 10 }} interval={4} />
+                <YAxis tick={{ fill: COLORS.textSecondary, fontSize: 11 }} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend />
+                <Bar dataKey="business" name="Business" fill={COLORS.neonOrange} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="user" name="User" fill={COLORS.neonBlue} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

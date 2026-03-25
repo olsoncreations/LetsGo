@@ -266,6 +266,10 @@ export default function AdvertisingPage() {
   const [forecastImpact, setForecastImpact] = useState("all");
   const [forecastTimeframe, setForecastTimeframe] = useState("90");
 
+  // QR scan tracking
+  const [qrScans, setQrScans] = useState<{ id: string; campaign: string; scanned_at: string; ip_address: string | null; user_agent: string | null }[]>([]);
+  const [qrFilter, setQrFilter] = useState("all");
+
   // Surge pricing
   const [surgeEvents, setSurgeEvents] = useState<SurgeEvent[]>([]);
   const [showSurgeModal, setShowSurgeModal] = useState(false);
@@ -348,6 +352,13 @@ export default function AdvertisingPage() {
         .select("*")
         .order("start_date");
       setSurgeEvents(surgeData || []);
+
+      // Fetch QR scans
+      const { data: qrData } = await supabaseBrowser
+        .from("qr_scans")
+        .select("id, campaign, scanned_at, ip_address, user_agent")
+        .order("scanned_at", { ascending: false });
+      setQrScans(qrData || []);
     } catch (err) {
       console.error("Error fetching advertising data:", err);
       addToast("Failed to load data", "error");
@@ -678,6 +689,7 @@ export default function AdvertisingPage() {
     { key: "addons", label: "⭐ Premium Add-ons", count: addonSubs.filter(a => a.status === "active" && a.addon_type !== "tpms").length },
     { key: "services", label: "🎯 Optional Services", count: addonSubs.filter(a => a.addon_type === "tpms" && a.status === "active").length },
     { key: "history", label: "📋 Marketing History", count: campaigns.length + pushCampaigns.length + addonSubs.length },
+    { key: "qr", label: "📱 QR Scans", count: qrScans.length },
     { key: "forecast", label: "📈 Marketing Forecast", count: surgeEvents.filter(e => e.is_active).length },
   ];
 
@@ -1316,6 +1328,81 @@ export default function AdvertisingPage() {
                   data={filtered as unknown as Record<string, unknown>[]}
                 />
               )}
+            </Card>
+          </>
+        );
+      })()}
+
+      {/* ==================== QR SCAN TRACKING TAB ==================== */}
+      {activeTab === "qr" && (() => {
+        const filtered = qrFilter === "all" ? qrScans : qrScans.filter(s => s.campaign === qrFilter);
+        const totalBiz = qrScans.filter(s => s.campaign === "business").length;
+        const totalUsr = qrScans.filter(s => s.campaign === "user").length;
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayCount = qrScans.filter(s => s.scanned_at?.slice(0, 10) === todayStr).length;
+        const last7 = new Date(); last7.setDate(last7.getDate() - 7);
+        const weekCount = qrScans.filter(s => new Date(s.scanned_at) >= last7).length;
+
+        const parseDevice = (ua: string | null) => {
+          if (!ua) return "Unknown";
+          if (/iPhone/i.test(ua)) return "iPhone";
+          if (/Android/i.test(ua)) return "Android";
+          if (/iPad/i.test(ua)) return "iPad";
+          if (/Mac/i.test(ua)) return "Mac";
+          if (/Windows/i.test(ua)) return "Windows";
+          return "Other";
+        };
+
+        return (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 24 }}>
+              <StatCard value={qrScans.length.toLocaleString()} label="Total Scans" gradient={COLORS.gradient1} />
+              <StatCard value={totalBiz.toLocaleString()} label="Business Scans" gradient={COLORS.gradient2} />
+              <StatCard value={totalUsr.toLocaleString()} label="User Scans" gradient={COLORS.gradient3} />
+              <StatCard value={todayCount.toLocaleString()} label="Today" gradient={COLORS.gradient4} />
+              <StatCard value={weekCount.toLocaleString()} label="Last 7 Days" gradient="linear-gradient(135deg, #bf5fff, #ff2d92)" />
+            </div>
+
+            {/* Filter */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {["all", "business", "user"].map(f => (
+                <button key={f} onClick={() => setQrFilter(f)} style={{ padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, textTransform: "capitalize", background: qrFilter === f ? COLORS.gradient1 : COLORS.cardBg, color: qrFilter === f ? "#fff" : COLORS.textSecondary }}>{f === "all" ? "All Campaigns" : f + " QR"}</button>
+              ))}
+            </div>
+
+            {/* Scan log table */}
+            <Card title={`Scan Log (${filtered.length})`} style={{ marginBottom: 24 }}>
+              <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                      {["Campaign", "Date & Time", "Device", "IP Address"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr><td colSpan={4} style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No scans recorded yet</td></tr>
+                    ) : filtered.map(scan => (
+                      <tr key={scan.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                        <td style={{ padding: "10px 12px" }}>
+                          <Badge status={scan.campaign} />
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: COLORS.textPrimary }}>
+                          {formatDateTime(scan.scanned_at)}
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: COLORS.textSecondary }}>
+                          {parseDevice(scan.user_agent)}
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: COLORS.textSecondary, fontFamily: "monospace" }}>
+                          {scan.ip_address || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           </>
         );
