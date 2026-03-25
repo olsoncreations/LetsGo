@@ -421,6 +421,7 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
     influencers: "🌟 Influencer Report",
     surge_pricing: "⚡ Surge Pricing Report",
     promotions: "Promotions Report",
+    qr_scans: "📱 QR Scans & Mailings Report",
   };
 
   const frequencyLabels: Record<string, string> = {
@@ -723,6 +724,18 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const adR = allAdCampaigns.map((c: any) => [c.id, c.business_id, bn(c.business_id), c.campaign_type || "", c.duration_days || "", $$(n(c.base_price_cents)), $$(n(c.surge_fee_cents)), $$(n(c.total_price_cents)), c.surge_event_id || "", c.status || "", fmt(c.start_date), fmt(c.end_date), fmt(c.created_at)]);
 
+        // SHEET 18: QR SCANS
+        const allQrScans = await q("qr_scans", "*");
+        const qrH = ["Scan ID", "Campaign", "Scanned At", "IP Address"];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const qrR = allQrScans.map((s: any) => [s.id, s.campaign, fmt(s.scanned_at), s.ip_address || ""]);
+
+        // SHEET 19: POSTCARD MAILINGS
+        const allMailings = await q("postcard_mailings", "*", false);
+        const mlH = ["Mailing ID", "Campaign", "Quantity", "Cost", "Date Mailed", "Notes", "Logged At"];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mlR = allMailings.map((m: any) => [m.id, m.campaign, String(n(m.quantity)), $$(n(m.cost_cents)), m.mailed_date || "", m.notes || "", fmt(m.created_at)]);
+
         const sheets = [
           { name: "Executive Summary", data: sum },
           { name: "Receipts", data: buildSheet(recR, recH) },
@@ -741,6 +754,8 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
           { name: "Staff", data: buildSheet(stfR, stfH) },
           { name: "Surge Pricing Events", data: buildSheet(surgeR, surgeH) },
           { name: "Ad Campaigns", data: buildSheet(adR, adH) },
+          { name: "QR Scans", data: buildSheet(qrR, qrH) },
+          { name: "Postcard Mailings", data: buildSheet(mlR, mlH) },
         ];
 
         downloadXlsx(sheets, `LetsGo_MASTER_REPORT_${fromDate}_to_${toDate}.xlsx`);
@@ -905,6 +920,50 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
           rows = d.map((p: any) => [p.id, p.code, p.description || "", p.discount_type, p.discount_type === "percent" ? `${p.discount_amount}%` : $$(n(p.discount_amount)), $$(n(p.min_purchase_cents)), String(p.max_uses ?? "Unlimited"), String(n(p.uses_count)), p.max_uses ? `${((n(p.uses_count) / n(p.max_uses)) * 100).toFixed(0)}%` : "N/A", p.is_active ? "Active" : "Inactive", p.applies_to || "all", fmt(p.start_date), fmt(p.end_date), p.created_by || "", fmt(p.created_at)]);
           break;
         }
+        case "qr_scans": {
+          const scans = await q("qr_scans", "*");
+          const mails = await q("postcard_mailings", "*", false);
+          const parseDevice = (ua: string | null) => {
+            if (!ua) return "Unknown";
+            if (/iPhone/i.test(ua)) return "iPhone";
+            if (/Android/i.test(ua)) return "Android";
+            if (/iPad/i.test(ua)) return "iPad";
+            if (/Mac/i.test(ua)) return "Mac";
+            if (/Windows/i.test(ua)) return "Windows";
+            return "Other";
+          };
+          const scanH = ["Scan ID", "Campaign", "Scanned At", "Device", "IP Address", "User Agent"];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const scanR = scans.map((s: any) => [s.id, s.campaign, fmt(s.scanned_at), parseDevice(s.user_agent), s.ip_address || "", s.user_agent || ""]);
+          const mailH = ["Mailing ID", "Campaign", "Quantity", "Cost", "Date Mailed", "Notes", "Logged At"];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mailR = mails.map((m: any) => [m.id, m.campaign, String(n(m.quantity)), $$(n(m.cost_cents)), m.mailed_date || "", m.notes || "", fmt(m.created_at)]);
+
+          // CAC summary
+          const bizScans = scans.filter((s: { campaign: string }) => s.campaign === "business").length;
+          const usrScans = scans.filter((s: { campaign: string }) => s.campaign === "user").length;
+          const bizCost = mails.filter((m: { campaign: string }) => m.campaign === "business").reduce((s: number, m: { cost_cents: number }) => s + n(m.cost_cents), 0);
+          const usrCost = mails.filter((m: { campaign: string }) => m.campaign === "user").reduce((s: number, m: { cost_cents: number }) => s + n(m.cost_cents), 0);
+          const bizQty = mails.filter((m: { campaign: string }) => m.campaign === "business").reduce((s: number, m: { quantity: number }) => s + n(m.quantity), 0);
+          const usrQty = mails.filter((m: { campaign: string }) => m.campaign === "user").reduce((s: number, m: { quantity: number }) => s + n(m.quantity), 0);
+          const sumData = [
+            ["Metric", "Business", "User", "Combined"],
+            ["Total Postcards Mailed", String(bizQty), String(usrQty), String(bizQty + usrQty)],
+            ["Total Spent", $$(bizCost), $$(usrCost), $$(bizCost + usrCost)],
+            ["QR Scans", String(bizScans), String(usrScans), String(bizScans + usrScans)],
+            ["Scan Rate", bizQty > 0 ? `${((bizScans / bizQty) * 100).toFixed(1)}%` : "—", usrQty > 0 ? `${((usrScans / usrQty) * 100).toFixed(1)}%` : "—", (bizQty + usrQty) > 0 ? `${(((bizScans + usrScans) / (bizQty + usrQty)) * 100).toFixed(1)}%` : "—"],
+            ["Cost per Scan", bizScans > 0 ? $$(Math.round(bizCost / bizScans)) : "—", usrScans > 0 ? $$(Math.round(usrCost / usrScans)) : "—", (bizScans + usrScans) > 0 ? $$(Math.round((bizCost + usrCost) / (bizScans + usrScans))) : "—"],
+          ];
+
+          const qrFilename = `QR_Scans_Mailings_Report_${fromDate}_to_${toDate}.xlsx`;
+          downloadXlsx([
+            { name: "CAC Summary", data: sumData },
+            { name: "QR Scans", data: buildSheet(scanR, scanH) },
+            { name: "Postcard Mailings", data: buildSheet(mailR, mailH) },
+          ], qrFilename);
+          alert(`QR Scans & Mailings Report generated!\n\n${scanR.length} scans • ${mailR.length} mailings`);
+          return;
+        }
         default: {
           const d = await q("receipts", "*");
           headers = ["Receipt ID", "Business ID", "User ID", "Receipt Total", "Payout Amount", "Status", "Created At"];
@@ -1041,6 +1100,7 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
             <option value="referrals">Referrals Report</option>
             <option value="influencers">🌟 Influencer Report</option>
             <option value="promotions">Promotions Report</option>
+            <option value="qr_scans">📱 QR Scans & Mailings Report</option>
           </select>
         </div>
 
