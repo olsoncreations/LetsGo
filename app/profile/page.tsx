@@ -897,6 +897,12 @@ export default function LetsGoProfile() {
   const [tierExtPurchasing, setTierExtPurchasing] = useState(false);
   const [tierExtSuccess, setTierExtSuccess] = useState<string | null>(null);
   const [tierExtLegalAccepted, setTierExtLegalAccepted] = useState(false);
+  const [tierExtHistory, setTierExtHistory] = useState<{
+    id: string; businessName: string; productType: string; priceCents: number;
+    paymentMethod: string; effectiveFrom: string; effectiveUntil: string;
+    status: string; createdAt: string; protectedTierIndex: number;
+    pricingSnapshot: { balanceUsedCents?: number; cardChargedCents?: number; processingFeeCents?: number } | null;
+  }[]>([]);
 
   // Influencer dashboard
   const [influencerData, setInfluencerData] = useState<{
@@ -1197,6 +1203,28 @@ export default function LetsGoProfile() {
           setTierExtPricing(extData);
         }
       } catch { /* tier extensions may not be set up yet */ }
+
+      // Fetch tier extension purchase history
+      try {
+        const extHistRes = await fetch("/api/tier-extensions", { headers: { Authorization: `Bearer ${tk}` } });
+        if (cancelled) return;
+        if (extHistRes.ok) {
+          const extHistData = await extHistRes.json();
+          setTierExtHistory((extHistData.extensions ?? []).map((e: Record<string, unknown>) => ({
+            id: e.id as string,
+            businessName: e.businessName as string,
+            productType: e.product_type as string,
+            priceCents: e.price_cents as number,
+            paymentMethod: e.payment_method as string,
+            effectiveFrom: e.effective_from as string,
+            effectiveUntil: e.effective_until as string,
+            status: e.status as string,
+            createdAt: e.created_at as string,
+            protectedTierIndex: e.protected_tier_index as number,
+            pricingSnapshot: e.pricing_snapshot as Record<string, unknown> | null,
+          })));
+        }
+      } catch { /* tier extension history may not exist yet */ }
 
       setLoading(false);
     })();
@@ -2745,6 +2773,7 @@ export default function LetsGoProfile() {
             <div style={{ display: "flex", gap: 6, marginBottom: 14, animation: "fadeIn 0.2s ease" }}>
               <GlassPill active={historyTab === "receipts"} onClick={() => setHistoryTab("receipts")} neon={NEON.orange} neonRGB={NEON.orangeRGB}>Receipts ({receipts.length})</GlassPill>
               <GlassPill active={historyTab === "cashouts"} onClick={() => setHistoryTab("cashouts")} neon={NEON.orange} neonRGB={NEON.orangeRGB}>Cash Outs ({cashouts.length})</GlassPill>
+              {tierExtHistory.length > 0 && <GlassPill active={historyTab === "extensions"} onClick={() => setHistoryTab("extensions")} neon={NEON.yellow} neonRGB={NEON.yellowRGB}>Extensions ({tierExtHistory.length})</GlassPill>}
             </div>
 
             {historyTab === "receipts" && (
@@ -2838,6 +2867,53 @@ export default function LetsGoProfile() {
                 })}
                 {cashouts.length === 0 && (
                   <div style={{ padding: "30px 0", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>No cash outs yet. Reach ${(minCashoutCents/100).toFixed(0)} at any business to cash out!</div>
+                )}
+              </div>
+            )}
+
+            {/* Tier Extension History */}
+            {historyTab === "extensions" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {tierExtHistory.map((ext) => {
+                  const snapshot = ext.pricingSnapshot;
+                  const balUsed = (snapshot?.balanceUsedCents ?? 0) / 100;
+                  const cardCharged = (snapshot?.cardChargedCents ?? 0) / 100;
+                  const fee = (snapshot?.processingFeeCents ?? 0) / 100;
+                  const isActive = ext.status === "active";
+                  const productLabel = ext.productType.replace("_", " ").replace("silver", "Silver").replace("gold", "Gold");
+                  return (
+                    <div key={ext.id} style={{ borderRadius: 4, background: "#0C0C14", border: `1px solid ${isActive ? "rgba(57,255,20,0.12)" : "rgba(255,255,255,0.04)"}` }}>
+                      <div style={{ display: "flex", alignItems: "center", padding: "14px 18px", gap: 16 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 4, background: isActive ? "rgba(57,255,20,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${isActive ? "rgba(57,255,20,0.2)" : "rgba(255,255,255,0.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\uD83D\uDEE1\uFE0F"}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: "'DM Sans', sans-serif" }}>
+                            {productLabel} — {ext.businessName}
+                          </div>
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>
+                            {new Date(ext.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} {"\u00b7"} Level {ext.protectedTierIndex} {"\u00b7"} {ext.effectiveFrom} to {ext.effectiveUntil}
+                          </div>
+                          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", marginTop: 4 }}>
+                            {balUsed > 0 && cardCharged > 0 ? (
+                              <>Balance: ${balUsed.toFixed(2)} + Card: ${cardCharged.toFixed(2)}{fee > 0 && ` (incl $${fee.toFixed(2)} fee)`}</>
+                            ) : balUsed > 0 ? (
+                              <>Paid with balance</>
+                            ) : cardCharged > 0 ? (
+                              <>Card: ${cardCharged.toFixed(2)}{fee > 0 && ` (incl $${fee.toFixed(2)} fee)`}</>
+                            ) : (
+                              <>Paid via {ext.paymentMethod}</>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 15, fontWeight: 600, color: "#fff" }}>${(ext.priceCents / 100).toFixed(2)}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: isActive ? NEON.green : "rgba(255,255,255,0.2)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>{isActive ? "Active" : "Expired"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {tierExtHistory.length === 0 && (
+                  <div style={{ padding: "30px 0", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>No tier extensions purchased yet.</div>
                 )}
               </div>
             )}
