@@ -269,6 +269,9 @@ export default function AdvertisingPage() {
   // QR scan tracking
   const [qrScans, setQrScans] = useState<{ id: string; campaign: string; scanned_at: string; ip_address: string | null; user_agent: string | null }[]>([]);
   const [qrFilter, setQrFilter] = useState("all");
+  const [mailings, setMailings] = useState<{ id: string; campaign: string; quantity: number; cost_cents: number; mailed_date: string; notes: string | null; created_at: string }[]>([]);
+  const [showMailingForm, setShowMailingForm] = useState(false);
+  const [mailingForm, setMailingForm] = useState({ campaign: "business", quantity: "", cost: "", mailed_date: "", notes: "" });
 
   // Surge pricing
   const [surgeEvents, setSurgeEvents] = useState<SurgeEvent[]>([]);
@@ -359,6 +362,13 @@ export default function AdvertisingPage() {
         .select("id, campaign, scanned_at, ip_address, user_agent")
         .order("scanned_at", { ascending: false });
       setQrScans(qrData || []);
+
+      // Fetch postcard mailings
+      const { data: mailingData } = await supabaseBrowser
+        .from("postcard_mailings")
+        .select("*")
+        .order("mailed_date", { ascending: false });
+      setMailings(mailingData || []);
     } catch (err) {
       console.error("Error fetching advertising data:", err);
       addToast("Failed to load data", "error");
@@ -430,6 +440,33 @@ export default function AdvertisingPage() {
     if (error) { addToast("Toggle failed: " + error.message, "error"); return; }
     logAudit({ action: active ? "activate_surge" : "deactivate_surge", tab: AUDIT_TABS.ADVERTISING, subTab: "Surge Pricing", targetType: "surge_pricing", targetId: id, entityName: surge?.name || id, fieldName: "is_active", oldValue: String(!active), newValue: String(active), details: `Surge event ${active ? "activated" : "deactivated"}` });
     addToast(active ? "Surge event activated" : "Surge event deactivated", "info");
+    fetchData();
+  };
+
+  // Save postcard mailing
+  const saveMailing = async () => {
+    const qty = parseInt(mailingForm.quantity);
+    const cost = Math.round(parseFloat(mailingForm.cost) * 100);
+    if (!qty || !cost || !mailingForm.mailed_date) { addToast("Quantity, cost, and date are required", "warning"); return; }
+    const { error } = await supabaseBrowser.from("postcard_mailings").insert({
+      campaign: mailingForm.campaign,
+      quantity: qty,
+      cost_cents: cost,
+      mailed_date: mailingForm.mailed_date,
+      notes: mailingForm.notes || null,
+    });
+    if (error) { addToast("Failed to save: " + error.message, "error"); return; }
+    logAudit({ action: "log_mailing", tab: AUDIT_TABS.ADVERTISING, subTab: "QR Scans", targetType: "postcard_mailing", details: `Logged ${qty} ${mailingForm.campaign} postcards mailed on ${mailingForm.mailed_date} for $${(cost / 100).toFixed(2)}` });
+    addToast("Mailing logged!", "success");
+    setMailingForm({ campaign: "business", quantity: "", cost: "", mailed_date: "", notes: "" });
+    setShowMailingForm(false);
+    fetchData();
+  };
+
+  const deleteMailing = async (id: string) => {
+    const { error } = await supabaseBrowser.from("postcard_mailings").delete().eq("id", id);
+    if (error) { addToast("Delete failed: " + error.message, "error"); return; }
+    addToast("Mailing record deleted", "info");
     fetchData();
   };
 
@@ -1397,6 +1434,184 @@ export default function AdvertisingPage() {
                         </td>
                         <td style={{ padding: "10px 12px", fontSize: 12, color: COLORS.textSecondary, fontFamily: "monospace" }}>
                           {scan.ip_address || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* CUSTOMER ACQUISITION COST */}
+            {(() => {
+              const bizMailings = mailings.filter(m => m.campaign === "business");
+              const usrMailings = mailings.filter(m => m.campaign === "user");
+              const bizCost = bizMailings.reduce((s, m) => s + m.cost_cents, 0);
+              const usrCost = usrMailings.reduce((s, m) => s + m.cost_cents, 0);
+              const bizQty = bizMailings.reduce((s, m) => s + m.quantity, 0);
+              const usrQty = usrMailings.reduce((s, m) => s + m.quantity, 0);
+              const bizScans = qrScans.filter(s => s.campaign === "business").length;
+              const usrScans = qrScans.filter(s => s.campaign === "user").length;
+              const bizCAC = bizScans > 0 ? (bizCost / bizScans / 100).toFixed(2) : "—";
+              const usrCAC = usrScans > 0 ? (usrCost / usrScans / 100).toFixed(2) : "—";
+              const totalCost = bizCost + usrCost;
+              const totalScans = bizScans + usrScans;
+              const totalCAC = totalScans > 0 ? (totalCost / totalScans / 100).toFixed(2) : "—";
+              const bizRate = bizQty > 0 ? ((bizScans / bizQty) * 100).toFixed(1) : "—";
+              const usrRate = usrQty > 0 ? ((usrScans / usrQty) * 100).toFixed(1) : "—";
+
+              return (
+                <>
+                  <Card title="📊 Customer Acquisition Cost" style={{ marginBottom: 24 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, padding: 8 }}>
+                      {/* Business column */}
+                      <div style={{ background: COLORS.darkBg, borderRadius: 12, padding: 20, border: "1px solid " + COLORS.cardBorder }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.neonOrange, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>Business Campaign</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Postcards Mailed</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>{bizQty.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Total Spent</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>${(bizCost / 100).toFixed(2)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>QR Scans</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>{bizScans}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Scan Rate</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.neonGreen }}>{bizRate}%</span>
+                          </div>
+                          <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 12, marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>Cost per Scan</div>
+                            <div style={{ fontSize: 32, fontWeight: 900, color: COLORS.neonOrange }}>{bizCAC === "—" ? "—" : "$" + bizCAC}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* User column */}
+                      <div style={{ background: COLORS.darkBg, borderRadius: 12, padding: 20, border: "1px solid " + COLORS.cardBorder }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.neonBlue, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>User Campaign</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Postcards Mailed</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>{usrQty.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Total Spent</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>${(usrCost / 100).toFixed(2)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>QR Scans</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>{usrScans}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Scan Rate</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.neonGreen }}>{usrRate}%</span>
+                          </div>
+                          <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 12, marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>Cost per Scan</div>
+                            <div style={{ fontSize: 32, fontWeight: 900, color: COLORS.neonBlue }}>{usrCAC === "—" ? "—" : "$" + usrCAC}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Combined column */}
+                      <div style={{ background: COLORS.darkBg, borderRadius: 12, padding: 20, border: "1px solid " + COLORS.cardBorder }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.neonPink, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>Combined</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Total Postcards</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>{(bizQty + usrQty).toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Total Spent</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>${(totalCost / 100).toFixed(2)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Total Scans</span>
+                            <span style={{ fontSize: 14, fontWeight: 700 }}>{totalScans}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Overall Scan Rate</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.neonGreen }}>{(bizQty + usrQty) > 0 ? ((totalScans / (bizQty + usrQty)) * 100).toFixed(1) : "—"}%</span>
+                          </div>
+                          <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 12, marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>Cost per Scan</div>
+                            <div style={{ fontSize: 32, fontWeight: 900, background: COLORS.gradient1, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{totalCAC === "—" ? "—" : "$" + totalCAC}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </>
+              );
+            })()}
+
+            {/* MAILING LOG */}
+            <Card title="📬 Postcard Mailing Log" style={{ marginBottom: 24 }} actions={
+              <button onClick={() => setShowMailingForm(v => !v)} style={{ padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: COLORS.gradient1, color: "#fff" }}>
+                {showMailingForm ? "Cancel" : "+ Log Mailing"}
+              </button>
+            }>
+              {/* Add mailing form */}
+              {showMailingForm && (
+                <div style={{ background: COLORS.darkBg, borderRadius: 10, padding: 20, marginBottom: 16, border: "1px solid " + COLORS.cardBorder }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Campaign</label>
+                      <select value={mailingForm.campaign} onChange={e => setMailingForm(f => ({ ...f, campaign: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 13 }}>
+                        <option value="business">Business</option>
+                        <option value="user">User</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Quantity</label>
+                      <input type="number" placeholder="e.g. 50" value={mailingForm.quantity} onChange={e => setMailingForm(f => ({ ...f, quantity: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Total Cost ($)</label>
+                      <input type="number" step="0.01" placeholder="e.g. 75.00" value={mailingForm.cost} onChange={e => setMailingForm(f => ({ ...f, cost: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Date Mailed</label>
+                      <input type="date" value={mailingForm.mailed_date} onChange={e => setMailingForm(f => ({ ...f, mailed_date: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 13 }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Notes (optional)</label>
+                      <input type="text" placeholder="e.g. Downtown restaurants batch" value={mailingForm.notes} onChange={e => setMailingForm(f => ({ ...f, notes: e.target.value }))} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid " + COLORS.cardBorder, background: COLORS.cardBg, color: "#fff", fontSize: 13 }} />
+                    </div>
+                    <button onClick={saveMailing} style={{ padding: "10px 24px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: COLORS.neonGreen, color: "#000" }}>Save</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mailing history table */}
+              <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                      {["Campaign", "Date Mailed", "Quantity", "Cost", "Notes", ""].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mailings.length === 0 ? (
+                      <tr><td colSpan={6} style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No mailings logged yet</td></tr>
+                    ) : mailings.map(m => (
+                      <tr key={m.id} style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
+                        <td style={{ padding: "10px 12px" }}><Badge status={m.campaign} /></td>
+                        <td style={{ padding: "10px 12px", fontSize: 13 }}>{formatDate(m.mailed_date)}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>{m.quantity.toLocaleString()}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600 }}>${(m.cost_cents / 100).toFixed(2)}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: COLORS.textSecondary }}>{m.notes || "—"}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <button onClick={() => deleteMailing(m.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(255,49,49,0.3)", background: "rgba(255,49,49,0.1)", color: "#ff3131", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Delete</button>
                         </td>
                       </tr>
                     ))}
