@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LetsGo — Business Postcard (USPS Compliant)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --orange: #ff6b35;
+    --yellow: #f7b801;
+    --green: #00c896;
+    --blue-navy: #004e89;
+    --blue-light: #1a659e;
+    --dark: #001220;
+  }
+
+  body {
+    background: #090b12;
+    font-family: 'Barlow', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 40px 80px;
+    gap: 24px;
+  }
+
+  .sheet-label {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: rgba(255,255,255,0.2);
+    align-self: flex-start; margin-left: 30px;
+  }
+
+  .postcard {
+    width: 1350px; height: 900px;
+    position: relative; overflow: hidden;
+    flex-shrink: 0; border-radius: 6px;
+  }
+
+  /* ════════════ ADDRESS SIDE (mailing side) ════════════ */
+  .address-side {
+    background: var(--dark);
+    box-shadow: 0 40px 100px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.05);
+  }
+  .address-side::before {
+    content: ''; position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.045) 1px, transparent 1px);
+    background-size: 26px 26px; z-index: 0;
+  }
+
+  /* Left half — marketing content */
+  .a-left {
+    position: absolute; top: 0; left: 0;
+    width: 430px; height: 700px;
+    z-index: 10;
+    display: flex; flex-direction: column;
+    padding: 50px 0 0 50px;
+    justify-content: flex-start;
+    gap: 24px;
+  }
+  .a-left-glow {
+    position: absolute; bottom: -100px; left: -80px;
+    width: 420px; height: 420px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,78,137,0.5) 0%, transparent 65%);
+    z-index: 1; pointer-events: none;
+  }
+
+  .a-logo-img {
+    height: 120px; width: auto; object-fit: contain;
+  }
+  .a-eyebrow {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--orange); margin-bottom: 6px;
+    max-width: 240px;
+  }
+  .a-stat {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 160px; font-weight: 900; line-height: 0.85;
+    letter-spacing: -0.01em; color: white; display: block;
+  }
+  .a-stat-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 32px; font-weight: 700; letter-spacing: 0.02em;
+    color: rgba(255,255,255,0.6); line-height: 1.1;
+    margin-top: 4px; max-width: 240px;
+  }
+  .a-hook {
+    font-size: 18px; font-weight: 600; line-height: 1.5;
+    color: rgba(255,255,255,0.9); max-width: 240px;
+    padding-left: 16px; border-left: 4px solid var(--orange);
+  }
+  /* ── Phone mockup on address side ── */
+  .a-phone {
+    position: absolute;
+    top: 120px; left: 300px;
+    z-index: 15;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transform: rotate(3deg);
+  }
+  .a-phone-frame {
+    width: 320px; height: 640px;
+    border-radius: 28px;
+    border: 3px solid rgba(192,192,210,0.3);
+    overflow: hidden; background: #1a1a1e;
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(200,200,220,0.08),
+      0 0 80px rgba(255,107,53,0.15);
+    position: relative; padding: 6px;
+  }
+  .a-phone-frame::before {
+    content: '';
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 80px; height: 5px; border-radius: 0 0 8px 8px;
+    background: rgba(200,200,220,0.1); z-index: 2;
+  }
+  .a-phone-frame img {
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: top center;
+    border-radius: 16px;
+  }
+
+  /* ── NEW neon sign ── */
+  .a-new-stamp {
+    position: absolute;
+    top: 80px; left: 260px;
+    z-index: 20;
+    transform: rotate(-8deg);
+  }
+  .a-neon-bubble {
+    border: 3px solid #ff2d92;
+    border-radius: 16px;
+    padding: 6px 28px 4px;
+    background: #1a0a1a;
+    box-shadow:
+      0 0 8px #ff2d92,
+      0 0 20px rgba(255,45,146,0.5),
+      inset 0 0 8px rgba(255,45,146,0.15);
+  }
+  .a-neon-text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 54px; font-weight: 800;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: #fff;
+    text-shadow:
+      0 0 4px #fff,
+      0 0 10px #ff2d92,
+      0 0 25px #ff2d92,
+      0 0 50px rgba(255,45,146,0.6);
+    line-height: 1;
+  }
+
+  /* Stats row at bottom of left half */
+  .a-stats {
+    position: absolute; bottom: 30px; left: 50px;
+    width: 585px;
+    display: flex; gap: 6px;
+    z-index: 12;
+  }
+  .a-stat-card {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 10px 12px;
+    position: relative; overflow: hidden;
+  }
+  .a-stat-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .a-stat-card:nth-child(1)::before { background: #ff6b35; }
+  .a-stat-card:nth-child(2)::before { background: #f7b801; }
+  .a-stat-card:nth-child(3)::before { background: #5eb8ff; }
+  .a-stat-card:nth-child(4)::before { background: #00c896; }
+  .a-stat-card .a-card-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px; font-weight: 900;
+    line-height: 1; letter-spacing: -0.02em;
+  }
+  .a-stat-card:nth-child(1) .a-card-num { color: #ff6b35; }
+  .a-stat-card:nth-child(2) .a-card-num { color: #f7b801; }
+  .a-stat-card:nth-child(3) .a-card-num { color: #5eb8ff; }
+  .a-stat-card:nth-child(4) .a-card-num { color: #00c896; }
+  .a-stat-card .a-card-desc {
+    font-size: 11px; font-weight: 500;
+    color: rgba(255,255,255,0.85);
+    line-height: 1.25; margin-top: 2px;
+  }
+
+  /* Right half — USPS mailing area (4.5" × 6") */
+  .a-mail-area {
+    position: absolute; top: 0; right: 0;
+    width: 675px; height: 900px;
+    background: #ffffff;
+    z-index: 10;
+  }
+
+  /* Postage indicia — top right */
+  .a-postage {
+    position: absolute;
+    top: 30px; right: 30px;
+    width: 90px; height: 90px;
+    border: 2.5px solid #bbb;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Barlow', sans-serif;
+    font-size: 11px; font-weight: 600;
+    color: #999; text-transform: uppercase;
+    letter-spacing: 0.05em; text-align: center;
+    line-height: 1.4;
+  }
+
+  /* Return address — top left of mail area */
+  .a-return-address {
+    position: absolute;
+    top: 30px; left: 36px;
+  }
+  .a-return-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 32px; font-weight: 900; color: #222;
+    letter-spacing: 0.04em;
+  }
+  .a-return-addr {
+    font-family: 'Barlow', sans-serif;
+    font-size: 16px; font-weight: 500; color: #666;
+    line-height: 1.6; margin-top: 6px;
+  }
+
+  /* Delivery address — center/right */
+  .a-delivery-address {
+    position: absolute;
+    top: 50%; left: 55%;
+    transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; gap: 28px;
+    width: 65%;
+  }
+  .a-mail-line {
+    border-bottom: 2px solid #d0d0d0;
+    height: 1px;
+  }
+
+  /* Barcode clear zone — bottom strip (4.5" × 0.625") */
+  .a-barcode-zone {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 94px; /* ~0.625" at 150 DPI */
+    border-top: 1px dashed #ddd;
+  }
+  .a-barcode-label {
+    position: absolute;
+    bottom: 8px; left: 36px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 9px; font-weight: 500;
+    color: #ccc; text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+
+  /* ════════════ BACK — BROCHURE STYLE (full marketing) ════════════ */
+  .back {
+    background: #00111f;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.05);
+  }
+  .back::before {
+    content: ''; position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 28px 28px; z-index: 0;
+  }
+
+  /* Ambient glows — scattered organically */
+  .b-glow-a {
+    position: absolute; top: -60px; left: 200px;
+    width: 500px; height: 500px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,78,137,0.22) 0%, transparent 65%);
+    z-index: 1; pointer-events: none;
+  }
+  .b-glow-b {
+    position: absolute; bottom: -100px; right: 120px;
+    width: 450px; height: 450px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,107,53,0.14) 0%, transparent 65%);
+    z-index: 1; pointer-events: none;
+  }
+  .b-glow-c {
+    position: absolute; top: 300px; right: 500px;
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,200,150,0.10) 0%, transparent 65%);
+    z-index: 1; pointer-events: none;
+  }
+  .b-topbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 5px;
+    background: linear-gradient(90deg, var(--orange) 0%, var(--yellow) 50%, var(--green) 100%);
+    z-index: 10;
+  }
+
+  /* Free-form canvas — no grid */
+  .b-canvas {
+    position: relative; z-index: 10; width: 100%; height: 100%;
+  }
+
+  /* ── Headline band ── */
+  .b-headline {
+    position: absolute; top: 20px; left: 0; right: 0;
+    text-align: center; z-index: 9;
+  }
+  .b-headline-main {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 32px; font-weight: 900; color: white;
+    letter-spacing: 0.02em; line-height: 1;
+  }
+  .b-headline-main span { color: var(--orange); }
+  .b-headline-sub {
+    font-size: 12px; font-weight: 500;
+    color: rgba(255,255,255,0.4); margin-top: 4px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Phones — absolutely positioned, scattered ── */
+  .b-phone {
+    position: absolute; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .b-phone-frame {
+    width: 170px; height: 340px;
+    border-radius: 20px;
+    border: 2.5px solid rgba(255,255,255,0.12);
+    overflow: hidden; background: #000;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+    position: relative; padding: 5px;
+  }
+  .b-phone-frame::before {
+    content: '';
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 36px; height: 5px; border-radius: 0 0 5px 5px;
+    background: rgba(255,255,255,0.1); z-index: 2;
+  }
+  .b-phone-frame img {
+    width: 100%; height: 100%;
+    object-fit: cover; object-position: top center;
+    border-radius: 10px;
+  }
+
+  /* ── Device variants ── */
+  .p1 .b-phone-frame {
+    border-color: rgba(192,192,210,0.35);
+    background: #1a1a1e;
+    border-radius: 24px; padding: 6px;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(200,200,220,0.1);
+  }
+  .p1 .b-phone-frame::before {
+    width: 80px; height: 5px;
+    background: rgba(200,200,220,0.12);
+    border-radius: 0 0 8px 8px;
+  }
+  .p1 .b-phone-frame img { border-radius: 16px; }
+
+  .p2 .b-phone-frame {
+    border-color: rgba(255,255,255,0.08);
+    background: #0a0a0a;
+    border-radius: 12px; padding: 4px;
+  }
+  .p2 .b-phone-frame::before {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    top: 8px; left: 60px;
+    transform: none;
+    background: rgba(255,255,255,0.08);
+  }
+  .p2 .b-phone-frame img { border-radius: 8px; }
+
+  .p3 .b-phone-frame {
+    border-color: rgba(220,170,140,0.35);
+    background: #1c1412;
+    border-radius: 22px; padding: 5px;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(220,170,140,0.08);
+  }
+  .p3 .b-phone-frame::before {
+    width: 44px; height: 6px;
+    background: rgba(220,170,140,0.12);
+    border-radius: 0 0 6px 6px;
+  }
+  .p3 .b-phone-frame img { border-radius: 14px; }
+
+  .p4 .b-phone-frame {
+    border-color: rgba(80,130,200,0.3);
+    background: #08101c;
+    border-radius: 16px; padding: 3px;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(80,130,200,0.08);
+  }
+  .p4 .b-phone-frame::before {
+    width: 18px; height: 5px;
+    border-radius: 0 0 5px 5px;
+    background: rgba(80,130,200,0.12);
+  }
+  .p4 .b-phone-frame img { border-radius: 12px; }
+
+  .p5 .b-phone-frame {
+    border-color: rgba(140,140,150,0.25);
+    background: #121215;
+    border-radius: 20px; padding: 4px;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(140,140,150,0.06);
+  }
+  .p5 .b-phone-frame::before {
+    width: 60px; height: 5px;
+    background: rgba(140,140,150,0.1);
+    border-radius: 0 0 6px 6px;
+  }
+  .p5 .b-phone-frame img { border-radius: 13px; }
+
+  .p6 .b-phone-frame {
+    border-color: rgba(120,180,100,0.25);
+    background: #0c120a;
+    border-radius: 14px; padding: 5px;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(120,180,100,0.06);
+  }
+  .p6 .b-phone-frame::before {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    top: 9px;
+    background: rgba(120,180,100,0.1);
+  }
+  .p6 .b-phone-frame img { border-radius: 9px; }
+  .b-phone-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .b-phone-label.c-discovery   { color: #FF2D78; }
+  .b-phone-label.c-5v3v1       { color: #FFD600; }
+  .b-phone-label.c-groupvote   { color: #00FF87; }
+  .b-phone-label.c-datenight   { color: #00E5FF; }
+  .b-phone-label.c-events      { color: #D050FF; }
+  .b-phone-label.c-experiences { color: #FF6B2D; }
+  .b-phone-desc {
+    font-size: 9.5px; font-weight: 400;
+    color: rgba(255,255,255,0.45);
+    text-align: center; line-height: 1.35; max-width: 160px;
+  }
+
+  /* Phone positions — spread across full width, staggered */
+  .b-phone.p1 { top: 108px; left: 30px;   transform: rotate(-2.5deg); }
+  .b-phone.p2 { top: 125px; left: 228px;  transform: rotate(1.8deg); }
+  .b-phone.p3 { top: 102px; left: 438px;  transform: rotate(-1deg); }
+  .b-phone.p4 { top: 120px; left: 660px;  transform: rotate(2.2deg); }
+  .b-phone.p5 { top: 110px; left: 890px;  transform: rotate(-1.8deg); }
+  .b-phone.p6 { top: 128px; left: 1120px; transform: rotate(1.5deg); }
+
+  /* Tier badges */
+  .b-tier-badge {
+    position: absolute; z-index: 8;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 12px; border-radius: 4px;
+    white-space: nowrap;
+  }
+  .b-tier-badge.basic {
+    color: var(--green);
+    background: rgba(0,200,150,0.12);
+    border: 1px solid rgba(0,200,150,0.3);
+    top: 62px; left: 200px;
+    transform: rotate(-1deg);
+  }
+  .b-tier-badge.premium {
+    color: var(--yellow);
+    background: rgba(247,184,1,0.12);
+    border: 1px solid rgba(247,184,1,0.3);
+    top: 62px; left: 830px;
+    transform: rotate(1.5deg);
+  }
+
+  /* ── Bottom info panel ── */
+  .b-bottom-panel {
+    position: absolute; bottom: 14px; left: 12px; right: 24px;
+    z-index: 8;
+    display: flex; align-items: stretch; gap: 12px;
+    height: 340px;
+  }
+
+  .b-reasons-grid {
+    width: 527px; flex-shrink: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .b-info-card {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+  }
+  .b-info-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .b-reasons-grid .b-info-card:nth-child(1)::before { background: #ff6b35; }
+  .b-reasons-grid .b-info-card:nth-child(2)::before { background: #00c896; }
+  .b-reasons-grid .b-info-card:nth-child(3)::before { background: #bf5fff; }
+  .b-reasons-grid .b-info-card:nth-child(4)::before { background: #5eb8ff; }
+
+  .b-card-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 30px; font-weight: 900;
+    line-height: 1; letter-spacing: -0.02em;
+  }
+
+  .b-card-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 26px; font-weight: 700;
+    line-height: 1; letter-spacing: -0.02em;
+    margin-top: 2px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .b-reasons-grid .b-info-card:nth-child(1) .b-card-title { color: #ff6b35; }
+  .b-reasons-grid .b-info-card:nth-child(2) .b-card-title { color: #00c896; }
+  .b-reasons-grid .b-info-card:nth-child(3) .b-card-title { color: #bf5fff; }
+  .b-reasons-grid .b-info-card:nth-child(4) .b-card-title { color: #5eb8ff; }
+  .b-card-desc {
+    font-size: 14px; font-weight: 500;
+    color: rgba(255,255,255,0.9);
+    line-height: 1.3; margin-top: 6px;
+    text-align: center;
+    flex: 1;
+    display: flex; align-items: center;
+  }
+
+  .b-launch-eyebrow {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.16em;
+    text-transform: uppercase; color: rgba(255,255,255,0.4);
+  }
+  .b-launch-date {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 64px; font-weight: 900; color: white; line-height: 1;
+  }
+  .b-launch-month {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px; font-weight: 700; color: var(--orange);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .b-launch-sub {
+    font-size: 14px; font-weight: 600;
+    color: rgba(255,255,255,0.35); line-height: 1.4;
+    margin-top: 10px; text-align: center;
+  }
+  .b-launch-cta {
+    display: inline-block; margin-top: 14px;
+    background: var(--orange); color: white;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 24px; border-radius: 5px;
+  }
+
+  /* ── Slogan ── */
+  .b-slogan {
+    position: absolute; top: 22px; left: 36px;
+    z-index: 9;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.04em;
+    font-style: italic;
+  }
+
+  /* ── Center zone ── */
+  .b-center-zone {
+    flex: 1;
+    display: flex; align-items: stretch;
+    gap: 8px;
+  }
+  .b-center-item {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+
+  /* ── QR blocks ── */
+  .b-qr-block {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .b-qr-block .b-qr-wrap {
+    width: 158px; height: 158px;
+    background: white; border-radius: 6px;
+    padding: 4px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .b-qr-block .b-qr-wrap img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+  }
+  .b-qr-block .b-qr-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: rgba(255,255,255,0.35);
+    margin-top: 6px; text-align: center;
+  }
+  .b-qr-block .b-qr-url {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; font-weight: 700; color: var(--orange);
+    margin-top: 2px; text-align: center;
+  }
+
+  /* ── Social icons ── */
+  .b-social-row {
+    display: flex; gap: 10px; margin-top: 8px;
+    align-items: center; justify-content: center;
+  }
+  .b-social-row a {
+    color: rgba(255,255,255,0.3);
+    font-size: 14px;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .b-social-row a:hover { color: rgba(255,255,255,0.6); }
+
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════ ADDRESS SIDE (mailing side) ════════════════════════ -->
+<p class="sheet-label">Address Side — 6" x 9" postcard (300 DPI — 2700×1800) — USPS compliant mailing area</p>
+<div class="postcard address-side">
+  <div class="a-left-glow"></div>
+
+  <!-- LEFT HALF: Marketing content -->
+  <div class="a-left">
+    <div>
+      <img src="Logo-removebg%20(2).png" alt="LetsGo" class="a-logo-img">
+    </div>
+    <div>
+      <div class="a-eyebrow">The hard truth about your restaurant</div>
+      <span class="a-stat">70<span style="color:var(--orange);font-size:100px">%</span></span>
+      <div class="a-stat-label">of first-time diners<br>never come back.</div>
+    </div>
+    <div class="a-hook">
+      The LetsGo app fixes that — by giving customers a real reason to return, every single time.
+    </div>
+  </div>
+
+  <!-- Phone mockup -->
+  <div class="a-phone">
+    <div class="a-phone-frame">
+      <img src="manual-screenshots%20-%20redone/Discovery%20page.jpg" alt="Discovery">
+    </div>
+  </div>
+
+  <!-- NEW neon sign -->
+  <div class="a-new-stamp">
+    <div class="a-neon-bubble">
+      <span class="a-neon-text">NEW</span>
+    </div>
+  </div>
+
+  <!-- Stats cards — bottom of left half -->
+  <div class="a-stats">
+    <div class="a-stat-card">
+      <div class="a-card-num">$375K</div>
+      <div class="a-card-desc">Revenue lost per year to churn</div>
+    </div>
+    <div class="a-stat-card">
+      <div class="a-card-num">5–7×</div>
+      <div class="a-card-desc">Costlier to find new vs. keep</div>
+    </div>
+    <div class="a-stat-card">
+      <div class="a-card-num">25–95%</div>
+      <div class="a-card-desc">Profit boost from 5% retention</div>
+    </div>
+    <div class="a-stat-card">
+      <div class="a-card-num">67%</div>
+      <div class="a-card-desc">More spent by repeat customers</div>
+    </div>
+  </div>
+
+  <!-- RIGHT HALF: USPS mailing area (4.5" × 6") -->
+  <div class="a-mail-area">
+    <!-- Return address — top left -->
+    <div class="a-return-address">
+      <div class="a-return-name">LetsGo</div>
+      <div class="a-return-addr">
+        www.useletsgo.com<br>
+        info@useletsgo.com
+      </div>
+    </div>
+
+    <!-- Postage — top right -->
+    <div class="a-postage">Place<br>Stamp<br>Here</div>
+
+    <!-- Delivery address lines — center -->
+    <div class="a-delivery-address">
+      <div class="a-mail-line"></div>
+      <div class="a-mail-line"></div>
+      <div class="a-mail-line"></div>
+      <div class="a-mail-line"></div>
+    </div>
+
+    <!-- Barcode clear zone — bottom -->
+    <div class="a-barcode-zone">
+      <div class="a-barcode-label">Barcode Clear Zone</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════ BACK — FULL MARKETING ════════════════════════ -->
+<p class="sheet-label">Back — 6" x 9" postcard (300 DPI — 2700×1800)</p>
+<div class="postcard back">
+  <div class="b-topbar"></div>
+  <div class="b-glow-a"></div>
+  <div class="b-glow-b"></div>
+  <div class="b-glow-c"></div>
+
+  <div class="b-canvas">
+
+    <!-- Headline -->
+    <div class="b-headline">
+      <div class="b-headline-main"><span>6</span> Ways Customers Find You</div>
+      <div class="b-headline-sub">Basic gets 3 &nbsp;|&nbsp; Premium unlocks all 6 + more</div>
+    </div>
+
+    <!-- 6 phones scattered across the page -->
+    <div class="b-phone p1">
+      <div class="b-phone-frame">
+        <img src="manual-screenshots%20-%20redone/Discovery%20page.jpg" alt="Discovery">
+      </div>
+      <div class="b-phone-label c-discovery">✦ Discovery</div>
+      <div class="b-phone-desc">Swipe to find new places nearby</div>
+    </div>
+
+    <div class="b-phone p2">
+      <div class="b-phone-frame">
+        <img src="manual-screenshots%20-%20redone/5v3v1%20Page.jpg" alt="5v3v1">
+      </div>
+      <div class="b-phone-label c-5v3v1">◎ 5v3v1</div>
+      <div class="b-phone-desc">Two friends narrow 5 picks to 1</div>
+    </div>
+
+    <div class="b-phone p3">
+      <div class="b-phone-frame">
+        <img src="manual-screenshots%20-%20redone/Group%20Vote.jpg" alt="Group Vote">
+      </div>
+      <div class="b-phone-label c-groupvote">⬡ Group Vote</div>
+      <div class="b-phone-desc">Groups vote on tonight's spot</div>
+    </div>
+
+    <div class="b-phone p4">
+      <div class="b-phone-frame">
+        <img src="manual-screenshots%20-%20redone/Date%20Night%20Generator%20Page.jpg" alt="Date Night">
+      </div>
+      <div class="b-phone-label c-datenight">♡ Date Night Generator</div>
+      <div class="b-phone-desc">Smart Algorithm picks a restaurant + activity</div>
+    </div>
+
+    <div class="b-phone p5">
+      <div class="b-phone-frame">
+        <img src="manual-screenshots%20-%20redone/Events%20Page.jpg" alt="Events">
+      </div>
+      <div class="b-phone-label c-events">◈ Events</div>
+      <div class="b-phone-desc">Promote events to local users</div>
+    </div>
+
+    <div class="b-phone p6">
+      <div class="b-phone-frame">
+        <img src="manual-screenshots%20-%20redone/Experiences%20Page.jpg" alt="Experiences">
+      </div>
+      <div class="b-phone-label c-experiences">❛ Experiences</div>
+      <div class="b-phone-desc">Real customer photos & videos</div>
+    </div>
+
+    <!-- Slogan — top left -->
+    <div class="b-slogan">Go. Play. Eat. Get Paid to Live Your Best Life.</div>
+
+    <!-- Logo — top right -->
+    <img src="Logo-removebg%20(2).png" alt="LetsGo" style="position:absolute; top:14px; right:24px; z-index:9; width:80px; height:auto;">
+
+    <!-- Tier badges -->
+    <div class="b-tier-badge basic">✦ Basic</div>
+    <div class="b-tier-badge premium">★ Premium</div>
+
+    <!-- Bottom panel — hook | QR | launch | reasons -->
+    <div class="b-bottom-panel">
+
+      <!-- Center: Hook | QR | Launch -->
+      <div class="b-center-zone">
+
+        <!-- Hook quote -->
+        <div class="b-center-item" style="flex:0.8;">
+          <div style="font-family:'Georgia', serif; font-style:italic; font-size:16px;font-weight:400;line-height:1.5;color:rgba(255,255,255,0.9);padding-left:16px;border-left:4px solid var(--orange);">
+            LetsGo is a fun discovery platform with the sole purpose of creating repeat customers.
+          </div>
+        </div>
+
+        <!-- QR: Sign Up -->
+        <div class="b-center-item" style="flex:0.7;">
+          <div class="b-qr-block">
+            <div class="b-qr-wrap">
+              <img src="QR%20Code%20-%20www.useletsgo.com/Business%20QR%20Codes%20-%20For%20Advertising%20Purposes.png" alt="Sign Up QR">
+            </div>
+            <div class="b-qr-label">Sign Up</div>
+            <div class="b-qr-url">useletsgo.com</div>
+            <div class="b-qr-url" style="color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 4px;">info@useletsgo.com</div>
+          </div>
+        </div>
+
+        <!-- Launch info -->
+        <div class="b-center-item" style="text-align:center;">
+          <div class="b-launch-eyebrow">Launching</div>
+          <div class="b-launch-date" style="font-size:42px;">MAY 1<sup style="font-size:22px;">ST</sup></div>
+          <div class="b-launch-month">Google Play & Apple App Stores</div>
+          <div class="b-launch-sub" style="color:#ffffff;">First 15 businesses to sign up by April 30th<br>will receive 1 month of Premium for free!</div>
+          <div class="b-launch-cta">Sign Up Early</div>
+          <div class="b-social-row">
+            <a href="#" title="TikTok">♪</a>
+            <a href="#" title="Instagram">📷</a>
+            <a href="#" title="YouTube">▶</a>
+            <a href="#" title="Facebook">f</a>
+            <a href="#" title="Google Play">▷</a>
+            <a href="#" title="Apple App Store">⊘</a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right: Reasons 2x2 grid -->
+      <div class="b-reasons-grid">
+        <div class="b-info-card">
+          <div class="b-card-title">Pay Only for Results</div>
+          <div class="b-card-desc" style="text-align:left;">
+            &bull; Options to pay only on a verified customer visit<br>
+            &bull; No Setup Fees. No Contract. Cancel Anytime.<br>
+            &bull; Customers pay you 100% upfront before you pay us
+          </div>
+        </div>
+        <div class="b-info-card">
+          <div class="b-card-title">Progressive Cash-Back</div>
+          <div class="b-card-desc" style="text-align:left;">
+            &bull; Users could earn up to 20% back<br>
+            &bull; More visits = higher rewards<br>
+            &bull; You control the payout tiers
+          </div>
+        </div>
+        <div class="b-info-card">
+          <div class="b-card-title">Cheaper Than Any Ad</div>
+          <div class="b-card-desc" style="text-align:left;">
+            &bull; Average Ads cost $83–$125 per new customer, LetsGo can get as low as $6.38 per visit<br>
+            &bull; Advertising Packages to hit every user within a 20-100 mile radius
+          </div>
+        </div>
+        <div class="b-info-card">
+          <div class="b-card-title">Real Social Proof</div>
+          <div class="b-card-desc" style="text-align:left;">
+            &bull; 79% say UGC impacts decisions<br>
+            &bull; Customers post real photos<br>
+            &bull; Free marketing from real visits
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- Download buttons -->
+<div style="display:flex;gap:16px;margin-top:20px;">
+  <button onclick="downloadCard('address-side')" style="padding:12px 32px;background:#ff6b35;color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;">Download Address Side (PNG)</button>
+  <button onclick="downloadCard('back')" style="padding:12px 32px;background:#00c896;color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;">Download Back (PNG)</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+async function downloadCard(side) {
+  const btn = event.target;
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  try {
+    const el = document.querySelector('.postcard.' + side);
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: null
+    });
+    const link = document.createElement('a');
+    link.download = 'postcard-business-' + side + '-300dpi.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    btn.textContent = 'Download ' + (side === 'address-side' ? 'Address Side' : 'Back') + ' (PNG)';
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>
