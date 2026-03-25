@@ -3009,40 +3009,45 @@ export default function LetsGoProfile() {
                     <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: NEON.yellow }}>${(s6 / 100).toFixed(2)}</div>
                   </div>
                 </div>
-                {availBal >= s6 / 100 ? (
-                  <button
-                    disabled={tierExtPurchasing}
-                    onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz); }}
-                    style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #FFD600, #FF6B35)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-                  >
-                    {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
-                  </button>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {availBal > 0 && (
-                      <button
-                        disabled={tierExtPurchasing}
-                        onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz); }}
-                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #FFD600, #FF6B35)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-                      >
+                {(() => {
+                  const s6Price = s6 / 100;
+                  const balUse = Math.min(availBal, s6Price);
+                  const remainder = s6Price - balUse;
+                  const fee = remainder > 0 ? Math.ceil(remainder * 100 * 350 / 10000) / 100 : 0;
+                  const legalClick = () => { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); };
+
+                  if (availBal >= s6Price) {
+                    // Full balance
+                    return (
+                      <button disabled={tierExtPurchasing} onClick={() => { if (!tierExtLegalAccepted) { legalClick(); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz); }}
+                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #FFD600, #FF6B35)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
                         {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
                       </button>
-                    )}
-                    {profile?.stripe_payment_method_id ? (
-                      <button
-                        disabled={tierExtPurchasing}
-                        onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz, profile?.payment_method_type || "card"); }}
-                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "1px solid rgba(0,229,255,0.3)", background: "rgba(0,229,255,0.08)", color: NEON.primary, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-                      >
-                        {tierExtPurchasing ? "Processing..." : `Pay with ${profile.payment_method_type === "card" ? `${(profile.payment_card_brand || "Card").toUpperCase()} ••${profile.payment_card_last4}` : `Bank ••${profile.payment_bank_last4}`} (+$${(Math.ceil(s6 * 350 / 10000) / 100).toFixed(2)} fee)`}
-                      </button>
-                    ) : (
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "8px 0" }}>
-                        Add a payment method in your account settings to pay with card or bank
+                    );
+                  }
+                  if (profile?.stripe_payment_method_id) {
+                    const pmLabel = profile.payment_method_type === "card" ? `${(profile.payment_card_brand || "Card").toUpperCase()} ••${profile.payment_card_last4}` : `Bank ••${profile.payment_bank_last4}`;
+                    // Split or full card
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <button disabled={tierExtPurchasing} onClick={() => { if (!tierExtLegalAccepted) { legalClick(); return; } handleTierExtPurchase(isGold ? "gold_6" : "silver_6", isGold ? null : tierExtModalBiz, profile?.payment_method_type || "card"); }}
+                          style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #FFD600, #FF6B35)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                          {tierExtPurchasing ? "Processing..." : "Pay Now"}
+                        </button>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textAlign: "center", lineHeight: 1.5 }}>
+                          {balUse > 0 ? `$${balUse.toFixed(2)} from balance + $${remainder.toFixed(2)} on ${pmLabel}` : `$${s6Price.toFixed(2)} on ${pmLabel}`}
+                          {fee > 0 && ` + $${fee.toFixed(2)} processing fee`}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                )}
+                    );
+                  }
+                  // No payment method
+                  return (
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "8px 0" }}>
+                      {availBal > 0 ? `Balance: $${availBal.toFixed(2)} — add a payment method for the remaining $${remainder.toFixed(2)}` : "Add a payment method in Settings → Account to purchase"}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 12-month option */}
@@ -3062,40 +3067,42 @@ export default function LetsGoProfile() {
                         <div style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: NEON.green }}>${(s12 / 100).toFixed(2)}</div>
                       </div>
                     </div>
-                    {availBal >= s12 / 100 ? (
-                      <button
-                        disabled={tierExtPurchasing}
-                        onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz); }}
-                        style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #39ff14, #00E5FF)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", marginTop: 8 }}
-                      >
-                        {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
-                      </button>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                        {availBal > 0 && (
-                          <button
-                            disabled={tierExtPurchasing}
-                            onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz); }}
-                            style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #39ff14, #00E5FF)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-                          >
+                    {(() => {
+                      const s12Price = s12 / 100;
+                      const balUse12 = Math.min(availBal, s12Price);
+                      const remainder12 = s12Price - balUse12;
+                      const fee12 = remainder12 > 0 ? Math.ceil(remainder12 * 100 * 350 / 10000) / 100 : 0;
+                      const legalClick12 = () => { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); };
+
+                      if (availBal >= s12Price) {
+                        return (
+                          <button disabled={tierExtPurchasing} onClick={() => { if (!tierExtLegalAccepted) { legalClick12(); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz); }}
+                            style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #39ff14, #00E5FF)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", marginTop: 8 }}>
                             {tierExtPurchasing ? "Processing..." : `Pay with Balance ($${availBal.toFixed(2)})`}
                           </button>
-                        )}
-                        {profile?.stripe_payment_method_id ? (
-                          <button
-                            disabled={tierExtPurchasing}
-                            onClick={() => { if (!tierExtLegalAccepted) { document.getElementById("tier-ext-legal")?.scrollIntoView({ behavior: "smooth" }); document.getElementById("tier-ext-legal")?.classList.add("tier-ext-legal-flash"); setTimeout(() => document.getElementById("tier-ext-legal")?.classList.remove("tier-ext-legal-flash"), 2000); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz, profile?.payment_method_type || "card"); }}
-                            style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "1px solid rgba(0,229,255,0.3)", background: "rgba(0,229,255,0.08)", color: NEON.primary, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-                          >
-                            {tierExtPurchasing ? "Processing..." : `Pay with ${profile.payment_method_type === "card" ? `${(profile.payment_card_brand || "Card").toUpperCase()} ••${profile.payment_card_last4}` : `Bank ••${profile.payment_bank_last4}`} (+$${(Math.ceil(s12 * 350 / 10000) / 100).toFixed(2)} fee)`}
-                          </button>
-                        ) : (
-                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "8px 0" }}>
-                            Add a payment method in your account settings to pay with card or bank
+                        );
+                      }
+                      if (profile?.stripe_payment_method_id) {
+                        const pmLabel12 = profile.payment_method_type === "card" ? `${(profile.payment_card_brand || "Card").toUpperCase()} ••${profile.payment_card_last4}` : `Bank ••${profile.payment_bank_last4}`;
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                            <button disabled={tierExtPurchasing} onClick={() => { if (!tierExtLegalAccepted) { legalClick12(); return; } handleTierExtPurchase(isGold ? "gold_12" : "silver_12", isGold ? null : tierExtModalBiz, profile?.payment_method_type || "card"); }}
+                              style={{ width: "100%", padding: "10px 0", borderRadius: 4, border: "none", background: "linear-gradient(135deg, #39ff14, #00E5FF)", color: "#000", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                              {tierExtPurchasing ? "Processing..." : "Pay Now"}
+                            </button>
+                            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textAlign: "center", lineHeight: 1.5 }}>
+                              {balUse12 > 0 ? `$${balUse12.toFixed(2)} from balance + $${remainder12.toFixed(2)} on ${pmLabel12}` : `$${s12Price.toFixed(2)} on ${pmLabel12}`}
+                              {fee12 > 0 && ` + $${fee12.toFixed(2)} processing fee`}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    )}
+                        );
+                      }
+                      return (
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "8px 0", marginTop: 8 }}>
+                          {availBal > 0 ? `Balance: $${availBal.toFixed(2)} — add a payment method for the remaining $${remainder12.toFixed(2)}` : "Add a payment method in Settings → Account to purchase"}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}

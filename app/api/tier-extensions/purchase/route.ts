@@ -19,6 +19,47 @@ import { logAudit } from "@/lib/auditLog";
 
 type ProductType = "silver_6" | "silver_12" | "gold_6" | "gold_12";
 
+/** Helper: create business credits + billing adjustments for an extension purchase */
+async function createBusinessCredits(
+  db: typeof supabase, extensionId: string | undefined, businessCreditCents: number,
+  isSilver: boolean, businessId: string | undefined,
+  silverResults: { bizId: string; silver6PriceCents: number; silver12PriceCents: number; currentTierIndex: number; lostPerMonthCents: number; nothingToProtect: boolean }[],
+  config: { letsgoSplitPct: number; goldDiscountPct: number; silver6FeePct: number; silver12FeePct: number; churnWindowDays: number },
+  userId: string
+) {
+  if (businessCreditCents <= 0) return;
+  if (isSilver && businessId) {
+    const { data: adj } = await db.from("billing_adjustments").insert({
+      business_id: businessId, amount_cents: -businessCreditCents, type: "credit",
+      description: "Premium Tier Extension Purchase", status: "pending", created_by: userId,
+    }).select("id").single();
+    if (adj && extensionId) {
+      await db.from("tier_extension_business_credits").insert({
+        tier_extension_id: extensionId, business_id: businessId,
+        credit_cents: businessCreditCents, billing_adjustment_id: adj.id,
+      });
+    }
+  } else if (!isSilver) {
+    const goldPricesForCredits = calculateGoldPrices(
+      silverResults.map((s) => ({ businessId: s.bizId, businessName: "", currentTierIndex: s.currentTierIndex, lostPerVisitCents: 0, lostPerMonthCents: s.lostPerMonthCents, lostOver6MoCents: 0, lostOver12MoCents: 0, silver6PriceCents: s.silver6PriceCents, silver12PriceCents: s.silver12PriceCents, nothingToProtect: s.nothingToProtect })),
+      config
+    );
+    const credits = splitGoldCredits(businessCreditCents, goldPricesForCredits.businessShares);
+    for (const credit of credits) {
+      const { data: adj } = await db.from("billing_adjustments").insert({
+        business_id: credit.businessId, amount_cents: -credit.creditCents, type: "credit",
+        description: "Premium Tier Extension Purchase", status: "pending", created_by: userId,
+      }).select("id").single();
+      if (adj && extensionId) {
+        await db.from("tier_extension_business_credits").insert({
+          tier_extension_id: extensionId, business_id: credit.businessId,
+          credit_cents: credit.creditCents, billing_adjustment_id: adj.id,
+        });
+      }
+    }
+  }
+}
+
 /**
  * POST /api/tier-extensions/purchase
  * Purchase a tier extension (Silver or Gold).
@@ -57,7 +98,7 @@ export async function POST(req: NextRequest) {
     // 3) Get user profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("created_at, available_balance, status")
+      .select("created_at, available_balance, status, stripe_customer_id, stripe_payment_method_id, payment_method_type")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -230,147 +271,96 @@ export async function POST(req: NextRequest) {
       calculatedAt: new Date().toISOString(),
     };
 
-    // 8) Execute purchase
-    if (paymentMethod === "balance") {
-      // Use atomic PL/pgSQL function
-      const { data: result, error: purchaseError } = await supabase.rpc(
-        "purchase_tier_extension",
-        {
-          p_user_id: user.id,
-          p_business_id: isSilver ? businessId! : null,
-          p_product_type: productType,
-          p_extension_months: extensionMonths,
-          p_protected_tier_index: protectedTierIndex,
-          p_price_cents: priceCents,
-          p_effective_from: effectiveFrom.toISOString().slice(0, 10),
-          p_effective_until: effectiveUntil.toISOString().slice(0, 10),
-          p_pricing_snapshot: pricingSnapshot,
-        }
-      );
+    // 8) Execute purchase — supports split payment (balance + card for remainder)
+    const availableBalance = profile.available_balance ?? 0;
+    const balanceToUse = Math.min(availableBalance, priceCents);
+    const remainderCents = priceCents - balanceToUse;
 
-      if (purchaseError) {
-        const msg = purchaseError.message?.includes("EXTENSION_ERROR:")
-          ? purchaseError.message.split("EXTENSION_ERROR:")[1]
-          : "Purchase failed";
+    // Calculate processing fee on card portion only (3.5%)
+    const PROCESSING_FEE_BPS = 350;
+    const processingFeeCents = remainderCents > 0 ? Math.ceil(remainderCents * PROCESSING_FEE_BPS / 10000) : 0;
+    const cardChargeCents = remainderCents + processingFeeCents;
+
+    // If there's a card portion, verify payment method exists
+    if (remainderCents > 0) {
+      if (!profile.stripe_customer_id || !profile.stripe_payment_method_id) {
+        return NextResponse.json(
+          { error: "Insufficient balance and no payment method on file. Please add a card or bank account in your profile settings." },
+          { status: 400 }
+        );
+      }
+      if (cardChargeCents < 50) {
+        return NextResponse.json({ error: "Card charge amount too small (minimum $0.50). Please use balance only." }, { status: 400 });
+      }
+    }
+
+    // Step A: Deduct balance portion (if any) atomically
+    if (balanceToUse > 0) {
+      const { error: balError } = await supabase.rpc("purchase_tier_extension", {
+        p_user_id: user.id,
+        p_business_id: isSilver ? businessId! : null,
+        p_product_type: productType,
+        p_extension_months: extensionMonths,
+        p_protected_tier_index: protectedTierIndex,
+        p_price_cents: balanceToUse, // only deduct balance portion
+        p_effective_from: effectiveFrom.toISOString().slice(0, 10),
+        p_effective_until: effectiveUntil.toISOString().slice(0, 10),
+        p_pricing_snapshot: { ...pricingSnapshot, balanceUsedCents: balanceToUse, cardChargedCents: cardChargeCents, processingFeeCents },
+      });
+
+      if (balError) {
+        const msg = balError.message?.includes("EXTENSION_ERROR:")
+          ? balError.message.split("EXTENSION_ERROR:")[1]
+          : "Balance deduction failed";
         return NextResponse.json({ error: msg }, { status: 400 });
       }
 
-      const extensionId = (result as { id?: string })?.id;
-
-      // 9) Create business credits + billing adjustments
-      const { businessCreditCents } = calculateRevenueSplit(priceCents, config.letsgoSplitPct);
-
-      if (isSilver && businessCreditCents > 0) {
-        // Single business credit
-        const { data: adj } = await supabase
-          .from("billing_adjustments")
-          .insert({
-            business_id: businessId!,
-            amount_cents: -businessCreditCents, // negative = credit
-            type: "credit",
-            description: `Premium Tier Extension Purchase`,
-            status: "pending",
-            created_by: user.id,
-          })
+      // If fully paid by balance, we're done — the RPC already created the extension
+      if (remainderCents === 0) {
+        // Get the extension that was just created
+        const { data: newExt } = await supabase
+          .from("tier_extensions")
           .select("id")
-          .single();
+          .eq("user_id", user.id)
+          .eq("product_type", productType)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        if (adj) {
-          await supabase.from("tier_extension_business_credits").insert({
-            tier_extension_id: extensionId,
-            business_id: businessId!,
-            credit_cents: businessCreditCents,
-            billing_adjustment_id: adj.id,
-          });
-        }
-      } else if (!isSilver && businessCreditCents > 0) {
-        // Gold: split proportionally across businesses
-        const goldPrices = calculateGoldPrices(silverResults, config);
-        const credits = splitGoldCredits(businessCreditCents, goldPrices.businessShares);
+        const extensionId = newExt?.id;
 
-        for (const credit of credits) {
-          const { data: adj } = await supabase
-            .from("billing_adjustments")
-            .insert({
-              business_id: credit.businessId,
-              amount_cents: -credit.creditCents,
-              type: "credit",
-              description: `Premium Tier Extension Purchase`,
-              status: "pending",
-              created_by: user.id,
-            })
-            .select("id")
-            .single();
+        // Create business credits
+        const { businessCreditCents } = calculateRevenueSplit(priceCents, config.letsgoSplitPct);
+        await createBusinessCredits(supabase, extensionId, businessCreditCents, isSilver, businessId, silverResults, config, user.id);
 
-          if (adj) {
-            await supabase.from("tier_extension_business_credits").insert({
-              tier_extension_id: extensionId,
-              business_id: credit.businessId,
-              credit_cents: credit.creditCents,
-              billing_adjustment_id: adj.id,
-            });
-          }
-        }
-      }
+        try {
+          logAudit({ action: "tier_extension_purchased", tab: "Tier Extensions", targetType: "tier_extension", targetId: extensionId, staffId: user.id, staffName: user.email ?? "User", details: `Purchased ${productType} for $${(priceCents / 100).toFixed(2)} via balance` });
+        } catch { /* non-blocking */ }
 
-      // 10) Audit log
-      try {
-        logAudit({
-          action: "tier_extension_purchased",
-          tab: "Tier Extensions",
-          targetType: "tier_extension",
-          targetId: extensionId,
-          staffId: user.id,
-          staffName: user.email ?? "User",
-          details: `Purchased ${productType} for $${(priceCents / 100).toFixed(2)} via balance`,
+        return NextResponse.json({
+          success: true,
+          extension: { id: extensionId },
+          priceCents,
+          balanceUsedCents: balanceToUse,
+          cardChargedCents: 0,
+          processingFeeCents: 0,
+          effectiveFrom: effectiveFrom.toISOString().slice(0, 10),
+          effectiveUntil: effectiveUntil.toISOString().slice(0, 10),
         });
-      } catch {
-        // Non-blocking
       }
-
-      return NextResponse.json({
-        success: true,
-        extension: result,
-        priceCents,
-        effectiveFrom: effectiveFrom.toISOString().slice(0, 10),
-        effectiveUntil: effectiveUntil.toISOString().slice(0, 10),
-      });
     }
 
-    // Card/Bank/Venmo payment via Stripe
-    // Load user's saved payment method
-    const { data: pmProfile } = await supabase
-      .from("profiles")
-      .select("stripe_customer_id, stripe_payment_method_id, payment_method_type")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!pmProfile?.stripe_customer_id || !pmProfile?.stripe_payment_method_id) {
-      return NextResponse.json(
-        { error: "No payment method on file. Please add a card or bank account in your profile settings." },
-        { status: 400 }
-      );
-    }
-
-    // Calculate processing fee (3.5%)
-    const PROCESSING_FEE_BPS = 350;
-    const processingFeeCents = Math.ceil(priceCents * PROCESSING_FEE_BPS / 10000);
-    const totalChargeCents = priceCents + processingFeeCents;
-
-    if (totalChargeCents < 50) {
-      return NextResponse.json({ error: "Amount too small for card payment (minimum $0.50)" }, { status: 400 });
-    }
-
-    // Create audit record
+    // Step B: Charge remainder to card via Stripe
+    // Create audit record for card portion
     const { data: attempt, error: attemptErr } = await supabase
       .from("user_payment_attempts")
       .insert({
         user_id: user.id,
         entity_type: "tier_extension",
-        amount_cents: priceCents,
+        amount_cents: remainderCents,
         processing_fee_cents: processingFeeCents,
-        total_cents: totalChargeCents,
-        payment_method: paymentMethod,
+        total_cents: cardChargeCents,
+        payment_method: profile.payment_method_type || "card",
         processor: "stripe",
         status: "pending",
       })
@@ -378,16 +368,19 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (attemptErr || !attempt) {
+      // Refund balance if card setup fails (balance was already deducted)
+      if (balanceToUse > 0) {
+        await supabase.from("profiles").update({ available_balance: availableBalance }).eq("id", user.id);
+      }
       return NextResponse.json({ error: "Failed to initiate payment" }, { status: 500 });
     }
 
-    // Charge via Stripe off-session PaymentIntent
     try {
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: totalChargeCents,
+        amount: cardChargeCents,
         currency: "usd",
-        customer: pmProfile.stripe_customer_id,
-        payment_method: pmProfile.stripe_payment_method_id,
+        customer: profile.stripe_customer_id!,
+        payment_method: profile.stripe_payment_method_id!,
         off_session: true,
         confirm: true,
         description: `LetsGo Tier Extension - ${productType}`,
@@ -397,174 +390,84 @@ export async function POST(req: NextRequest) {
           product_type: productType,
           business_id: isSilver ? businessId! : "gold",
           extension_price_cents: String(priceCents),
+          balance_used_cents: String(balanceToUse),
+          card_charged_cents: String(cardChargeCents),
           processing_fee_cents: String(processingFeeCents),
           user_payment_attempt_id: attempt.id,
         },
       });
 
       if (paymentIntent.status === "succeeded") {
-        // Payment succeeded — create the extension
-        await supabase
-          .from("user_payment_attempts")
-          .update({
-            status: "succeeded",
-            stripe_payment_intent_id: paymentIntent.id,
-            processor_response: { transaction_id: paymentIntent.id, processor: "stripe" },
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", attempt.id);
+        await supabase.from("user_payment_attempts").update({
+          status: "succeeded", stripe_payment_intent_id: paymentIntent.id,
+          processor_response: { transaction_id: paymentIntent.id, processor: "stripe" },
+          completed_at: new Date().toISOString(),
+        }).eq("id", attempt.id);
 
-        // Insert tier extension directly (no balance deduction needed)
-        const { data: extRow } = await supabase
-          .from("tier_extensions")
-          .insert({
-            user_id: user.id,
-            business_id: isSilver ? businessId! : null,
-            product_type: productType,
-            extension_months: extensionMonths,
-            protected_tier_index: protectedTierIndex,
-            price_cents: priceCents,
-            payment_method: paymentMethod,
+        // If balance was used, extension already created by RPC. If not, create it now.
+        let extensionId: string | undefined;
+        if (balanceToUse > 0) {
+          const { data: existingExt } = await supabase.from("tier_extensions").select("id")
+            .eq("user_id", user.id).eq("product_type", productType)
+            .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          extensionId = existingExt?.id;
+        } else {
+          const { data: extRow } = await supabase.from("tier_extensions").insert({
+            user_id: user.id, business_id: isSilver ? businessId! : null,
+            product_type: productType, extension_months: extensionMonths,
+            protected_tier_index: protectedTierIndex, price_cents: priceCents,
+            payment_method: profile.payment_method_type || "card",
             effective_from: effectiveFrom.toISOString().slice(0, 10),
             effective_until: effectiveUntil.toISOString().slice(0, 10),
             status: "active",
-            pricing_snapshot: { ...pricingSnapshot, processingFeeCents, totalChargeCents, stripePaymentIntentId: paymentIntent.id },
-          })
-          .select("id")
-          .single();
+            pricing_snapshot: { ...pricingSnapshot, balanceUsedCents: balanceToUse, cardChargedCents: cardChargeCents, processingFeeCents, stripePaymentIntentId: paymentIntent.id },
+          }).select("id").single();
+          extensionId = extRow?.id;
+        }
 
-        const extensionId = extRow?.id;
-
-        // Update attempt with entity_id
         if (extensionId) {
-          await supabase
-            .from("user_payment_attempts")
-            .update({ entity_id: extensionId })
-            .eq("id", attempt.id);
+          await supabase.from("user_payment_attempts").update({ entity_id: extensionId }).eq("id", attempt.id);
         }
 
-        // Create business credits (same logic as balance payment)
+        // Create business credits on total price (not just card portion)
         const { businessCreditCents } = calculateRevenueSplit(priceCents, config.letsgoSplitPct);
+        await createBusinessCredits(supabase, extensionId, businessCreditCents, isSilver, businessId, silverResults, config, user.id);
 
-        if (isSilver && businessCreditCents > 0) {
-          const { data: adj } = await supabase
-            .from("billing_adjustments")
-            .insert({
-              business_id: businessId!,
-              amount_cents: -businessCreditCents,
-              type: "credit",
-              description: `Premium Tier Extension Purchase`,
-              status: "pending",
-              created_by: user.id,
-            })
-            .select("id")
-            .single();
-
-          if (adj && extensionId) {
-            await supabase.from("tier_extension_business_credits").insert({
-              tier_extension_id: extensionId,
-              business_id: businessId!,
-              credit_cents: businessCreditCents,
-              billing_adjustment_id: adj.id,
-            });
-          }
-        } else if (!isSilver && businessCreditCents > 0) {
-          const goldPricesForCredits = calculateGoldPrices(silverResults, config);
-          const credits = splitGoldCredits(businessCreditCents, goldPricesForCredits.businessShares);
-
-          for (const credit of credits) {
-            const { data: adj } = await supabase
-              .from("billing_adjustments")
-              .insert({
-                business_id: credit.businessId,
-                amount_cents: -credit.creditCents,
-                type: "credit",
-                description: `Premium Tier Extension Purchase`,
-                status: "pending",
-                created_by: user.id,
-              })
-              .select("id")
-              .single();
-
-            if (adj && extensionId) {
-              await supabase.from("tier_extension_business_credits").insert({
-                tier_extension_id: extensionId,
-                business_id: credit.businessId,
-                credit_cents: credit.creditCents,
-                billing_adjustment_id: adj.id,
-              });
-            }
-          }
-        }
-
-        // Audit log
         try {
-          logAudit({
-            action: "tier_extension_purchased",
-            tab: "Tier Extensions",
-            targetType: "tier_extension",
-            targetId: extensionId,
-            staffId: user.id,
-            staffName: user.email ?? "User",
-            details: `Purchased ${productType} for $${(priceCents / 100).toFixed(2)} via ${paymentMethod} (fee: $${(processingFeeCents / 100).toFixed(2)})`,
-          });
-        } catch {
-          // Non-blocking
-        }
+          logAudit({ action: "tier_extension_purchased", tab: "Tier Extensions", targetType: "tier_extension", targetId: extensionId, staffId: user.id, staffName: user.email ?? "User", details: `Purchased ${productType} for $${(priceCents / 100).toFixed(2)} (balance: $${(balanceToUse / 100).toFixed(2)}, card: $${(cardChargeCents / 100).toFixed(2)} incl $${(processingFeeCents / 100).toFixed(2)} fee)` });
+        } catch { /* non-blocking */ }
 
         return NextResponse.json({
-          success: true,
-          extension: { id: extensionId },
-          priceCents,
-          processingFeeCents,
-          totalChargeCents,
+          success: true, extension: { id: extensionId }, priceCents,
+          balanceUsedCents: balanceToUse, cardChargedCents: cardChargeCents, processingFeeCents,
           effectiveFrom: effectiveFrom.toISOString().slice(0, 10),
           effectiveUntil: effectiveUntil.toISOString().slice(0, 10),
         });
       } else if (paymentIntent.status === "requires_action") {
-        // 3D Secure or bank verification needed
-        await supabase
-          .from("user_payment_attempts")
-          .update({
-            stripe_payment_intent_id: paymentIntent.id,
-            processor_response: { transaction_id: paymentIntent.id, status: "requires_action" },
-          })
-          .eq("id", attempt.id);
+        await supabase.from("user_payment_attempts").update({
+          stripe_payment_intent_id: paymentIntent.id,
+          processor_response: { transaction_id: paymentIntent.id, status: "requires_action" },
+        }).eq("id", attempt.id);
 
-        return NextResponse.json({
-          pending: true,
-          clientSecret: paymentIntent.client_secret,
-          attemptId: attempt.id,
-          priceCents,
-          processingFeeCents,
-          totalChargeCents,
-        });
+        return NextResponse.json({ pending: true, clientSecret: paymentIntent.client_secret, attemptId: attempt.id, priceCents, balanceUsedCents: balanceToUse, cardChargedCents: cardChargeCents, processingFeeCents });
       } else {
-        // Payment failed
-        await supabase
-          .from("user_payment_attempts")
-          .update({
-            status: "failed",
-            stripe_payment_intent_id: paymentIntent.id,
-            error_message: `Payment status: ${paymentIntent.status}`,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", attempt.id);
-
+        // Card failed — refund balance portion
+        if (balanceToUse > 0) {
+          await supabase.from("profiles").update({ available_balance: availableBalance }).eq("id", user.id);
+          // Delete the extension created by balance RPC
+          await supabase.from("tier_extensions").delete().eq("user_id", user.id).eq("product_type", productType).order("created_at", { ascending: false }).limit(1);
+        }
+        await supabase.from("user_payment_attempts").update({ status: "failed", stripe_payment_intent_id: paymentIntent.id, error_message: `Payment status: ${paymentIntent.status}`, completed_at: new Date().toISOString() }).eq("id", attempt.id);
         return NextResponse.json({ error: "Payment failed. Please try again or use a different payment method." }, { status: 400 });
       }
     } catch (stripeErr) {
-      // Stripe API error (card declined, etc.)
       const errMsg = stripeErr instanceof Error ? stripeErr.message : "Payment failed";
-      await supabase
-        .from("user_payment_attempts")
-        .update({
-          status: "failed",
-          error_message: errMsg,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", attempt.id);
-
+      // Refund balance portion on Stripe error
+      if (balanceToUse > 0) {
+        await supabase.from("profiles").update({ available_balance: availableBalance }).eq("id", user.id);
+        await supabase.from("tier_extensions").delete().eq("user_id", user.id).eq("product_type", productType).order("created_at", { ascending: false }).limit(1);
+      }
+      await supabase.from("user_payment_attempts").update({ status: "failed", error_message: errMsg, completed_at: new Date().toISOString() }).eq("id", attempt.id);
       return NextResponse.json({ error: errMsg }, { status: 400 });
     }
   } catch (err) {
