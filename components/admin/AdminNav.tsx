@@ -725,7 +725,7 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
         const adR = allAdCampaigns.map((c: any) => [c.id, c.business_id, bn(c.business_id), c.campaign_type || "", c.duration_days || "", $$(n(c.base_price_cents)), $$(n(c.surge_fee_cents)), $$(n(c.total_price_cents)), c.surge_event_id || "", c.status || "", fmt(c.start_date), fmt(c.end_date), fmt(c.created_at)]);
 
         // SHEET 18: QR SCANS
-        const allQrScans = await q("qr_scans", "*");
+        const allQrScans = await q("qr_scans", "*", false);
         const qrH = ["Scan ID", "Campaign", "Scanned At", "IP Address"];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const qrR = allQrScans.map((s: any) => [s.id, s.campaign, fmt(s.scanned_at), s.ip_address || ""]);
@@ -921,7 +921,7 @@ function CustomReportsModal({ onClose }: { onClose: () => void }) {
           break;
         }
         case "qr_scans": {
-          const scans = await q("qr_scans", "*");
+          const scans = await q("qr_scans", "*", false);
           const mails = await q("postcard_mailings", "*", false);
           const parseDevice = (ua: string | null) => {
             if (!ua) return "Unknown";
