@@ -425,8 +425,21 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
         return;
       }
     } else {
-      if (!email || !password || !fullName) {
+      if (!email || !password || !firstName || !lastName || !zipCode || !phone) {
         setError("Please fill in all fields.");
+        return;
+      }
+      if (firstName.trim().length < 1 || lastName.trim().length < 1) {
+        setError("Please enter a valid first and last name.");
+        return;
+      }
+      if (!/^\d{5}$/.test(zipCode)) {
+        setError("Please enter a valid 5-digit zip code.");
+        return;
+      }
+      const digitsOnly = phone.replace(/\D/g, "");
+      if (digitsOnly.length !== 10) {
+        setError("Please enter a valid 10-digit phone number.");
         return;
       }
     }
@@ -454,7 +467,14 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
             phone: phone.replace(/\D/g, ""),
             user_type: type,
           }
-        : { full_name: fullName, user_type: type };
+        : {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            full_name: `${firstName.trim()} ${lastName.trim()}`,
+            zip_code: zipCode.trim(),
+            phone: phone.replace(/\D/g, ""),
+            user_type: type,
+          };
 
       const { data, error: signUpError } = await supabaseBrowser.auth.signUp({
         email,
@@ -489,7 +509,11 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
           profilePayload.zip_code = zipCode.trim();
           profilePayload.phone = phone.replace(/\D/g, "");
         } else {
-          profilePayload.full_name = fullName.trim();
+          profilePayload.first_name = firstName.trim();
+          profilePayload.last_name = lastName.trim();
+          profilePayload.full_name = `${firstName.trim()} ${lastName.trim()}`;
+          profilePayload.zip_code = zipCode.trim();
+          profilePayload.phone = phone.replace(/\D/g, "");
         }
         const profileRes = await fetch("/api/profiles/init", {
           method: "POST",
@@ -724,18 +748,26 @@ function AuthModal({ isOpen, onClose, type, mode: initialMode, onSuccess, influe
 
         <form onSubmit={mode === "signin" ? handleSignIn : handleSignUp} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {mode === "signup" && type === "business" && (
-            <div>
-              <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: "0.375rem" }}>Full Name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="John Smith"
-                required
-                disabled={loading}
-                style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }}
-              />
-            </div>
+            <>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: "0.375rem" }}>First Name</label>
+                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" required disabled={loading} style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: "0.375rem" }}>Last Name</label>
+                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Smith" required disabled={loading} style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: "0.375rem" }}>Zip Code</label>
+                <input type="text" inputMode="numeric" value={zipCode} onChange={(e) => setZipCode(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="90210" required disabled={loading} style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: "0.375rem" }}>Phone Number</label>
+                <input type="tel" value={phone} onChange={(e) => { const digits = e.target.value.replace(/\D/g, "").slice(0, 10); const formatted = digits.length > 6 ? `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}` : digits.length > 3 ? `(${digits.slice(0,3)}) ${digits.slice(3)}` : digits; setPhone(formatted); }} placeholder="(555) 123-4567" required disabled={loading} style={{ width: "100%", padding: "0.875rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "white", fontSize: "0.95rem" }} />
+              </div>
+            </>
           )}
           {mode === "signup" && type === "user" && (
             <>

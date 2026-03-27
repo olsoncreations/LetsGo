@@ -151,6 +151,50 @@ export default function UsersPage() {
   // Year-to-date earnings for selected user (for W-9 / 1099 checks)
   const [ytdEarningsCents, setYtdEarningsCents] = useState<number>(0);
 
+  // Tier extension purchase history for selected user
+  interface TierExtension {
+    id: string;
+    business_id: string | null;
+    business_name?: string;
+    product_type: string;
+    extension_months: number;
+    protected_tier_index: number;
+    price_cents: number;
+    payment_method: string;
+    effective_from: string;
+    effective_until: string;
+    status: string;
+    created_at: string;
+  }
+  const [tierExtensions, setTierExtensions] = useState<TierExtension[]>([]);
+
+  // Real-time business loyalty levels (computed from receipts)
+  interface BusinessTierInfo {
+    businessId: string;
+    businessName: string;
+    visits: number;
+    currentTier: number;
+    currentTierLabel: string;
+    currentBps: number;
+    totalPayoutCents: number;
+    visitRange: string;
+    firstVisit: string;
+    lastVisit: string;
+  }
+  const [businessTiers, setBusinessTiers] = useState<BusinessTierInfo[]>([]);
+  const [loyaltyExpanded, setLoyaltyExpanded] = useState(false);
+  const [loyaltySearch, setLoyaltySearch] = useState("");
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [grantForm, setGrantForm] = useState({
+    businessId: "" as string,
+    tierLevel: 1,
+    days: 30,
+    type: "silver" as "silver" | "gold",
+    reason: "",
+  });
+  const [grantBusinessSearch, setGrantBusinessSearch] = useState("");
+  const [grantBusinessResults, setGrantBusinessResults] = useState<{ id: string; name: string }[]>([]);
+
   // Referral data for selected user
   const [userReferrals, setUserReferrals] = useState<{
     referredBy: string | null;
@@ -357,16 +401,255 @@ export default function UsersPage() {
     }
   }
 
+  async function fetchTierExtensions(userId: string) {
+    try {
+      const { data } = await supabaseBrowser
+        .from("tier_extensions")
+        .select("id, business_id, product_type, extension_months, protected_tier_index, price_cents, payment_method, effective_from, effective_until, status, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (!data || data.length === 0) {
+        setTierExtensions([]);
+        return;
+      }
+
+      // Enrich with business names
+      const bizIds = [...new Set(data.filter((d) => d.business_id).map((d) => d.business_id as string))];
+      let bizMap = new Map<string, string>();
+      if (bizIds.length > 0) {
+        const { data: bizData } = await supabaseBrowser
+          .from("business")
+          .select("id, public_business_name, business_name")
+          .in("id", bizIds);
+        for (const b of bizData || []) {
+          bizMap.set(b.id, (b.public_business_name || b.business_name || b.id) as string);
+        }
+      }
+
+      setTierExtensions(data.map((d) => ({
+        ...d,
+        business_name: d.business_id ? bizMap.get(d.business_id as string) || (d.business_id as string) : undefined,
+      })) as TierExtension[]);
+    } catch (err) {
+      console.error("Error fetching tier extensions:", err);
+      setTierExtensions([]);
+    }
+  }
+
   useEffect(() => {
     if (selectedId) {
       fetchUserReferrals(selectedId);
       fetchUserBan(selectedId);
       fetchYtdEarnings(selectedId);
+      fetchTierExtensions(selectedId);
+      fetchBusinessTiers(selectedId);
     } else {
       setActiveBan(null);
       setYtdEarningsCents(0);
+      setTierExtensions([]);
+      setBusinessTiers([]);
     }
   }, [selectedId]);
+
+  async function fetchBusinessTiers(userId: string) {
+    try {
+      // Get all approved receipts for this user in the 365-day window
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - 365);
+      const windowStartStr = windowStart.toISOString().split("T")[0];
+
+      const { data: receipts } = await supabaseBrowser
+        .from("receipts")
+        .select("business_id, payout_cents, visit_date")
+        .eq("user_id", userId)
+        .eq("status", "approved")
+        .gte("visit_date", windowStartStr)
+        .order("visit_date", { ascending: false });
+
+      if (!receipts || receipts.length === 0) {
+        setBusinessTiers([]);
+        return;
+      }
+
+      // Group by business — count visits and total payout
+      const bizMap = new Map<string, { visits: number; totalPayout: number; firstVisit: string; lastVisit: string }>();
+      for (const r of receipts) {
+        const bid = r.business_id as string;
+        const visitDate = r.visit_date as string;
+        const existing = bizMap.get(bid);
+        if (!existing) {
+          bizMap.set(bid, {
+            visits: 1,
+            totalPayout: (r.payout_cents as number) || 0,
+            firstVisit: visitDate,
+            lastVisit: visitDate,
+          });
+        } else {
+          existing.visits++;
+          existing.totalPayout += (r.payout_cents as number) || 0;
+          if (visitDate < existing.firstVisit) existing.firstVisit = visitDate;
+          if (visitDate > existing.lastVisit) existing.lastVisit = visitDate;
+        }
+      }
+
+      // Fetch business names + payout tiers for each business
+      const bizIds = [...bizMap.keys()];
+      const [{ data: bizData }, { data: allTiers }] = await Promise.all([
+        supabaseBrowser
+          .from("business")
+          .select("id, public_business_name, business_name")
+          .in("id", bizIds),
+        supabaseBrowser
+          .from("business_payout_tiers")
+          .select("business_id, tier_index, label, percent_bps, min_visits, max_visits")
+          .in("business_id", bizIds)
+          .order("tier_index", { ascending: true }),
+      ]);
+
+      const nameMap = new Map<string, string>();
+      for (const b of bizData || []) {
+        nameMap.set(b.id, (b.public_business_name || b.business_name || b.id) as string);
+      }
+
+      // Build tier lookup per business
+      type TierInfo = { tier_index: number; label: string; percent_bps: number; min_visits: number; max_visits: number | null };
+      const tiersByBiz = new Map<string, TierInfo[]>();
+      for (const t of (allTiers || []) as Record<string, unknown>[]) {
+        const bid = t.business_id as string;
+        if (!tiersByBiz.has(bid)) tiersByBiz.set(bid, []);
+        tiersByBiz.get(bid)!.push({
+          tier_index: t.tier_index as number,
+          label: (t.label as string) || `Level ${t.tier_index}`,
+          percent_bps: (t.percent_bps as number) || 0,
+          min_visits: (t.min_visits as number) || 0,
+          max_visits: t.max_visits as number | null,
+        });
+      }
+
+      const results: BusinessTierInfo[] = [...bizMap.entries()].map(([bizId, info]) => {
+        // Find the current tier based on visit count
+        const tiers = tiersByBiz.get(bizId) || [];
+        let currentTier = 1;
+        let currentLabel = "Level 1";
+        let currentBps = 0;
+        let visitRange = "1+";
+        for (const t of tiers) {
+          if (info.visits >= t.min_visits && (t.max_visits === null || info.visits <= t.max_visits)) {
+            currentTier = t.tier_index;
+            currentLabel = t.label;
+            currentBps = t.percent_bps;
+            visitRange = t.max_visits === null ? `${t.min_visits}+` : `${t.min_visits}–${t.max_visits}`;
+          }
+        }
+
+        return {
+          businessId: bizId,
+          businessName: nameMap.get(bizId) || bizId,
+          visits: info.visits,
+          currentTier,
+          currentTierLabel: currentLabel,
+          currentBps,
+          totalPayoutCents: info.totalPayout,
+          visitRange,
+          firstVisit: info.firstVisit,
+          lastVisit: info.lastVisit,
+        };
+      });
+
+      results.sort((a, b) => b.visits - a.visits);
+      setBusinessTiers(results);
+    } catch (err) {
+      console.error("Error fetching business tiers:", err);
+      setBusinessTiers([]);
+    }
+  }
+
+  async function handleReinstateExtension(ext: TierExtension) {
+    if (!selected) return;
+    const daysExpired = Math.ceil((Date.now() - new Date(ext.effective_until).getTime()) / (1000 * 60 * 60 * 24));
+    const newUntil = new Date();
+    newUntil.setDate(newUntil.getDate() + Math.max(30, ext.extension_months * 30 - daysExpired));
+    const newUntilStr = newUntil.toISOString().split("T")[0];
+
+    try {
+      const { error } = await supabaseBrowser
+        .from("tier_extensions")
+        .update({ status: "reinstated", effective_until: newUntilStr, updated_at: new Date().toISOString() })
+        .eq("id", ext.id);
+
+      if (error) { alert("Error reinstating: " + error.message); return; }
+
+      logAudit({ action: "reinstate_tier_extension", tab: AUDIT_TABS.USERS, subTab: "Tier Extensions", targetType: "user", targetId: selected.id, entityName: selected.full_name || selected.email || "", fieldName: "tier_extension", oldValue: `expired (${ext.effective_until})`, newValue: `reinstated until ${newUntilStr}`, details: `Extension ${ext.id}, ${ext.product_type}, protects level ${ext.protected_tier_index}` });
+      await fetchTierExtensions(selected.id);
+    } catch (err) {
+      console.error("Reinstate error:", err);
+      alert("Error reinstating extension.");
+    }
+  }
+
+  async function handleGrantExtension() {
+    if (!selected) return;
+    if (grantForm.days <= 0 || grantForm.days > 365) {
+      alert("Duration must be between 1 and 365 days.");
+      return;
+    }
+    const extensionMonths = grantForm.days >= 180 ? 12 : 6;
+    const productType = `${grantForm.type}_${extensionMonths}` as string;
+    const businessId = grantForm.type === "gold" ? null : grantForm.businessId || null;
+
+    if (grantForm.type === "silver" && !businessId) {
+      alert("Please select a business for Silver extensions.");
+      return;
+    }
+
+    const effectiveFrom = new Date().toISOString().split("T")[0];
+    const effectiveUntil = new Date();
+    effectiveUntil.setDate(effectiveUntil.getDate() + grantForm.days);
+    const effectiveUntilStr = effectiveUntil.toISOString().split("T")[0];
+
+    try {
+      const { error } = await supabaseBrowser
+        .from("tier_extensions")
+        .insert({
+          user_id: selected.id,
+          business_id: businessId,
+          product_type: productType,
+          extension_months: extensionMonths,
+          protected_tier_index: grantForm.tierLevel,
+          price_cents: 0,
+          payment_method: "admin",
+          effective_from: effectiveFrom,
+          effective_until: effectiveUntilStr,
+          status: "active",
+          pricing_snapshot: { admin_granted: true, reason: grantForm.reason },
+        });
+
+      if (error) { alert("Error granting extension: " + error.message); return; }
+
+      logAudit({ action: "grant_tier_extension", tab: AUDIT_TABS.USERS, subTab: "Tier Extensions", targetType: "user", targetId: selected.id, entityName: selected.full_name || selected.email || "", fieldName: "tier_extension", newValue: `${productType}, level ${grantForm.tierLevel}, ${grantForm.days} days until ${effectiveUntilStr}`, details: grantForm.reason || "Admin granted" });
+      setShowGrantModal(false);
+      setGrantForm({ businessId: "", tierLevel: 1, days: 30, type: "silver", reason: "" });
+      await fetchTierExtensions(selected.id);
+    } catch (err) {
+      console.error("Grant extension error:", err);
+      alert("Error granting extension.");
+    }
+  }
+
+  async function searchBusinessesForGrant(query: string) {
+    setGrantBusinessSearch(query);
+    if (query.length < 2) { setGrantBusinessResults([]); return; }
+    const { data } = await supabaseBrowser
+      .from("business")
+      .select("id, public_business_name, business_name")
+      .or(`public_business_name.ilike.%${query}%,business_name.ilike.%${query}%`)
+      .limit(8);
+    setGrantBusinessResults((data || []).map((b) => ({
+      id: b.id,
+      name: ((b.public_business_name || b.business_name || b.id) as string),
+    })));
+  }
 
   async function fetchUserBan(userId: string) {
     try {
@@ -1460,18 +1743,42 @@ export default function UsersPage() {
                   </div>
                 </Card>
 
-                {/* Business Loyalty Levels */}
-                <SectionTitle icon="⭐">Business Loyalty Levels</SectionTitle>
+                {/* Business Loyalty Levels (real-time from receipts) */}
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                  onClick={() => setLoyaltyExpanded((v) => !v)}
+                >
+                  <SectionTitle icon="⭐">Business Loyalty Levels ({businessTiers.length})</SectionTitle>
+                  <span style={{ fontSize: 18, color: COLORS.textSecondary, transform: loyaltyExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</span>
+                </div>
                 <Card style={{ marginBottom: 24 }}>
-                  {!selected.business_levels || selected.business_levels.length === 0 ? (
+                  {businessTiers.length === 0 ? (
                     <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>⭐</div>
-                      No loyalty levels yet — visits to businesses will appear here
+                      No visits in the last 365 days
+                    </div>
+                  ) : !loyaltyExpanded ? (
+                    <div style={{ padding: 16, textAlign: "center", color: COLORS.textSecondary, fontSize: 13 }}>
+                      {businessTiers.length} business{businessTiers.length !== 1 ? "es" : ""} — click header to expand
                     </div>
                   ) : (
-                    selected.business_levels.map((bl, i) => (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {/* Search filter */}
+                      {businessTiers.length > 3 && (
+                        <input
+                          type="text"
+                          placeholder="Search businesses..."
+                          value={loyaltySearch}
+                          onChange={(e) => setLoyaltySearch(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ padding: "10px 12px", background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: "#fff", fontSize: 13, outline: "none", marginBottom: 4 }}
+                        />
+                      )}
+                      {businessTiers
+                        .filter((bt) => !loyaltySearch || bt.businessName.toLowerCase().includes(loyaltySearch.toLowerCase()))
+                        .map((bt) => (
                         <div
-                          key={i}
+                          key={bt.businessId}
                           style={{
                             display: "flex",
                             justifyContent: "space-between",
@@ -1479,30 +1786,297 @@ export default function UsersPage() {
                             padding: 18,
                             background: COLORS.darkBg,
                             borderRadius: 12,
-                            marginBottom: i < selected.business_levels!.length - 1 ? 10 : 0,
                           }}
                         >
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 15 }}>{bl.business_name}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>{bt.businessName}</div>
                             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
-                              {bl.visits} visits • Next level at {bl.next_level_visits} visits
+                              {bt.visits} visit{bt.visits !== 1 ? "s" : ""} (365-day window)
+                              {" • "}{(bt.currentBps / 100).toFixed(1)}% payout rate
+                              {" • "}{formatMoney(bt.totalPayoutCents)} earned
+                            </div>
+                            <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>
+                              {(() => {
+                                const expDate = new Date(bt.firstVisit);
+                                expDate.setDate(expDate.getDate() + 365);
+                                const daysLeft = Math.ceil((expDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                return <>Start Date: {new Date(bt.firstVisit).toLocaleDateString()} • Expiration Date: {expDate.toLocaleDateString()} ({daysLeft > 0 ? `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left` : "expired"})</>;
+                              })()}
                             </div>
                           </div>
-                          <div
-                            style={{
-                              padding: "10px 20px",
-                              background: COLORS.gradient1,
-                              borderRadius: 100,
-                              fontWeight: 700,
-                              fontSize: 14,
-                            }}
-                          >
-                            Level {bl.level}
+                          <div style={{ textAlign: "center" }}>
+                            <div
+                              style={{
+                                padding: "10px 20px",
+                                background: COLORS.gradient1,
+                                borderRadius: 100,
+                                fontWeight: 700,
+                                fontSize: 13,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Level {bt.currentTier} • {bt.visitRange} · {(bt.currentBps / 100).toFixed(1)}%
+                            </div>
                           </div>
                         </div>
-                      ))
+                      ))}
+                      {loyaltySearch && businessTiers.filter((bt) => bt.businessName.toLowerCase().includes(loyaltySearch.toLowerCase())).length === 0 && (
+                        <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary, fontSize: 13 }}>
+                          No businesses matching &quot;{loyaltySearch}&quot;
+                        </div>
+                      )}
+                    </div>
                   )}
-                    </Card>
+                </Card>
+
+                {/* Tier Extension Purchase History */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <SectionTitle icon="🛡️">Tier Extension Purchases</SectionTitle>
+                  <button
+                    onClick={() => setShowGrantModal(true)}
+                    style={{
+                      padding: "8px 16px",
+                      background: COLORS.gradient1,
+                      border: "none",
+                      borderRadius: 8,
+                      color: "#fff",
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    + Grant Extension
+                  </button>
+                </div>
+                <Card style={{ marginBottom: 24 }}>
+                  {tierExtensions.length === 0 ? (
+                    <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>🛡️</div>
+                      No tier extension purchases yet
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {tierExtensions.map((ext) => {
+                        const isActive = ext.status === "active" || ext.status === "reinstated";
+                        const isExpired = ext.status === "expired";
+                        const productLabel = ext.product_type.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                        const daysLeft = isActive ? Math.max(0, Math.ceil((new Date(ext.effective_until).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
+                        const daysExpired = isExpired ? Math.ceil((Date.now() - new Date(ext.effective_until).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                        return (
+                          <div
+                            key={ext.id}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: 16,
+                              background: COLORS.darkBg,
+                              borderRadius: 12,
+                              border: isActive ? "1px solid rgba(57,255,20,0.2)" : "1px solid transparent",
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                <span style={{ fontWeight: 700, fontSize: 14 }}>{productLabel}</span>
+                                <Badge status={ext.status} />
+                              </div>
+                              <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                                {ext.business_name ? ext.business_name : "All businesses (Gold)"}
+                                {" • "}Protects Level {ext.protected_tier_index}
+                                {" • "}{ext.extension_months} months
+                              </div>
+                              <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>
+                                {new Date(ext.effective_from).toLocaleDateString()} → {new Date(ext.effective_until).toLocaleDateString()}
+                                {isActive && ` (${daysLeft} day${daysLeft !== 1 ? "s" : ""} left)`}
+                                {isExpired && ` (expired ${daysExpired} day${daysExpired !== 1 ? "s" : ""} ago)`}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: 16, color: isActive ? COLORS.neonGreen : COLORS.textSecondary }}>
+                                  {ext.price_cents === 0 ? "Free" : formatMoney(ext.price_cents)}
+                                </div>
+                                <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>
+                                  {ext.payment_method === "admin" ? "Admin granted" : ext.payment_method === "balance" ? "Paid from balance" : ext.payment_method === "card" ? "Paid by card" : "Paid via Venmo"}
+                                </div>
+                              </div>
+                              {isExpired && (
+                                <button
+                                  onClick={() => handleReinstateExtension(ext)}
+                                  style={{
+                                    padding: "5px 12px",
+                                    background: "rgba(0,212,255,0.15)",
+                                    border: "1px solid rgba(0,212,255,0.3)",
+                                    borderRadius: 6,
+                                    color: COLORS.neonBlue,
+                                    fontWeight: 600,
+                                    fontSize: 11,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Reinstate
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, textAlign: "right", marginTop: 4 }}>
+                        Total spent: {formatMoney(tierExtensions.reduce((sum, ext) => sum + ext.price_cents, 0))}
+                        {" • "}{tierExtensions.filter((e) => e.status === "active" || e.status === "reinstated").length} active
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Grant Extension Modal */}
+                {showGrantModal && (
+                  <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowGrantModal(false)}>
+                    <div style={{ background: COLORS.cardBg, borderRadius: 16, padding: 28, width: 440, maxHeight: "80vh", overflow: "auto", border: `1px solid ${COLORS.cardBorder}` }} onClick={(e) => e.stopPropagation()}>
+                      <h3 style={{ margin: "0 0 20px", fontSize: 18, fontWeight: 700 }}>Grant Tier Extension</h3>
+                      <p style={{ fontSize: 13, color: COLORS.textSecondary, margin: "0 0 16px" }}>
+                        Grant a free tier extension to {selected.full_name || selected.email}.
+                      </p>
+
+                      {/* Type */}
+                      <div style={{ marginBottom: 14 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>Type</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {(["silver", "gold"] as const).map((t) => (
+                            <button
+                              key={t}
+                              onClick={() => setGrantForm((f) => ({ ...f, type: t, businessId: t === "gold" ? "" : f.businessId }))}
+                              style={{
+                                flex: 1,
+                                padding: "10px 16px",
+                                borderRadius: 8,
+                                border: grantForm.type === t ? `2px solid ${t === "silver" ? COLORS.neonBlue : COLORS.neonYellow}` : `1px solid ${COLORS.cardBorder}`,
+                                background: grantForm.type === t ? "rgba(255,255,255,0.05)" : "transparent",
+                                color: "#fff",
+                                fontWeight: 600,
+                                fontSize: 13,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {t === "silver" ? "Silver (1 business)" : "Gold (all businesses)"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Business search (Silver only) */}
+                      {grantForm.type === "silver" && (
+                        <div style={{ marginBottom: 14 }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>Business</label>
+                          <input
+                            type="text"
+                            placeholder="Search businesses..."
+                            value={grantBusinessSearch}
+                            onChange={(e) => searchBusinessesForGrant(e.target.value)}
+                            style={{ width: "100%", padding: "10px 12px", background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                          />
+                          {grantBusinessResults.length > 0 && (
+                            <div style={{ marginTop: 4, background: COLORS.darkBg, borderRadius: 8, border: `1px solid ${COLORS.cardBorder}`, maxHeight: 150, overflow: "auto" }}>
+                              {grantBusinessResults.map((b) => (
+                                <div
+                                  key={b.id}
+                                  onClick={() => { setGrantForm((f) => ({ ...f, businessId: b.id })); setGrantBusinessSearch(b.name); setGrantBusinessResults([]); }}
+                                  style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: `1px solid ${COLORS.cardBorder}` }}
+                                  onMouseEnter={(e) => { (e.target as HTMLDivElement).style.background = "rgba(255,255,255,0.05)"; }}
+                                  onMouseLeave={(e) => { (e.target as HTMLDivElement).style.background = "transparent"; }}
+                                >
+                                  {b.name}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Tier Level */}
+                      <div style={{ marginBottom: 14 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>Protect Tier Level</label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {[1, 2, 3, 4, 5, 6, 7].map((lvl) => (
+                            <button
+                              key={lvl}
+                              onClick={() => setGrantForm((f) => ({ ...f, tierLevel: lvl }))}
+                              style={{
+                                flex: 1,
+                                padding: "8px 0",
+                                borderRadius: 6,
+                                border: grantForm.tierLevel === lvl ? `2px solid ${COLORS.neonGreen}` : `1px solid ${COLORS.cardBorder}`,
+                                background: grantForm.tierLevel === lvl ? "rgba(57,255,20,0.1)" : "transparent",
+                                color: grantForm.tierLevel === lvl ? COLORS.neonGreen : "#fff",
+                                fontWeight: 600,
+                                fontSize: 13,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {lvl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Duration */}
+                      <div style={{ marginBottom: 14 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>Duration (days)</label>
+                        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                          {[2, 7, 14, 30, 90, 180, 365].map((d) => (
+                            <button
+                              key={d}
+                              onClick={() => setGrantForm((f) => ({ ...f, days: d }))}
+                              style={{
+                                flex: 1,
+                                padding: "7px 0",
+                                borderRadius: 6,
+                                border: grantForm.days === d ? `2px solid ${COLORS.neonPink}` : `1px solid ${COLORS.cardBorder}`,
+                                background: grantForm.days === d ? "rgba(255,45,146,0.1)" : "transparent",
+                                color: grantForm.days === d ? COLORS.neonPink : "#fff",
+                                fontWeight: 600,
+                                fontSize: 11,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {d}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={grantForm.days}
+                          onChange={(e) => setGrantForm((f) => ({ ...f, days: Math.max(1, Math.min(365, parseInt(e.target.value) || 1)) }))}
+                          style={{ width: "100%", padding: "10px 12px", background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        />
+                      </div>
+
+                      {/* Reason */}
+                      <div style={{ marginBottom: 20 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>Reason (optional)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Customer service goodwill, loyalty reward..."
+                          value={grantForm.reason}
+                          onChange={(e) => setGrantForm((f) => ({ ...f, reason: e.target.value }))}
+                          style={{ width: "100%", padding: "10px 12px", background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                        />
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => setShowGrantModal(false)} style={{ flex: 1, padding: "12px 16px", background: "transparent", border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                          Cancel
+                        </button>
+                        <button onClick={handleGrantExtension} style={{ flex: 1, padding: "12px 16px", background: COLORS.gradient1, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                          Grant Extension
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Recent History */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

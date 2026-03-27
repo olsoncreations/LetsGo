@@ -106,6 +106,8 @@ export function Badge({ status }: BadgeProps) {
     follow_up: { bg: "linear-gradient(135deg, #ffff00, #ff6b35)", color: "#000" },
     signed_up: { bg: "linear-gradient(135deg, #39ff14, #00d4ff)", color: "#000" },
     not_interested: { bg: "linear-gradient(135deg, #ff3131, #990000)", color: "#fff" },
+    expired: { bg: "#3d3d5c", color: "#a0a0b0" },
+    reinstated: { bg: "linear-gradient(135deg, #00d4ff, #39ff14)", color: "#000" },
   };
   const s = styles[status] || styles.submitted;
   return (

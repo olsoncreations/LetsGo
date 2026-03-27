@@ -25,15 +25,20 @@ export async function POST(req: NextRequest) {
       tos_accepted_at: new Date().toISOString(),
     };
 
-    if (user_type === "user") {
-      if (first_name) profileData.first_name = first_name.trim();
-      if (last_name) profileData.last_name = last_name.trim();
-      if (full_name) profileData.full_name = full_name.trim();
-      if (zip_code) profileData.zip_code = zip_code.trim();
-      if (phone) profileData.phone = phone.trim();
-    } else {
-      if (full_name) profileData.full_name = full_name.trim();
+    if (full_name) {
+      const trimmed = full_name.trim();
+      profileData.full_name = trimmed;
+      // Always split full_name into first/last if not provided explicitly
+      if (!first_name && !last_name && trimmed.includes(" ")) {
+        const parts = trimmed.split(/\s+/);
+        profileData.first_name = parts[0];
+        profileData.last_name = parts.slice(1).join(" ");
+      }
     }
+    if (first_name) profileData.first_name = first_name.trim();
+    if (last_name) profileData.last_name = last_name.trim();
+    if (zip_code) profileData.zip_code = zip_code.trim();
+    if (phone) profileData.phone = phone.trim();
 
     const { error: upsertError } = await supabaseServer
       .from("profiles")
