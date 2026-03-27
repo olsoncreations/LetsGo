@@ -769,6 +769,9 @@ function FollowButton({ followed, onToggle }: { followed: boolean; onToggle: () 
 // ─── Share Button ───
 
 function ShareButton({ name }: { name: string }) {
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
+
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const url = window.location.href;
@@ -776,22 +779,29 @@ function ShareButton({ name }: { name: string }) {
       try { await navigator.share({ title: name, text: `Check out ${name} on LetsGo!`, url }); } catch { /* user cancelled */ }
     } else {
       await navigator.clipboard.writeText(url);
-      alert("Link copied to clipboard!");
+      showToast("Link copied to clipboard!");
     }
   };
 
   return (
-    <button onClick={handleClick} style={{
-      background: "none", border: "none", cursor: "pointer", padding: 4,
-      flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-        stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        style={{ transition: "all 0.3s ease" }}
-      >
-        <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
-      </svg>
-    </button>
+    <>
+      <button onClick={handleClick} style={{
+        background: "none", border: "none", cursor: "pointer", padding: 4,
+        flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+          stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transition: "all 0.3s ease" }}
+        >
+          <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+        </svg>
+      </button>
+      {toast && (
+        <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "rgba(0,0,0,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 24px rgba(0,0,0,0.5)", fontSize: 14, whiteSpace: "nowrap" }}>
+          {toast}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1180,6 +1190,8 @@ function DiscoveryPage() {
   const [payoutLevels, setPayoutLevels] = useState(DEFAULT_PAYOUT_LEVELS);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [showFollowedOnly, setShowFollowedOnly] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   // Onboarding tour
@@ -1276,7 +1288,7 @@ function DiscoveryPage() {
   const handleToggleFollow = useCallback(async (businessId: string) => {
     const userId = getUserId();
     if (!userId) {
-      alert("Please log in to follow businesses.");
+      showToast("Please log in to follow businesses.");
       return;
     }
     const wasFollowed = followedIds.has(businessId);
@@ -1287,7 +1299,7 @@ function DiscoveryPage() {
     });
     try {
       const token = await getAuthToken();
-      if (!token) { alert("Please log in to follow businesses."); return; }
+      if (!token) { showToast("Please log in to follow businesses."); return; }
       const res = await fetch("/api/businesses/follow", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -1631,6 +1643,12 @@ function DiscoveryPage() {
           onSkip={tour.skip}
           illustration={tour.stepIndex >= 0 ? swipeTourIllustrations[tour.stepIndex] : undefined}
         />
+      )}
+
+      {toast && (
+        <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "rgba(0,0,0,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 24px rgba(0,0,0,0.5)", fontSize: 14, whiteSpace: "nowrap" }}>
+          {toast}
+        </div>
       )}
 
       <style>{`

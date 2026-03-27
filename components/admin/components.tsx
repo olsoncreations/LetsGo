@@ -485,7 +485,7 @@ export function AddressField({ label, value, editable = true, onChange, onAddres
           const dummyDiv = document.createElement("div");
           placesService.current = new w.google.maps.places.PlacesService(dummyDiv);
           setGoogleLoaded(true);
-          console.log("[AddressField] Google Maps Places loaded successfully");
+          // Google Maps Places loaded
         } catch (err) {
           console.error("[AddressField] Error initializing Google Maps:", err);
         }
@@ -494,7 +494,7 @@ export function AddressField({ label, value, editable = true, onChange, onAddres
         if (attempts < maxAttempts) {
           setTimeout(checkGoogleMaps, 500);
         } else {
-          console.warn("[AddressField] Google Maps not available after 10s - address autocomplete disabled");
+          // Google Maps not available after 10s - address autocomplete disabled
         }
       }
     };

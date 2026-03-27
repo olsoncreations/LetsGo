@@ -116,12 +116,6 @@ async function sendViaStripeConnect(request: PayoutRequest): Promise<PayoutResul
       };
     }
 
-    console.log("[Stripe Connect] Sending transfer:", {
-      amount: amountToTransfer,
-      destination: request.stripe_connect_account_id,
-      payoutId: request.payout_id,
-    });
-
     const transfer = await stripe.transfers.create(
       {
         amount: amountToTransfer,
@@ -138,8 +132,6 @@ async function sendViaStripeConnect(request: PayoutRequest): Promise<PayoutResul
         idempotencyKey: `letsgo-transfer-${request.payout_id}`,
       }
     );
-
-    console.log("[Stripe Connect] Transfer created:", transfer.id);
 
     return {
       success: true,
@@ -235,13 +227,6 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
       items: [payoutItem],
     };
 
-    console.log("[PayPal] Sending Venmo payout:", {
-      amount: amountStr,
-      receiver,
-      recipientType,
-      payoutId: request.payout_id,
-    });
-
     const res = await fetch(`${PAYPAL_BASE_URL}/v1/payments/payouts`, {
       method: "POST",
       headers: {
@@ -263,7 +248,6 @@ async function sendViaPayPal(request: PayoutRequest): Promise<PayoutResult> {
     }
 
     const batchId = responseData?.batch_header?.payout_batch_id || "";
-    console.log("[PayPal] Venmo payout batch created:", batchId);
 
     return {
       success: true,

@@ -74,7 +74,7 @@ function PendingAdjustments({ businessId, colors }: { businessId: string; colors
           const json = await res.json();
           setAdjustments(json.adjustments || []);
         }
-      } catch { /* API may not be available */ }
+      } catch (err) { console.error("Failed to load adjustments:", err); }
       finally { if (mounted) setLoading(false); }
     }
     load();
@@ -257,7 +257,7 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
           // Sum: credits are negative (reduce bill), charges are positive (increase bill)
           setPendingAdjTotalCents(adjs.reduce((s: number, a: { amount_cents: number }) => s + a.amount_cents, 0));
         }
-      } catch { /* table may not exist */ }
+      } catch (err) { console.error("Failed to load pending adjustments:", err); }
     }
     loadAdjustments();
     return () => { mounted = false; };
@@ -1732,7 +1732,6 @@ function UpdatePaymentForm({
         return;
       }
 
-      console.log("[UpdatePaymentForm] Confirming card setup...");
       const { error: confirmError, setupIntent } = await stripe.confirmCardSetup(
         clientSecret,
         { payment_method: { card: cardNumberElement } }
@@ -1744,7 +1743,6 @@ function UpdatePaymentForm({
         return;
       }
 
-      console.log("[UpdatePaymentForm] SetupIntent confirmed:", setupIntent?.id, setupIntent?.status);
       if (setupIntent) {
         const pmId = typeof setupIntent.payment_method === "string"
           ? setupIntent.payment_method
@@ -1771,7 +1769,6 @@ function UpdatePaymentForm({
     showError("");
 
     try {
-      console.log("[UpdatePaymentForm] Confirming setup via Link...");
       const { error: confirmError, setupIntent } = await stripe.confirmSetup({
         elements,
         redirect: "if_required",
@@ -1784,7 +1781,6 @@ function UpdatePaymentForm({
         return;
       }
 
-      console.log("[UpdatePaymentForm] SetupIntent confirmed:", setupIntent?.id, setupIntent?.status);
       if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "requires_action")) {
         const pmId = typeof setupIntent.payment_method === "string"
           ? setupIntent.payment_method
@@ -1811,7 +1807,6 @@ function UpdatePaymentForm({
     showError("");
 
     try {
-      console.log("[UpdatePaymentForm] Confirming US bank account setup...");
       const { error: confirmError, setupIntent } = await stripe.confirmSetup({
         elements,
         redirect: "if_required",
@@ -1824,7 +1819,6 @@ function UpdatePaymentForm({
         return;
       }
 
-      console.log("[UpdatePaymentForm] Bank SetupIntent:", setupIntent?.id, setupIntent?.status);
       if (setupIntent && (setupIntent.status === "succeeded" || setupIntent.status === "requires_action")) {
         const pmId = typeof setupIntent.payment_method === "string"
           ? setupIntent.payment_method

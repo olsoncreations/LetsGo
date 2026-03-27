@@ -10,13 +10,14 @@ import { supabaseServer as supabase } from "@/lib/supabaseServer";
  * Protected by CRON_SECRET header to prevent unauthorized access.
  */
 export async function GET(req: NextRequest) {
-  // Verify cron secret (if configured)
+  // Verify cron secret (required)
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authHeader = req.headers.get("authorization") ?? "";
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!cronSecret) {
+    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  const authHeader = req.headers.get("authorization") ?? "";
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -35,8 +36,6 @@ export async function GET(req: NextRequest) {
     }
 
     const expiredCount = data?.length ?? 0;
-    console.log(`[cron/expire-extensions] Expired ${expiredCount} tier extensions`);
-
     return NextResponse.json({ success: true, expiredCount });
   } catch (err) {
     console.error("Expire extensions cron error:", err);

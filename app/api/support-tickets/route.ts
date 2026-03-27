@@ -29,7 +29,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     const category = String(body.category || "general").trim();
     const priority = String(body.priority || "normal").trim();
     const businessId = body.business_id ? String(body.business_id).trim() : null;
-    const attachmentUrl = body.attachment_url ? String(body.attachment_url).trim() : null;
+    const rawAttachmentUrl = body.attachment_url ? String(body.attachment_url).trim() : null;
+    const attachmentUrl = rawAttachmentUrl && /^https:\/\/.{3,2000}$/.test(rawAttachmentUrl) ? rawAttachmentUrl : null;
 
     // Validation
     if (!subject) {

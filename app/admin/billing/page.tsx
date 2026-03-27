@@ -270,7 +270,10 @@ export default function BillingPage() {
       setExpectedLoading(true);
       try {
         const dateStr = expectedRefDate.toISOString().split("T")[0];
-        const res = await fetch(`/api/admin/billing/expected?period=${expectedPeriod}&date=${dateStr}`);
+        const sess = await supabaseBrowser.auth.getSession();
+        const res = await fetch(`/api/admin/billing/expected?period=${expectedPeriod}&date=${dateStr}`, {
+          headers: { Authorization: `Bearer ${sess.data.session?.access_token ?? ""}` },
+        });
         if (res.ok) {
           const data = await res.json();
           if (mounted) {

@@ -588,16 +588,6 @@ useEffect(() => {
   fetchBillingBundle("29a51f82-feb4-4b05-b2bb-b8b9b98aa53a");
 }, []);
 
-// Log AFTER invoice data exists
-useEffect(() => {
-  if (!invoice) return;
-
-  console.log("BILLING CHECK:", {
-    total_cents: invoice.total_cents,
-    line_count: invoiceLines.length,
-  });
-}, [invoice, invoiceLines]);
-
   return (
     <div style={{
       minHeight: '100vh',

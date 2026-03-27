@@ -87,7 +87,6 @@ export default function AdminLayout({
         );
 
         if (staffErr || !staffData) {
-          console.warn("Not a staff user");
           router.replace("/admin/login");
           return;
         }
@@ -162,9 +161,7 @@ export default function AdminLayout({
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="afterInteractive"
-        onLoad={() => {
-          console.log("[AdminLayout] Google Maps API loaded successfully");
-        }}
+        onLoad={() => {}}
         onError={(e) => {
           console.error("[AdminLayout] Google Maps API failed to load:", e);
         }}

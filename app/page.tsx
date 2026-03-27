@@ -492,7 +492,7 @@ function FeaturedCarousel({ images }: { images?: string[] }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={src}
-                alt=""
+                alt="Featured business photo"
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             </div>

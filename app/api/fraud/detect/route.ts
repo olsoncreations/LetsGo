@@ -166,7 +166,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   } catch (err) {
     console.error("[fraud/detect] Unexpected error:", err);
     return NextResponse.json(
-      { error: "Unexpected error", details: String(err instanceof Error ? err.message : err) },
+      { error: "Unexpected error" },
       { status: 500 }
     );
   }

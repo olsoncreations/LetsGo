@@ -163,9 +163,8 @@ export async function GET(req: NextRequest) {
       const monthsActive = Math.max(1, (now.getTime() - firstVisit.getTime()) / (1000 * 60 * 60 * 24 * 30));
       const visitsPerMonth = bizData.visitCount / monthsActive;
 
-      // Convert raw tier_index to human-friendly level (1-based position among tiers)
-      const sortedTiers = [...tiers].sort((a, b) => a.tier_index - b.tier_index);
-      const currentLevel = sortedTiers.findIndex((t) => t.tier_index === currentTier.tier_index) + 1;
+      // tier_index is already 1-based (1-7) in the database
+      const currentLevel = currentTier.tier_index;
 
       silverInputs.push({
         businessId: bizId,

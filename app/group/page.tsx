@@ -321,7 +321,7 @@ const CardImageCarousel = ({ images, gradient, height = 140, children }: {
       >
         {hasImages ? images.map((url, i) => (
           <div key={i} style={{ flex: "0 0 100%", width: "100%", height: "100%", scrollSnapAlign: "start" }}>
-            <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} draggable={false} />
+            <img src={url} alt="Business photo" style={{ width: "100%", height: "100%", objectFit: "cover" }} draggable={false} />
           </div>
         )) : (
           <div style={{ flex: "0 0 100%", width: "100%", height: "100%", background: gradient }} />
@@ -1525,7 +1525,7 @@ const PlayerActivityTracker = ({ activity, phase }: { activity: PlayerActivity[]
               background: p.hasContributed ? `rgba(${NEON_RGB}, 0.08)` : "rgba(255,255,255,0.03)",
             }}>
               {p.avatar ? (
-                <img src={p.avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={p.avatar} alt={`${p.name} avatar`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
                 <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, fontWeight: 700, color: p.hasContributed ? NEON : TEXT_DIM }}>
                   {getInitial(p.name)}

@@ -876,6 +876,8 @@ export default function LetsGoProfile() {
   const [rateWouldGoAgain, setRateWouldGoAgain] = useState(true);
   const [rateSaving, setRateSaving] = useState(false);
   const [editingRatingId, setEditingRatingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
 
   // Tier extension state
   const [tierExtPricing, setTierExtPricing] = useState<{
@@ -1371,7 +1373,7 @@ export default function LetsGoProfile() {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Purchase failed");
+        showToast(data.error || "Purchase failed");
         setTierExtPurchasing(false);
         return;
       }
@@ -1387,7 +1389,7 @@ export default function LetsGoProfile() {
         if (profData.profile) setProfile(profData.profile);
       }
     } catch {
-      alert("Purchase failed. Please try again.");
+      showToast("Purchase failed. Please try again.");
     }
     setTierExtPurchasing(false);
   }, [token, tierExtPurchasing, tierExtLegalAccepted]);
@@ -1481,14 +1483,14 @@ export default function LetsGoProfile() {
     if (!token || !profile || !expFile || !expSelectedBiz) return;
     const maxSize = expFile.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
     const maxLabel = expFile.type.startsWith("video/") ? "50MB" : "10MB";
-    if (expFile.size > maxSize) { alert(`File too large. Max ${maxLabel} for ${expFile.type.startsWith("video/") ? "videos" : "images"}.`); return; }
+    if (expFile.size > maxSize) { showToast(`File too large. Max ${maxLabel} for ${expFile.type.startsWith("video/") ? "videos" : "images"}.`); return; }
     setExpUploading(true);
     const ext = expFile.name.split(".").pop() || "jpg";
     const safeName = expFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const uniqueId = crypto.randomUUID();
     const storagePath = `${profile.id}/${uniqueId}-${safeName}`;
     const { error: upErr } = await supabaseBrowser.storage.from("user-experiences").upload(storagePath, expFile);
-    if (upErr) { console.error("[exp upload] Storage error:", upErr); alert("Upload failed: " + upErr.message); setExpUploading(false); return; }
+    if (upErr) { console.error("[exp upload] Storage error:", upErr); showToast("Upload failed: " + upErr.message); setExpUploading(false); return; }
     const mediaType = expFile.type.startsWith("video/") ? "video" : "image";
     const res = await fetch("/api/experiences", {
       method: "POST",
@@ -1530,7 +1532,7 @@ export default function LetsGoProfile() {
       setViewingExp(null);
     } else {
       const data = await res.json().catch(() => null);
-      alert(data?.error || "Failed to delete experience.");
+      showToast(data?.error || "Failed to delete experience.");
     }
   }, [token]);
 
@@ -1561,12 +1563,12 @@ export default function LetsGoProfile() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        alert(data?.error || "Failed to cancel receipt");
+        showToast(data?.error || "Failed to cancel receipt");
         return;
       }
       setReceipts(prev => prev.map(r => r.id === receiptId ? { ...r, status: "cancelled", cashback: 0 } : r));
     } catch {
-      alert("Network error — could not cancel receipt");
+      showToast("Network error — could not cancel receipt");
     }
     setCancelConfirmId(null);
   }, [token]);
@@ -2134,7 +2136,7 @@ export default function LetsGoProfile() {
                 {pendingReceipts.map((r) => (
                   <div key={r.id} onClick={() => setViewingReceipt(r)} style={{ display: "flex", alignItems: "center", padding: "14px 18px", borderRadius: 4, background: "#0C0C14", border: `1px solid rgba(${NEON.yellowRGB},0.1)`, transition: "all 0.2s ease", gap: 16, cursor: "pointer" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = `rgba(${NEON.yellowRGB},0.25)`; e.currentTarget.style.background = "#0d0d16"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = `rgba(${NEON.yellowRGB},0.1)`; e.currentTarget.style.background = "#0C0C14"; }}>
                     {r.photoUrl ? (
-                      <img src={r.photoUrl} alt="" style={{ width: 38, height: 38, borderRadius: 4, objectFit: "cover", flexShrink: 0, border: `1px solid rgba(${NEON.yellowRGB},0.15)` }} />
+                      <img src={r.photoUrl} alt="Pending receipt photo" style={{ width: 38, height: 38, borderRadius: 4, objectFit: "cover", flexShrink: 0, border: `1px solid rgba(${NEON.yellowRGB},0.15)` }} />
                     ) : (
                       <div style={{ width: 38, height: 38, borderRadius: 4, background: `rgba(${NEON.yellowRGB},0.08)`, border: `1px solid rgba(${NEON.yellowRGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\uD83E\uDDFE"}</div>
                     )}
@@ -2664,9 +2666,9 @@ export default function LetsGoProfile() {
                   if (!file) return;
                   if (file.type.startsWith("image/")) {
                     const orientResult = await validatePortraitOrientation(file);
-                    if (!orientResult.valid) { alert(`Image rejected — landscape orientation is not allowed.\n\nYour image: ${orientResult.width}×${orientResult.height}px (${(file.size / 1024).toFixed(0)}KB) — landscape\nRequired: portrait orientation (height must be ≥ width)\nRecommended: 1080×1920 (9:16 ratio)\n\nTip: Crop your photo to portrait orientation before uploading.`); e.target.value = ""; return; }
+                    if (!orientResult.valid) { showToast("Image must be portrait orientation (taller than wide)"); e.target.value = ""; return; }
                     const dimResult = await validateImageDimensions(file, 1080);
-                    if (!dimResult.valid) { alert(`Image rejected — does not meet minimum requirements.\n\nYour image: ${dimResult.width}×${dimResult.height}px (${(file.size / 1024).toFixed(0)}KB)\nRequired: at least 1080px wide, portrait orientation (9:16 recommended)\n\nTip: Use a photo editor to resize or crop your image to at least 1080×1920 before uploading.`); e.target.value = ""; return; }
+                    if (!dimResult.valid) { showToast("Image must be at least 1080px wide"); e.target.value = ""; return; }
                     setExpFileDims({ width: dimResult.width, height: dimResult.height });
                   } else {
                     setExpFileDims(null);
@@ -2797,7 +2799,7 @@ export default function LetsGoProfile() {
                   {filteredReceipts.map((r) => (
                     <div key={r.id} onClick={() => setViewingReceipt(r)} style={{ display: "flex", alignItems: "center", padding: "14px 18px", borderRadius: 4, background: r.status === "cancelled" ? "rgba(255,255,255,0.01)" : "#0C0C14", border: "1px solid rgba(255,255,255,0.04)", transition: "all 0.2s ease", gap: 16, cursor: "pointer", opacity: r.status === "cancelled" ? 0.45 : 1 }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = `rgba(${NEON.orangeRGB},0.15)`; e.currentTarget.style.background = r.status === "cancelled" ? "rgba(255,255,255,0.015)" : "#0d0d16"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)"; e.currentTarget.style.background = r.status === "cancelled" ? "rgba(255,255,255,0.01)" : "#0C0C14"; }}>
                       {r.photoUrl ? (
-                        <img src={r.photoUrl} alt="" style={{ width: 38, height: 38, borderRadius: 4, objectFit: "cover", flexShrink: 0, border: `1px solid rgba(${NEON.orangeRGB},0.15)` }} />
+                        <img src={r.photoUrl} alt="Receipt photo" style={{ width: 38, height: 38, borderRadius: 4, objectFit: "cover", flexShrink: 0, border: `1px solid rgba(${NEON.orangeRGB},0.15)` }} />
                       ) : (
                         <div style={{ width: 38, height: 38, borderRadius: 4, background: `rgba(${NEON.orangeRGB},0.08)`, border: `1px solid rgba(${NEON.orangeRGB},0.15)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\uD83E\uDDFE"}</div>
                       )}
@@ -3222,6 +3224,12 @@ export default function LetsGoProfile() {
           onSkip={tour.skip}
           illustration={tour.stepIndex >= 0 ? profileTourIllustrations[tour.stepIndex] : undefined}
         />
+      )}
+
+      {toast && (
+        <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "rgba(0,0,0,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 24px rgba(0,0,0,0.5)", fontSize: 14, whiteSpace: "nowrap" }}>
+          {toast}
+        </div>
       )}
     </>
   );

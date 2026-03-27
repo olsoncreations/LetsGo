@@ -243,7 +243,7 @@ export default function Analytics({ businessId, isPremium }: BusinessTabProps) {
       const tierColors = ['#94a3b8', '#64748b', colors.accent, colors.primary, colors.secondary, colors.warning, colors.success];
       const tierAgg = new Map<number, { count: number; totalCents: number }>();
       for (const r of approved) {
-        const tierIdx = r.payout_tier_index ?? 0;
+        const tierIdx = r.payout_tier_index ?? 1;
         const existing = tierAgg.get(tierIdx) || { count: 0, totalCents: 0 };
         existing.count += 1;
         existing.totalCents += safeNumber(r.receipt_total_cents);
@@ -347,7 +347,6 @@ export default function Analytics({ businessId, isPremium }: BusinessTabProps) {
   }, [loadCompetitors]);
 
   const onDownload = (format: 'CSV' | 'XLSX') => {
-    console.log(`Download requested: ${format}`);
     alert(`(Placeholder) ${format} export`);
   };
 

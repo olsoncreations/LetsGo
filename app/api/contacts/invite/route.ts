@@ -95,7 +95,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     for (const invite of toSend) {
       const email = invite.email?.toLowerCase().trim();
-      if (!email || !email.includes("@")) {
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         skipped++;
         continue;
       }

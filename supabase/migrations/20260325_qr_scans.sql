@@ -13,6 +13,6 @@ CREATE POLICY "Staff can read qr_scans"
   ON qr_scans FOR SELECT
   USING (auth.uid() IN (SELECT user_id FROM staff_users));
 
-CREATE POLICY "Allow inserts from API"
+CREATE POLICY "Service role inserts qr_scans"
   ON qr_scans FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (auth.uid() IN (SELECT user_id FROM staff_users));

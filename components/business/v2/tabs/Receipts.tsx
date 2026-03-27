@@ -311,8 +311,8 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
       if (!tierError && tierData && tierData.length > 0) {
         // Use tiers from table
         loadedTiers = tierData.map((t: any, idx: number) => ({
-          level: t.level ?? t.tier_index ?? idx + 1,
-          label: t.label || `Level ${t.level ?? t.tier_index ?? idx + 1}`,
+          level: t.tier_index ?? idx + 1,
+          label: t.label || `Level ${t.tier_index ?? idx + 1}`,
           minVisits: t.min_visits ?? defaultTierConfig[idx]?.minVisits ?? 0,
           maxVisits: t.max_visits ?? defaultTierConfig[idx]?.maxVisits,
           bps: t.bps ?? t.percent_bps ?? 0,
@@ -480,7 +480,7 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
       // Prepare tier rows
       const tierRows = defaultTierConfig.map((t, idx) => ({
         business_id: businessId,
-        tier_index: idx,
+        tier_index: idx + 1,
         level: t.level,
         label: t.label,
         min_visits: t.minVisits,

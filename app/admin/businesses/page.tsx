@@ -194,7 +194,7 @@ function BusinessesPage() {
 
   // DB-driven tag categories for dropdowns
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
-  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch((err) => console.error("Failed to load tag categories:", err)); }, []);
 
   const businessTypeOptions = React.useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
@@ -581,7 +581,7 @@ function BusinessesPage() {
 
           const tierRows = TIER_CONFIG.map((t, idx) => ({
             business_id: selected.id,
-            tier_index: idx,
+            tier_index: idx + 1,
             level: t.level,
             label: t.label,
             min_visits: t.minVisits,
@@ -589,7 +589,7 @@ function BusinessesPage() {
             bps: newTiers[idx] ?? 0,
             percent_bps: newTiers[idx] ?? 0,
             is_active: true,
-            updated_at: existingTimestamps.get(idx) || fallbackTimestamp,
+            updated_at: existingTimestamps.get(idx + 1) || fallbackTimestamp,
           }));
 
           // Delete existing + insert new (same pattern as business profile Receipts tab)

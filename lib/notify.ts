@@ -12,7 +12,7 @@ const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
 if (vapidPublic && vapidPrivate) {
   webpush.setVapidDetails("mailto:support@useletsgo.com", vapidPublic, vapidPrivate);
 } else {
-  console.warn("[notify] VAPID keys not configured — push notifications disabled. Set NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY.");
+  // VAPID keys not configured — push notifications disabled
 }
 
 // ── Types ──────────────────────────────────────────────

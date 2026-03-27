@@ -378,7 +378,7 @@ function CardImageCarousel({ images, gradient, emoji, height }: { images: { url:
             flex: "0 0 100%", width: "100%", height: "100%", scrollSnapAlign: "start",
           }}>
             <img
-              src={img.url} alt=""
+              src={img.url} alt="Business photo"
               style={{
                 width: "100%", height: "100%", objectFit: "contain",
               }}

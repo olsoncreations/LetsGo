@@ -1504,7 +1504,7 @@ export default function SalesPage() {
     });
 
     // Don't fail if audit log fails, just log it
-    if (auditError) console.warn("Audit log failed:", auditError);
+    // Audit log insert is best-effort; don't fail the main operation
 
     logAudit({
       action: "update_signup",
@@ -1569,7 +1569,6 @@ export default function SalesPage() {
       }
 
       // Use UPSERT to handle both create and update (upsert on conflict with quarter)
-      console.log("Upserting bonus pool record for", quarter);
       const { error: upsertError } = await supabaseBrowser
         .from("sales_bonus_pool")
         .upsert({
@@ -1598,7 +1597,6 @@ export default function SalesPage() {
         return;
       }
 
-      console.log("Successfully marked", quarter, "as paid");
       logAudit({
         action: "mark_bonus_paid",
         tab: AUDIT_TABS.SALES,
@@ -2987,7 +2985,7 @@ export default function SalesPage() {
                         const outboundPremium = outbound.filter(s => s.plan === "premium").length * getConfig("pool_outbound_premium");
                         const inboundAds = inbound.reduce((sum, s) => sum + Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100"), 0);
                         const outboundAds = outbound.reduce((sum, s) => sum + Math.floor((s.ad_spend_cents || 0) / 100) * getConfig("pool_ad_spend_per_100"), 0);
-                        const repeatCustomers = 0; // TODO: compute from repeat customers table
+                        const repeatCustomers = 0; // repeat customers metric not yet tracked
 
                         const rows = [
                           { cat: "Basic Signups", inbound: inboundBasic, outbound: outboundBasic, color: "#4ECDC4" },

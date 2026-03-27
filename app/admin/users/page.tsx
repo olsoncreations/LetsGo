@@ -148,6 +148,9 @@ export default function UsersPage() {
   const [banExpiresAt, setBanExpiresAt] = useState("");
   const [activeBan, setActiveBan] = useState<{ id: string; reason: string; banned_by: string; is_permanent: boolean; expires_at: string | null; created_at: string } | null>(null);
 
+  // Year-to-date earnings for selected user (for W-9 / 1099 checks)
+  const [ytdEarningsCents, setYtdEarningsCents] = useState<number>(0);
+
   // Referral data for selected user
   const [userReferrals, setUserReferrals] = useState<{
     referredBy: string | null;
@@ -337,12 +340,31 @@ export default function UsersPage() {
     }
   }
 
+  async function fetchYtdEarnings(userId: string) {
+    try {
+      const yearStart = `${new Date().getFullYear()}-01-01`;
+      const { data } = await supabaseBrowser
+        .from("receipts")
+        .select("payout_cents")
+        .eq("user_id", userId)
+        .eq("status", "approved")
+        .gte("visit_date", yearStart);
+      const total = (data || []).reduce((sum, r) => sum + ((r.payout_cents as number) || 0), 0);
+      setYtdEarningsCents(total);
+    } catch (err) {
+      console.error("Error fetching YTD earnings:", err);
+      setYtdEarningsCents(0);
+    }
+  }
+
   useEffect(() => {
     if (selectedId) {
       fetchUserReferrals(selectedId);
       fetchUserBan(selectedId);
+      fetchYtdEarnings(selectedId);
     } else {
       setActiveBan(null);
+      setYtdEarningsCents(0);
     }
   }, [selectedId]);
 
@@ -449,24 +471,25 @@ export default function UsersPage() {
 
   async function handleCashout() {
     if (!selected) return;
-    // TODO: Wire to actual payout processing system
-    // For now, log the cashout request and update balance
+    const balanceCents = selected.available_balance || 0;
+    if (balanceCents <= 0) {
+      alert("User has no available balance to cash out.");
+      return;
+    }
     try {
-      const { error } = await supabaseBrowser
-        .from("profiles")
-        .update({
-          available_balance: 0,
-          pending_payout: (selected.pending_payout || 0) + (selected.available_balance || 0),
-        })
-        .eq("id", selected.id);
-
-      if (error) {
-        alert("Error processing cashout: " + error.message);
+      const res = await fetch("/api/admin/cashout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selected.id, amountCents: balanceCents }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        alert("Error processing cashout: " + (result.error || "Unknown error"));
         return;
       }
 
-      logAudit({ action: "initiate_cashout", tab: AUDIT_TABS.USERS, subTab: "Activity & Balance", targetType: "user", targetId: selected.id, entityName: selected.full_name || selected.email || "", fieldName: "available_balance", oldValue: formatMoney(selected.available_balance || 0), newValue: "$0.00" });
-      alert(`✅ Cashout of ${formatMoney(selected.available_balance || 0)} initiated for ${selected.full_name || selected.email}.\n\nThe payout has been moved to "Pending" status.`);
+      logAudit({ action: "initiate_cashout", tab: AUDIT_TABS.USERS, subTab: "Activity & Balance", targetType: "user", targetId: selected.id, entityName: selected.full_name || selected.email || "", fieldName: "available_balance", oldValue: formatMoney(balanceCents), newValue: "$0.00", details: `Admin-initiated cashout, payout ID: ${result.payoutId}` });
+      alert(`Cashout of ${formatMoney(balanceCents)} initiated for ${selected.full_name || selected.email}.\n\nPayout ID: ${result.payoutId}\nStatus: pending`);
       setConfirmModal(null);
       await fetchUsers();
     } catch (err) {
@@ -1379,7 +1402,7 @@ export default function UsersPage() {
                       const bal = selected.available_balance || 0;
                       const minCashout = selected.min_cashout_cents || 2000;
                       const hasPayment = !!selected.payout_method && !!selected.payout_identifier;
-                      const ytdEarnings = selected.this_month_payout || 0; // TODO: replace with actual YTD
+                      const ytdEarnings = ytdEarningsCents;
                       const w9Threshold = 60000; // $600 in cents
                       const w9Warning = 40000; // $400 — start nagging
                       const needsW9 = ytdEarnings >= w9Threshold && selected.w9_status !== "received";
@@ -1819,7 +1842,7 @@ export default function UsersPage() {
                   {(() => {
                     const lifetimeEarnings = selected.lifetime_payout || 0;
                     const currentYear = new Date().getFullYear();
-                    const thisYearEarnings = selected.this_month_payout || 0; // TODO: replace with actual YTD when available
+                    const thisYearEarnings = ytdEarningsCents;
                     const threshold = 60000; // $600 in cents
                     const approaching = thisYearEarnings >= 40000 && thisYearEarnings < threshold;
                     const over = thisYearEarnings >= threshold;

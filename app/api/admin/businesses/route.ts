@@ -83,7 +83,7 @@ export async function DELETE(req: NextRequest): Promise<Response> {
 
       if (delErr) {
         // Some tables may not have business_id column — skip gracefully
-        console.warn(`[delete-business] Skipping ${table}: ${delErr.message}`);
+        // Table may not have business_id column — skip gracefully
       } else {
         deleted[table] = count ?? 0;
       }
@@ -101,8 +101,6 @@ export async function DELETE(req: NextRequest): Promise<Response> {
     }
 
     const bizName = (biz as Record<string, unknown>).public_business_name || (biz as Record<string, unknown>).business_name || businessId;
-    console.log(`[delete-business] Deleted business "${bizName}" and related data:`, deleted);
-
     return NextResponse.json({ success: true, businessName: bizName, deleted });
   } catch (err) {
     console.error("[delete-business] Unexpected error:", err);

@@ -12,7 +12,6 @@ INSERT INTO sales_counties (fips, name, state, zone_id, quota) VALUES
   ('10003', 'New Castle County', 'DE', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),
   ('10005', 'Sussex County', 'DE', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),
   ('11001', 'District of Columbia', 'DC', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),
-  ('11001', 'District of Columbia', 'DC', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),
   ('23001', 'Androscoggin County', 'ME', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),
   ('23003', 'Aroostook County', 'ME', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),
   ('23005', 'Cumberland County', 'ME', (SELECT id FROM sales_zones WHERE name = 'Northeast' LIMIT 1), 0),

@@ -536,7 +536,7 @@ export default function FindFriendsPage() {
                           border: `2px solid rgba(${GREEN_RGB}, 0.3)`,
                         }}>
                           {user.avatarUrl
-                            ? <img src={user.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ? <img src={user.avatarUrl} alt={`${user.userName} profile photo`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                             : getInitial(user.userName)
                           }
                         </div>

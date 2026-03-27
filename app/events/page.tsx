@@ -207,6 +207,10 @@ const GlobalStyles = () => (
       from { opacity: 0; transform: translateY(24px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
     @keyframes pulseGlow {
       0%, 100% { box-shadow: 0 0 8px rgba(${NEON_RGB}, 0.3), 0 0 20px rgba(${NEON_RGB}, 0.1); }
       50% { box-shadow: 0 0 16px rgba(${NEON_RGB}, 0.5), 0 0 40px rgba(${NEON_RGB}, 0.2); }
@@ -365,7 +369,7 @@ const getDateStr = (offset: number) => {
 };
 
 // ── Share Helper ─────────────────────────────────────────────
-const handleShare = async (title: string, text: string) => {
+const handleShare = async (title: string, text: string, onNotify?: (msg: string) => void) => {
   const url = window.location.href;
   // Try native share first (mobile), fall through to clipboard on any failure
   try {
@@ -378,10 +382,11 @@ const handleShare = async (title: string, text: string) => {
   }
   try {
     await navigator.clipboard.writeText(url);
-    alert("Link copied to clipboard!");
+    onNotify?.("Link copied to clipboard!");
   } catch {
-    // Clipboard blocked — final fallback
-    window.prompt("Copy this link:", url);
+    // Clipboard blocked — fallback copy attempt
+    navigator.clipboard.writeText(url).catch(() => {});
+    onNotify?.("Couldn't copy link automatically.");
   }
 };
 
@@ -561,6 +566,7 @@ const EventDetail = ({
   payoutLevels,
   isFollowed,
   onToggleFollow,
+  onNotify,
 }: {
   event: Event;
   onBack: () => void;
@@ -571,6 +577,7 @@ const EventDetail = ({
   payoutLevels?: { level: number; name: string; visits: string }[];
   isFollowed: boolean;
   onToggleFollow: (businessId: string) => void;
+  onNotify: (msg: string) => void;
 }) => {
   const dateParts = getDateParts(event.date);
   const todayDay = getTodayDayName();
@@ -626,7 +633,7 @@ const EventDetail = ({
           </div>
         )}
         <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 8 }}>
-          <ShareBtn size={18} onClick={(e) => { e.stopPropagation(); handleShare(event.title, `${event.business.name} – ${event.title}`); }} />
+          <ShareBtn size={18} onClick={(e) => { e.stopPropagation(); handleShare(event.title, `${event.business.name} – ${event.title}`, onNotify); }} />
           <button onClick={() => onToggleSave(event.id)} style={{
             width: 38, height: 38,
             borderRadius: 20, border: "none", cursor: "pointer", transition: "all 0.25s ease",
@@ -836,6 +843,7 @@ const EventCard = ({
   onToggleSave,
   isFollowed,
   onToggleFollow,
+  onNotify,
   dataTour,
 }: {
   event: Event;
@@ -847,6 +855,7 @@ const EventCard = ({
   onToggleSave: (eventId: string) => void;
   isFollowed: boolean;
   onToggleFollow: (businessId: string) => void;
+  onNotify: (msg: string) => void;
   dataTour?: string;
 }) => {
   const [hovered, setHovered] = useState(false);
@@ -886,7 +895,7 @@ const EventCard = ({
 
         <div style={{ position: "absolute", top: 14, right: 14, zIndex: 10, display: "flex", gap: 6 }}>
           <FollowBusinessBtn followed={isFollowed} onClick={(e) => { e.stopPropagation(); onToggleFollow(event.businessId); }} />
-          <ShareBtn size={14} onClick={(e) => { e.stopPropagation(); handleShare(event.title, `${event.business.name} – ${event.title}`); }} />
+          <ShareBtn size={14} onClick={(e) => { e.stopPropagation(); handleShare(event.title, `${event.business.name} – ${event.title}`, onNotify); }} />
           <button onClick={(e) => { e.stopPropagation(); onToggleSave(event.id); }} style={{
             width: 34, height: 34,
             borderRadius: 20, border: "none", cursor: "pointer", transition: "all 0.25s ease",
@@ -1318,7 +1327,8 @@ export default function EventsPage() {
 
   // Saved/bookmarked events
   const [savedEventIds, setSavedEventIds] = useState<Set<string>>(new Set());
-  const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   // Redirect unauthenticated users to Welcome page
@@ -1456,7 +1466,7 @@ export default function EventsPage() {
   const handleVote = useCallback(async (eventId: string, response: string) => {
     const userId = getUserId();
     if (!userId) {
-      alert("Please log in to vote.");
+      setToast("Please log in to vote."); setTimeout(() => setToast(null), 3000);
       return;
     }
 
@@ -1525,7 +1535,7 @@ export default function EventsPage() {
   const handleToggleSave = useCallback(async (eventId: string) => {
     const userId = getUserId();
     if (!userId) {
-      alert("Please log in to save events.");
+      setToast("Please log in to save events."); setTimeout(() => setToast(null), 3000);
       return;
     }
 
@@ -1541,8 +1551,7 @@ export default function EventsPage() {
 
     // Show toast
     if (!wasSaved) {
-      setSaveToast("Saved! We'll remind you as the event approaches.");
-      setTimeout(() => setSaveToast(null), 3000);
+      showToast("Saved! We'll remind you as the event approaches.");
     }
 
     try {
@@ -1577,7 +1586,7 @@ export default function EventsPage() {
   const handleToggleFollow = useCallback(async (businessId: string) => {
     const userId = getUserId();
     if (!userId) {
-      alert("Please log in to follow businesses.");
+      setToast("Please log in to follow businesses."); setTimeout(() => setToast(null), 3000);
       return;
     }
     const wasFollowed = followedBusinessIds.has(businessId);
@@ -1797,6 +1806,7 @@ export default function EventsPage() {
                 payoutLevels={payoutLevels}
                 isFollowed={followedBusinessIds.has(selectedEvent.businessId)}
                 onToggleFollow={handleToggleFollow}
+                onNotify={showToast}
               />
             ) : (
               <>
@@ -1964,6 +1974,7 @@ export default function EventsPage() {
                             onToggleSave={handleToggleSave}
                             isFollowed={followedBusinessIds.has(event.businessId)}
                             onToggleFollow={handleToggleFollow}
+                            onNotify={showToast}
                             dataTour={undefined}
                           />
                         ))
@@ -1977,20 +1988,19 @@ export default function EventsPage() {
           </div>
         </div>
       </div>
-      {/* Save toast */}
-      {saveToast && (
+      {/* Toast notification */}
+      {toast && (
         <div style={{
           position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
-          padding: "12px 24px", borderRadius: 8,
-          background: `rgba(${NEON_RGB},0.15)`, border: `1px solid rgba(${NEON_RGB},0.3)`,
-          backdropFilter: "blur(16px)", color: NEON,
-          fontSize: 13, fontWeight: 600, fontFamily: FONT_BODY,
-          zIndex: 9999, animation: "fadeIn 0.3s ease both",
-          display: "flex", alignItems: "center", gap: 8,
-          boxShadow: `0 4px 24px rgba(0,0,0,0.4)`,
+          padding: "12px 16px", borderRadius: 12,
+          background: "rgba(0,0,0,0.9)", border: "1px solid rgba(255,255,255,0.1)",
+          backdropFilter: "blur(16px)", color: "#fff",
+          fontSize: 13, fontWeight: 500, fontFamily: FONT_BODY,
+          zIndex: 9999, animation: "toastIn 0.3s ease both",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+          maxWidth: "90vw", textAlign: "center",
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill={NEON}><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
-          {saveToast}
+          {toast}
         </div>
       )}
 

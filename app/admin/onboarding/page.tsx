@@ -115,8 +115,6 @@ async function geocodeAddress(street: string, city: string, state: string, zip: 
       }),
     });
     const validationData = await validationRes.json();
-    console.log("Address Validation API response:", validationData);
-
     if (validationData.result) {
       const result = validationData.result;
       const postalAddr = result.address?.postalAddress;
@@ -138,13 +136,11 @@ async function geocodeAddress(street: string, city: string, state: string, zip: 
         const confidence = verdict?.validationGranularity || "UNKNOWN";
         const hasInferred = verdict?.hasInferredComponents || false;
         const hasReplaced = verdict?.hasReplacedComponents || false;
-        console.log(`Address Validation: granularity=${confidence}, inferred=${hasInferred}, replaced=${hasReplaced}`);
-
         return [suggestion];
       }
     }
   } catch (err) {
-    console.log("Address Validation API not available, falling back to Geocoding:", err);
+    // Address Validation API not available, fall back to Geocoding
   }
 
   // Layer 2: Standard Geocoding API fallback (progressive queries)
@@ -160,7 +156,6 @@ async function geocodeAddress(street: string, city: string, state: string, zip: 
       const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${key}`;
       const res = await fetch(url);
       const data = await res.json();
-      console.log(`Geocode [${query}]:`, data.status, data.results?.length || 0, "results");
       if (data.status === "OK" && data.results?.length) {
         return data.results.slice(0, 3).map((result: { address_components: { long_name: string; short_name: string; types: string[] }[]; formatted_address: string; geometry: { location: { lat: number; lng: number } } }) => {
           const components = result.address_components;
@@ -920,7 +915,7 @@ export default function OnboardingPage() {
 
   // DB-driven business type options
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
-  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+  useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch((err) => console.error("Failed to load tag categories:", err)); }, []);
   const businessTypeOptions = React.useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
     if (!bt || bt.tags.length === 0) {

@@ -79,7 +79,6 @@ async function handlePaymentSuccess(pi: Stripe.PaymentIntent) {
   const paymentAttemptId = pi.metadata?.payment_attempt_id;
 
   if (!invoiceId) {
-    console.warn("[stripe-webhook] payment_intent.succeeded missing invoice_id metadata:", pi.id);
     return;
   }
 
@@ -117,7 +116,6 @@ async function handlePaymentFailure(pi: Stripe.PaymentIntent) {
   const paymentAttemptId = pi.metadata?.payment_attempt_id;
 
   if (!invoiceId) {
-    console.warn("[stripe-webhook] payment_intent.payment_failed missing invoice_id metadata:", pi.id);
     return;
   }
 
@@ -174,7 +172,6 @@ async function handleAccountUpdated(account: Stripe.Account) {
 async function handleUserPaymentSuccess(pi: Stripe.PaymentIntent) {
   const attemptId = pi.metadata?.user_payment_attempt_id;
   if (!attemptId) {
-    console.warn("[stripe-webhook] tier_extension payment_intent.succeeded missing attempt ID:", pi.id);
     return;
   }
 
@@ -201,7 +198,6 @@ async function handleUserPaymentSuccess(pi: Stripe.PaymentIntent) {
 async function handleUserPaymentFailure(pi: Stripe.PaymentIntent) {
   const attemptId = pi.metadata?.user_payment_attempt_id;
   if (!attemptId) {
-    console.warn("[stripe-webhook] tier_extension payment_intent.payment_failed missing attempt ID:", pi.id);
     return;
   }
 

@@ -513,6 +513,8 @@ function CommentSection({
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [posting, setPosting] = useState(false);
+  const [csToast, setCsToast] = useState<string | null>(null);
+  const showCsToast = useCallback((msg: string) => { setCsToast(msg); setTimeout(() => setCsToast(null), 3000); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -542,7 +544,7 @@ function CommentSection({
     if (!newComment.trim() || posting) return;
     const token = await getAuthToken();
     if (!token) {
-      alert("Please sign in to comment.");
+      showCsToast("Please sign in to comment.");
       return;
     }
 
@@ -570,7 +572,7 @@ function CommentSection({
   const handleCommentLike = async (commentId: string) => {
     const token = await getAuthToken();
     if (!token) {
-      alert("Please sign in to like comments.");
+      showCsToast("Please sign in to like comments.");
       return;
     }
 
@@ -743,7 +745,7 @@ function CommentSection({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={c.user.avatarUrl}
-                      alt=""
+                      alt={`${c.user.name} profile photo`}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   ) : (
@@ -904,6 +906,21 @@ function CommentSection({
             </svg>
           </button>
         </div>
+        {/* Toast notification */}
+        {csToast && (
+          <div style={{
+            position: "absolute", bottom: 70, left: "50%", transform: "translateX(-50%)",
+            padding: "12px 16px", borderRadius: 12,
+            background: "rgba(0,0,0,0.9)", border: "1px solid rgba(255,255,255,0.1)",
+            backdropFilter: "blur(16px)", color: "#fff",
+            fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans'",
+            zIndex: 9999, animation: "toastIn 0.3s ease both",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+            maxWidth: "90%", textAlign: "center",
+          }}>
+            {csToast}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -929,6 +946,8 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errMsg, setErrMsg] = useState("");
+  const [modalToast, setModalToast] = useState<string | null>(null);
+  const showModalToast = useCallback((msg: string) => { setModalToast(msg); setTimeout(() => setModalToast(null), 4000); }, []);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1010,7 +1029,7 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
     const uid = await getUserId();
     const token = await getAuthToken();
     if (!uid || !token) {
-      alert("Please sign in to post.");
+      showModalToast("Please sign in to post.");
       return;
     }
 
@@ -1368,24 +1387,13 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
                 if (file && !file.type.startsWith("video/")) {
                   const result = await validatePortraitOrientation(file);
                   if (!result.valid) {
-                    alert(
-                      `Image rejected — landscape orientation is not allowed.\n\n` +
-                      `Your image: ${result.width}×${result.height}px (${(file.size / 1024).toFixed(0)}KB) — landscape\n` +
-                      `Required: portrait orientation (height must be ≥ width)\n` +
-                      `Recommended: 1080×1920 (9:16 ratio)\n\n` +
-                      `Tip: Crop your photo to portrait orientation before uploading.`
-                    );
+                    showModalToast(`Image rejected — landscape not allowed (${result.width}×${result.height}px). Please crop to portrait orientation.`);
                     e.target.value = "";
                     return;
                   }
                   const dimCheck = await validateImageDimensions(file, 1080);
                   if (!dimCheck.valid) {
-                    alert(
-                      `Image rejected — does not meet minimum requirements.\n\n` +
-                      `Your image: ${dimCheck.width}×${dimCheck.height}px (${(file.size / 1024).toFixed(0)}KB)\n` +
-                      `Required: at least 1080px wide, portrait orientation (9:16 recommended)\n\n` +
-                      `Tip: Use a photo editor to resize or crop your image to at least 1080×1920 before uploading.`
-                    );
+                    showModalToast(`Image rejected — too small (${dimCheck.width}×${dimCheck.height}px). Minimum 1080px wide, portrait orientation required.`);
                     e.target.value = "";
                     return;
                   }
@@ -1820,6 +1828,21 @@ function PostExperienceModal({ onClose }: { onClose: () => void }) {
             {uploading ? "Uploading..." : "Submit for Review"}
           </button>
         </div>
+        {/* Toast notification */}
+        {modalToast && (
+          <div style={{
+            position: "absolute", bottom: 80, left: "50%", transform: "translateX(-50%)",
+            padding: "12px 16px", borderRadius: 12,
+            background: "rgba(0,0,0,0.9)", border: "1px solid rgba(255,255,255,0.1)",
+            backdropFilter: "blur(16px)", color: "#fff",
+            fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans'",
+            zIndex: 9999, animation: "toastIn 0.3s ease both",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+            maxWidth: "90%", textAlign: "center",
+          }}>
+            {modalToast}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2554,6 +2577,8 @@ export default function ExperiencesPage() {
   const [filterBizName, setFilterBizName] = useState<string | null>(null);
   const [followedBizIds, setFollowedBizIds] = useState<Set<string>>(new Set());
   const [feedHint, setFeedHint] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
 
   // Payout breakdown modal
   const [payoutModalBiz, setPayoutModalBiz] = useState<{ id: string; name: string } | null>(null);
@@ -2642,7 +2667,7 @@ export default function ExperiencesPage() {
   const handleToggleFollow = useCallback(async (bizId: string) => {
     const uid = await getUserId();
     if (!uid) {
-      alert("Please sign in to follow businesses.");
+      showToast("Please sign in to follow businesses.");
       return;
     }
 
@@ -2659,7 +2684,7 @@ export default function ExperiencesPage() {
 
     try {
       const token = await getAuthToken();
-      if (!token) { alert("Please sign in to follow businesses."); return; }
+      if (!token) { showToast("Please sign in to follow businesses."); return; }
       const res = await fetch("/api/businesses/follow", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2797,7 +2822,7 @@ export default function ExperiencesPage() {
   const handleLikeToggle = useCallback(async (postId: string) => {
     const token = await getAuthToken();
     if (!token) {
-      alert("Please sign in to like posts.");
+      showToast("Please sign in to like posts.");
       return;
     }
 
@@ -3481,8 +3506,25 @@ export default function ExperiencesPage() {
         />
       )}
 
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          padding: "12px 16px", borderRadius: 12,
+          background: "rgba(0,0,0,0.9)", border: "1px solid rgba(255,255,255,0.1)",
+          backdropFilter: "blur(16px)", color: "#fff",
+          fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans'",
+          zIndex: 9999, animation: "toastIn 0.3s ease both",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+          maxWidth: "90vw", textAlign: "center",
+        }}>
+          {toast}
+        </div>
+      )}
+
       <style>{`
         ::-webkit-scrollbar { display: none; }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
       `}</style>
     </div>
   );

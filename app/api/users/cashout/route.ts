@@ -18,6 +18,9 @@ async function authenticate(req: NextRequest) {
 }
 
 // ─── Rate limit: one cashout per user per 30 seconds ───
+// Best-effort in-memory guard to prevent double-clicks.
+// Real safety is handled by the atomic request_cashout RPC (balance check + monthly cap).
+// In multi-instance deployments this resets per instance, which is acceptable.
 const cashoutTimestamps = new Map<string, number>();
 
 function checkRateLimit(userId: string): boolean {

@@ -249,7 +249,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   // Apply Fields to Refs
   // ============================================================================
   const applyFieldsToRefs = useCallback((fields: Record<string, string>) => {
-    console.log("[Profile] Applying fields to refs:", fields);
     if (nameRef.current) nameRef.current.value = fields.name ?? "";
     if (typeRef.current) typeRef.current.value = fields.type ?? "restaurant_bar";
     setSelectedBusinessType(fields.type ?? "restaurant_bar");
@@ -281,7 +280,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     if (hydratedBusinessIdRef.current === businessId) return; // Already hydrated
 
     // Form should now be rendered, apply the data
-    console.log("[Profile] Form rendered, applying loaded data");
     hydratedBusinessIdRef.current = businessId;
     applyFieldsToRefs(loadedData.fields);
     setHours(loadedData.hours);
@@ -403,8 +401,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
           }
         }
 
-        console.log("[Profile] Parsed fields:", baseFields);
-
         if (cancelled) return;
 
         // Store data and set loading false - effect will apply when form renders
@@ -437,7 +433,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
 
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!key) {
-      console.warn("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY");
       return;
     }
 
@@ -505,7 +500,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
         if (zipRef.current && parsed.zip) zipRef.current.value = parsed.zip;
       });
     } catch (e) {
-      console.warn("Google Places init failed:", e);
+      // Google Places init failed — autocomplete unavailable
     }
   }
 

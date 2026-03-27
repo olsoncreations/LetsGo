@@ -60,18 +60,18 @@ export default function Overview({ businessId, isPremium, setActiveTab }: Overvi
   const [loading, setLoading] = useState(true);
   const [loadNote, setLoadNote] = useState<string | null>(null);
 
-  const [upcomingEventsCount, setUpcomingEventsCount] = useState<number>(3); // fallback
-  const [activeCampaignCount, setActiveCampaignCount] = useState<number>(1); // fallback
-  const [mediaCount, setMediaCount] = useState<number>(0); // fallback
-  const [latestInvoiceTotal, setLatestInvoiceTotal] = useState<number>(0); // fallback
+  const [upcomingEventsCount, setUpcomingEventsCount] = useState<number>(0);
+  const [activeCampaignCount, setActiveCampaignCount] = useState<number>(0);
+  const [mediaCount, setMediaCount] = useState<number>(0);
+  const [latestInvoiceTotal, setLatestInvoiceTotal] = useState<number>(0);
   const [pendingReceiptsCount, setPendingReceiptsCount] = useState<number>(0); // real data
   const [pendingReceiptsDollars, setPendingReceiptsDollars] = useState<number>(0); // real data
 
   // Analytics (customersSent and monthlyGrowth still need real receipt/user aggregation)
   const analytics = useMemo(
     () => ({
-      customersSent: 0, // TODO: needs real receipt/user aggregation
-      monthlyGrowth: 0, // TODO: needs baseline comparison
+      customersSent: 0,
+      monthlyGrowth: 0,
     }),
     []
   );

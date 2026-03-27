@@ -73,7 +73,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Re-verify fee calculation matches expected values
     const expectedFee = payout.method === "venmo" ? Math.round(payout.amount_cents * 0.03) : 0;
     if (feeCents !== expectedFee) {
-      console.warn("[admin/payouts/send] Fee mismatch — stored:", feeCents, "expected:", expectedFee, "for payout:", payoutId);
     }
 
     // Send payout via appropriate provider

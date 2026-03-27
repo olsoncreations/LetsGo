@@ -18,7 +18,7 @@ function wrapInTemplate(
 ): string {
   const ctaBlock = ctaUrl
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0"><tr><td align="center">
-        <a href="https://useletsgo.com${ctaUrl}" style="display:inline-block;padding:14px 36px;background-color:#FF2D78;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:50px;letter-spacing:0.05em">${ctaText || "Open LetsGo"}</a>
+        <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.useletsgo.com"}${ctaUrl}" style="display:inline-block;padding:14px 36px;background-color:#FF2D78;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;border-radius:50px;letter-spacing:0.05em">${ctaText || "Open LetsGo"}</a>
       </td></tr></table>`
     : "";
 
@@ -32,7 +32,7 @@ function wrapInTemplate(
 
         <!-- Logo -->
         <tr><td align="center" style="padding-bottom:32px">
-          <img src="https://gzswywyvqkxynefbgclq.supabase.co/storage/v1/object/public/business-logos/lg-logo.png" alt="LetsGo" width="120" style="display:block;margin:0 auto;border:0;outline:none;height:auto" />
+          <img src="${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/business-logos/lg-logo.png" alt="LetsGo" width="120" style="display:block;margin:0 auto;border:0;outline:none;height:auto" />
           <div style="width:60px;height:2px;background-color:${accentColor};margin:8px auto 0"></div>
         </td></tr>
 
@@ -59,9 +59,9 @@ function wrapInTemplate(
         <tr><td style="text-align:center;padding-top:32px;color:#555570;font-size:11px;line-height:1.6">
           <p style="margin:0;letter-spacing:0.08em">Go. Play. Eat. Get paid to live your best life.</p>
           <p style="margin:10px 0 0">
-            <a href="https://useletsgo.com/profile" style="color:#7a7a90;text-decoration:underline">Notification Settings</a>
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.useletsgo.com"}/profile" style="color:#7a7a90;text-decoration:underline">Notification Settings</a>
             &nbsp;&middot;&nbsp;
-            <a href="https://useletsgo.com/privacy" style="color:#7a7a90;text-decoration:underline">Privacy</a>
+            <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://www.useletsgo.com"}/privacy" style="color:#7a7a90;text-decoration:underline">Privacy</a>
           </p>
           <p style="margin:10px 0 0;color:#333345">&copy; ${new Date().getFullYear()} LetsGo</p>
         </td></tr>

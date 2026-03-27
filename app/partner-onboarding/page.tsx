@@ -548,7 +548,6 @@ export default function PartnerOnboardingPage() {
         
         if (!session) {
           // Not logged in, redirect to welcome page
-          console.log("No session, redirecting to /welcome");
           router.push("/welcome");
           return;
         }
@@ -890,15 +889,25 @@ function Progress({ step }: { step: number }) {
 }
 
 function HelpBadge() {
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
+
   return (
-    <div
-      className="help-badge"
-      onClick={() => alert("Chat support would open here! Available Mon-Fri 9am-6pm EST")}
-      role="button"
-      tabIndex={0}
-    >
-      💬 Need Help?
-    </div>
+    <>
+      <div
+        className="help-badge"
+        onClick={() => showToast("Chat support available Mon-Fri 9am-6pm EST. Email: support@useletsgo.com")}
+        role="button"
+        tabIndex={0}
+      >
+        💬 Need Help?
+      </div>
+      {toast && (
+        <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "rgba(0,0,0,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 24px rgba(0,0,0,0.5)", fontSize: 14, whiteSpace: "nowrap" }}>
+          {toast}
+        </div>
+      )}
+    </>
   );
 }
 
