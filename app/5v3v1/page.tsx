@@ -9,6 +9,7 @@ import {
 } from "@/lib/businessNormalize";
 import { getDistanceBetweenZips } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
@@ -427,7 +428,7 @@ function BusinessMiniCard({ biz, selected, onSelect, disabled, number, distanceM
           images={biz.images}
           gradient={getBusinessGradient(biz.id)}
           emoji={getBusinessEmoji(biz.type)}
-          height={140}
+          height={280}
         />
 
         {selected && number && (
@@ -858,8 +859,8 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                       }}>
                         {biz ? (
                           <div>
-                            <div style={{ width: "100%", height: 180, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
-                              <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={180} />
+                            <div style={{ width: "100%", height: 280, borderRadius: 8, overflow: "hidden", marginBottom: 10 }}>
+                              <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={280} />
                             </div>
                             <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>{biz.type}</div>
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
@@ -2392,52 +2393,61 @@ function PickThreeStep({ fiveChoices, selectedThree, setSelectedThree, sender, o
         Pick your <span style={{ color: COLORS.neonPurple, fontWeight: 700 }}>top 3</span> from the options below
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "0 16px" }}>
-        {fiveChoices.map(biz => (
-          <button key={biz.id} onClick={() => toggleSelect(biz.id)}
-            disabled={selectedThree.length >= 3 && !selectedThree.includes(biz.id)}
-            style={{
-              display: "flex", alignItems: "center", gap: 14,
-              padding: 0, borderRadius: 16, overflow: "hidden",
-              border: `1px solid ${selectedThree.includes(biz.id) ? COLORS.neonPurple : COLORS.cardBorder}`,
-              background: selectedThree.includes(biz.id) ? `${COLORS.neonPurple}08` : COLORS.cardBg,
-              cursor: selectedThree.length >= 3 && !selectedThree.includes(biz.id) ? "default" : "pointer",
-              transition: "all 0.3s", textAlign: "left",
-              opacity: selectedThree.length >= 3 && !selectedThree.includes(biz.id) ? 0.35 : 1,
-              boxShadow: selectedThree.includes(biz.id) ? `0 0 16px ${COLORS.neonPurple}20` : "none",
-            }}
-          >
-            <div style={{ width: 90, height: 90, flexShrink: 0, position: "relative", overflow: "hidden", borderRadius: "16px 0 0 16px" }}>
-              <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={90} />
-              {selectedThree.includes(biz.id) && (
-                <div style={{
-                  position: "absolute", inset: 0, zIndex: 5,
-                  background: `${COLORS.neonPurple}25`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "0 16px" }}>
+        {fiveChoices.map(biz => {
+          const isSelected = selectedThree.includes(biz.id);
+          const disabled = selectedThree.length >= 3 && !isSelected;
+          return (
+            <button key={biz.id} onClick={() => toggleSelect(biz.id)}
+              disabled={disabled}
+              style={{
+                position: "relative", borderRadius: 16, overflow: "hidden",
+                border: `1px solid ${isSelected ? COLORS.neonPurple : COLORS.cardBorder}`,
+                background: isSelected ? `${COLORS.neonPurple}08` : COLORS.cardBg,
+                cursor: disabled ? "default" : "pointer",
+                transition: "all 0.3s", textAlign: "left", padding: 0,
+                opacity: disabled ? 0.35 : 1,
+                boxShadow: isSelected ? `0 0 16px ${COLORS.neonPurple}20` : "none",
+                transform: isSelected ? "scale(1.02)" : "scale(1)",
+              }}
+            >
+              <div style={{ position: "relative", overflow: "hidden" }}>
+                <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={280} />
+                {isSelected && (
                   <div style={{
-                    width: 32, height: 32, borderRadius: "50%",
-                    background: COLORS.neonPurple, display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: `0 0 12px ${COLORS.neonPurple}`,
+                    position: "absolute", inset: 0, zIndex: 5,
+                    background: `${COLORS.neonPurple}25`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    <span style={{ color: "#fff", fontWeight: 800, fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}>
-                      {selectedThree.indexOf(biz.id) + 1}
-                    </span>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: "50%",
+                      background: COLORS.neonPurple, display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: `0 0 12px ${COLORS.neonPurple}`,
+                    }}>
+                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 16, fontFamily: "'DM Sans', sans-serif" }}>
+                        {selectedThree.indexOf(biz.id) + 1}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <div style={{ flex: 1, padding: "12px 14px 12px 0" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif", marginBottom: 3 }}>{biz.name}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>{biz.type}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonYellow }}>{biz.price}</span>
-                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>·</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.neonGreen }}>{biz.payout[0]}–{biz.payout[6]}%</span>
+                )}
+                {biz.isOpen && (
+                  <div style={{ position: "absolute", top: 8, left: 8, zIndex: 6, padding: "3px 8px", borderRadius: 6, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", border: "1px solid rgba(57,255,20,0.25)" }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: COLORS.neonGreen }}>● Open</span>
+                  </div>
+                )}
               </div>
-            </div>
-          </button>
-        ))}
+              <div style={{ padding: "10px 12px 12px" }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", fontFamily: "'DM Sans', sans-serif", marginBottom: 3, lineHeight: 1.2 }}>{biz.name}</div>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>{biz.type}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.neonYellow }}>{biz.price}</span>
+                  <span style={{ fontSize: 11, color: COLORS.textSecondary }}>·</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.neonGreen }}>{biz.payout[0]}–{biz.payout[6]}%</span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       <div style={{
@@ -2469,6 +2479,7 @@ function PickOneStep({ threeChoices, selectedOne, setSelectedOne, friend, onFina
   friend: GameFriend;
   onFinalize: () => void;
 }) {
+  const isMobile = useIsMobile();
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: "0 0 120px" }}>
       <div style={{ padding: "20px 20px 4px", textAlign: "center" }}>
@@ -2491,7 +2502,7 @@ function PickOneStep({ threeChoices, selectedOne, setSelectedOne, friend, onFina
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "20px 16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14, padding: "20px 16px" }}>
         {threeChoices.map(biz => {
           const isSelected = selectedOne === biz.id;
           return (
@@ -2503,8 +2514,8 @@ function PickOneStep({ threeChoices, selectedOne, setSelectedOne, friend, onFina
               boxShadow: isSelected ? `0 0 24px ${COLORS.neonGreen}30` : "none",
               transform: isSelected ? "scale(1.02)" : "scale(1)",
             }}>
-              <div style={{ width: "100%", height: 160, position: "relative", overflow: "hidden" }}>
-                <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={160} />
+              <div style={{ width: "100%", height: isMobile ? 200 : 280, position: "relative", overflow: "hidden" }}>
+                <CardImageCarousel images={biz.images} gradient={getBusinessGradient(biz.id)} emoji={getBusinessEmoji(biz.type)} height={isMobile ? 200 : 280} />
                 {isSelected && (
                   <div style={{
                     position: "absolute", inset: 0, zIndex: 5, background: `${COLORS.neonGreen}15`,
@@ -2564,6 +2575,7 @@ function PickOneStep({ threeChoices, selectedOne, setSelectedOne, friend, onFina
 // ═══════════════════════════════════════════════════
 function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_VISIT_THRESHOLDS }: { business: DiscoveryBusiness; friend: GameFriend; onPlayAgain: () => void; visitThresholds?: VisitThreshold[] }) {
   const resultRouter = useRouter();
+  const isMobile = useIsMobile();
   const [revealed, setRevealed] = useState(false);
   const [showPayouts, setShowPayouts] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -2602,10 +2614,11 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
 
   return (
     <div style={{
-      flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "12px 16px", paddingBottom: "env(safe-area-inset-bottom, 32px)",
-      overflowY: "auto",
+      flex: "1 1 auto", display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "12px 16px 120px",
+      overflowY: "auto", overflowX: "hidden",
       WebkitOverflowScrolling: "touch",
+      minHeight: 0,
     }}>
       <style>{`
         @keyframes confettiDrop { 0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
@@ -2653,13 +2666,13 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
       </div>
 
       <div style={{
-        width: "100%", maxWidth: 380, borderRadius: 24, overflow: "hidden",
+        width: "100%", maxWidth: 380, borderRadius: 24, overflow: "hidden", flexShrink: 0,
         border: `2px solid ${COLORS.neonGreen}`, background: COLORS.cardBg,
         animation: revealed ? "revealScale 0.8s ease-out 0.4s forwards, glowPulse 3s ease-in-out infinite 1.2s" : "none",
         opacity: revealed ? 1 : 0,
       }}>
-        <div style={{ width: "100%", height: 200, position: "relative", overflow: "hidden" }}>
-          <CardImageCarousel images={business.images} gradient={getBusinessGradient(business.id)} emoji={getBusinessEmoji(business.type)} height={200} />
+        <div style={{ width: "100%", height: isMobile ? 200 : 280, position: "relative", overflow: "hidden" }}>
+          <CardImageCarousel images={business.images} gradient={getBusinessGradient(business.id)} emoji={getBusinessEmoji(business.type)} height={isMobile ? 200 : 280} />
         </div>
 
         <div style={{ padding: "10px 14px 14px" }}>
@@ -3099,15 +3112,22 @@ function FiveThreeOne() {
             // P2 joined and P1's pick5 was submitted — now waiting for P2's pick3
             // (stay on waiting step — P2 needs to pick 3)
           }
-          if (updated.status === "pick1" && viewMode === "player1") {
+          if (updated.status === "pick1" && updated.player1_id === user?.id) {
             // P2 submitted pick3 — advance P1 to pick 1
             setSelectedThree(updated.pick3_ids ?? []);
             setStep(3);
+          }
+          if (updated.status === "pick1" && updated.player2_id === user?.id) {
+            // P2 submitted pick3 — P2 goes to waiting screen
+            setViewMode("player1");
+            setStep(2);
           }
           if (updated.status === "complete") {
             // Game complete — both players see result
             setSelectedOne(updated.pick1_id);
             setStep(4);
+            const isP1 = updated.player1_id === user?.id;
+            if (!isP1) setViewMode("player2");
           }
           // P2 joined
           if (updated.player2_id && !gameSession.player2_id) {
@@ -3140,14 +3160,9 @@ function FiveThreeOne() {
         const { gameSession: gs } = await joinRes.json();
         // Look up opponent (P1) name for friend display
         const opponentId = gs.player1_id;
-        setSelectedFriend({
-          friendshipId: "", id: opponentId,
-          name: "Friend", username: null, avatarUrl: null, status: "online",
-        });
-        setGameSession(gs);
-        setSelectedFive(gs.pick5_ids ?? []);
-        setSelectedThree(gs.pick3_ids ?? []);
-        setViewMode("player2");
+        const opponentInfo = { id: opponentId, name: "Friend" };
+        // Use restoreGameState for proper step/viewMode handling (especially for completed games)
+        restoreGameState(gs, opponentInfo);
         return;
       }
 
@@ -3158,7 +3173,7 @@ function FiveThreeOne() {
       });
       if (!listRes.ok) { showToast("Failed to load games. Please try again."); return; }
       const { games } = await listRes.json();
-      const gs = (games ?? [] as GameWithNames[]).find((g: GameWithNames) => g.game_code === urlCode && g.status !== "complete" && g.status !== "expired");
+      const gs = (games ?? [] as GameWithNames[]).find((g: GameWithNames) => g.game_code === urlCode && g.status !== "expired");
       if (!gs) { showToast("Game not found or has expired."); return; }
 
       // Check expiration
@@ -3200,7 +3215,10 @@ function FiveThreeOne() {
       else { setViewMode("player2"); }
     }
     else if (gs.status === "pick1") { setStep(isP1 ? 3 : 2); }
-    else if (gs.status === "complete") { setStep(4); }
+    else if (gs.status === "complete") {
+      setStep(4);
+      if (!isP1) setViewMode("player2");
+    }
   };
 
   const fiveBusinesses = businesses.filter(b => selectedFive.includes(b.id));
@@ -3476,7 +3494,11 @@ function FiveThreeOne() {
         <ResultStep business={finalBusiness} friend={selectedFriend} onPlayAgain={handleReset} visitThresholds={visitThresholds} />
       )}
 
-      {viewMode === "player2" && (
+      {viewMode === "player2" && step === 4 && finalBusiness && selectedFriend && (
+        <ResultStep business={finalBusiness} friend={selectedFriend} onPlayAgain={handleReset} visitThresholds={visitThresholds} />
+      )}
+
+      {viewMode === "player2" && step !== 4 && (
         <PickThreeStep
           fiveChoices={fiveBusinesses}
           selectedThree={selectedThree} setSelectedThree={setSelectedThree}

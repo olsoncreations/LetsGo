@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useIsMobile } from "@/lib/useIsMobile";
 import {
   AlertCircle,
   ArrowUp,
@@ -258,6 +259,7 @@ function FocalPicker({
 }
 
 export default function Media({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -1034,7 +1036,7 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
           gap: "1rem",
           marginBottom: "2rem",
         }}
@@ -2328,7 +2330,7 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
     );
   }
   function Grid({ children }: { children: React.ReactNode }) {
-    return <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "1.5rem" }}>{children}</div>;
+    return <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(250px, 1fr))", gap: "1.5rem" }}>{children}</div>;
   }
   function Card({ item, colors, onClick }: { item: UiMediaItem; colors: Record<string, string>; onClick: () => void }) {
     const isBanned = item.adminStatus === "banned";

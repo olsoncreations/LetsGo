@@ -108,7 +108,7 @@ export async function PATCH(
         type: NOTIFICATION_TYPES.GAME_ADVANCED,
         title: "Your Turn!",
         body: "5 places picked — now narrow it down to 3!",
-        metadata: { gameId, href: "/5v3v1" },
+        metadata: { gameId, gameCode: game.game_code, href: "/5v3v1" },
       });
     }
 
@@ -158,7 +158,7 @@ export async function PATCH(
         type: NOTIFICATION_TYPES.GAME_ADVANCED,
         title: "Final Pick!",
         body: "3 places left — make the final call!",
-        metadata: { gameId, href: "/5v3v1" },
+        metadata: { gameId, gameCode: game.game_code, href: "/5v3v1" },
       });
     }
 
@@ -215,7 +215,7 @@ export async function PATCH(
         type: NOTIFICATION_TYPES.GAME_COMPLETE,
         title: "Game Over!",
         body: `The verdict is in — you're going to ${bizName}!`,
-        metadata: { gameId, winnerBusinessId: finalPick, businessName: bizName, href: "/5v3v1" },
+        metadata: { gameId, gameCode: game.game_code, winnerBusinessId: finalPick, businessName: bizName, href: "/5v3v1" },
       });
     }
 

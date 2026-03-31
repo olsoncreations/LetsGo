@@ -107,8 +107,8 @@ interface Friend {
 }
 
 interface FilterState {
-  category: string;
-  price: string;
+  category: string[];
+  price: string[];
   sort: string;
   openNow: boolean;
   distance: number;
@@ -1587,7 +1587,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const [confirmLockIn, setConfirmLockIn] = useState(false);
   const [suggestionsSubmitted, setSuggestionsSubmitted] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    category: "All", price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [], browseFrom: "All Businesses",
+    category: [], price: [], sort: "Nearest", openNow: false, distance: 15, tags: [], browseFrom: "All Businesses",
   });
 
   // DB-driven tag categories
@@ -1599,10 +1599,12 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   }, [tagCats]);
   // Smart visibility: hide Cuisine/Dietary when non-food category selected
   const selectedCatIsFood = useMemo(() => {
-    if (filters.category === "All") return true;
+    if (filters.category.length === 0) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
-    const tag = bt?.tags.find(t => t.name === filters.category);
-    return tag?.is_food ?? true;
+    return filters.category.some(cat => {
+      const tag = bt?.tags.find(t => t.name === cat);
+      return tag?.is_food ?? true;
+    });
   }, [filters.category, tagCats]);
 
   // Sync selections from server (private pool — only current user's picks)
@@ -1721,10 +1723,22 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
             whiteSpace: "nowrap", fontFamily: FONT_BODY, ...sx,
           }}>{label}</button>
         );
-        const sectionLabel = (text: string) => (
-          <div style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 10, fontFamily: FONT_BODY }}>{text}</div>
+        const [openSections, setOpenSections] = useState<Record<string, boolean>>({ Distance: true });
+        const toggleSection = (name: string) => setOpenSections(p => ({ ...p, [name]: !p[name] }));
+        const sectionLabel = (text: string, collapsible = true) => (
+          <div
+            onClick={collapsible ? () => toggleSection(text) : undefined}
+            style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: openSections[text] ? 10 : 0, fontFamily: FONT_BODY, cursor: collapsible ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "space-between", userSelect: "none" }}
+          >
+            <span>{text}</span>
+            {collapsible && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ transition: "transform 0.2s ease", transform: openSections[text] ? "rotate(180deg)" : "rotate(0deg)" }}>
+                <path d="M6 9l6 6 6-6" stroke={TEXT_DIM} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
         );
-        const activeFilterCount = (filters.category !== "All" ? 1 : 0) + (filters.price !== "Any" ? 1 : 0) + (filters.sort !== "Nearest" ? 1 : 0) + (filters.openNow ? 1 : 0) + filters.tags.length + (filters.browseFrom !== "All Businesses" ? 1 : 0);
+        const activeFilterCount = filters.category.length + filters.price.length + (filters.sort !== "Nearest" ? 1 : 0) + (filters.openNow ? 1 : 0) + filters.tags.length + (filters.browseFrom !== "All Businesses" ? 1 : 0);
         return (
           <>
             {/* Toggle button */}
@@ -1751,31 +1765,57 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                 background: "rgba(255,255,255,0.02)", border: `1px solid ${CARD_BORDER}`,
                 animation: "fadeIn 0.3s ease both",
               }}>
-                {/* Category */}
+                {/* Browse From (moved to top) */}
                 <div style={{ marginBottom: 16 }}>
-                  {sectionLabel("Category")}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {FILTER_CATEGORIES.map(c => glassPill(c, filters.category === c, () => setFilters(p => ({ ...p, category: c })), { fontSize: 11, padding: "6px 14px" }))}
-                  </div>
+                  {sectionLabel("Browse From")}
+                  {openSections["Browse From"] && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {[
+                        { label: "🌐 All Businesses", val: "All Businesses" },
+                        { label: "❤️ My Saved", val: "My Saved" },
+                        { label: "✨ New to Me", val: "New to Me" },
+                      ].map(opt => glassPill(opt.label, filters.browseFrom === opt.val, () => setFilters(p => ({ ...p, browseFrom: opt.val })), { fontSize: 12, padding: "8px 16px" }))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Price */}
+                {/* Category (multi-select) */}
+                <div style={{ marginBottom: 16 }}>
+                  {sectionLabel("Category")}
+                  {openSections["Category"] && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {glassPill("All", filters.category.length === 0, () => setFilters(p => ({ ...p, category: [] })), { fontSize: 11, padding: "6px 14px" })}
+                      {FILTER_CATEGORIES.filter(c => c !== "All").map(c => glassPill(c, filters.category.includes(c), () => setFilters(p => ({
+                        ...p, category: p.category.includes(c) ? p.category.filter(x => x !== c) : [...p.category, c],
+                      })), { fontSize: 11, padding: "6px 14px" }))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Price (multi-select) */}
                 <div style={{ marginBottom: 16 }}>
                   {sectionLabel("Price")}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {PRICE_FILTERS.map(p => glassPill(p, filters.price === p, () => setFilters(prev => ({ ...prev, price: p })), {}, PRICE_TOOLTIPS[p]))}
-                  </div>
+                  {openSections["Price"] && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {glassPill("Any", filters.price.length === 0, () => setFilters(p => ({ ...p, price: [] })), {}, PRICE_TOOLTIPS["Any"])}
+                      {PRICE_FILTERS.filter(p => p !== "Any").map(p => glassPill(p, filters.price.includes(p), () => setFilters(prev => ({
+                        ...prev, price: prev.price.includes(p) ? prev.price.filter(x => x !== p) : [...prev.price, p],
+                      })), {}, PRICE_TOOLTIPS[p]))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Sort By */}
                 <div style={{ marginBottom: 16 }}>
                   {sectionLabel("Sort By")}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {SORT_OPTIONS.map(s => glassPill(s, filters.sort === s, () => setFilters(prev => ({ ...prev, sort: s }))))}
-                  </div>
+                  {openSections["Sort By"] && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {SORT_OPTIONS.map(s => glassPill(s, filters.sort === s, () => setFilters(prev => ({ ...prev, sort: s }))))}
+                    </div>
+                  )}
                 </div>
 
-                {/* Distance */}
+                {/* Distance (always expanded) */}
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: "uppercase", letterSpacing: "0.12em", fontFamily: FONT_BODY }}>Distance</span>
@@ -1810,15 +1850,18 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                   .filter(c => !c.requires_food || selectedCatIsFood)
                   .map(c => {
                     const catTags = c.tags.map(t => t.name);
+                    const sectionKey = `${c.icon} ${c.name}`;
                     return (
                       <div key={c.id} style={{ marginBottom: 16 }}>
-                        {sectionLabel(`${c.icon} ${c.name}`)}
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {glassPill("All", !filters.tags.some(t => catTags.includes(t)), () => setFilters(p => ({ ...p, tags: p.tags.filter(t => !catTags.includes(t)) })), { fontSize: 11, padding: "6px 14px" })}
-                          {catTags.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
-                            ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                          })), { fontSize: 11, padding: "6px 14px" }))}
-                        </div>
+                        {sectionLabel(sectionKey)}
+                        {openSections[sectionKey] && (
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {glassPill("All", !filters.tags.some(t => catTags.includes(t)), () => setFilters(p => ({ ...p, tags: p.tags.filter(t => !catTags.includes(t)) })), { fontSize: 11, padding: "6px 14px" })}
+                            {catTags.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
+                              ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                            })), { fontSize: 11, padding: "6px 14px" }))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1827,34 +1870,26 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                   <>
                     <div style={{ marginBottom: 16 }}>
                       {sectionLabel("Cuisine")}
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {DEFAULT_CUISINE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
-                          ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                        })), { fontSize: 11, padding: "6px 14px" }))}
-                      </div>
+                      {openSections["Cuisine"] && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {DEFAULT_CUISINE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
+                            ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                          })), { fontSize: 11, padding: "6px 14px" }))}
+                        </div>
+                      )}
                     </div>
                     <div style={{ marginBottom: 16 }}>
                       {sectionLabel("Vibe & Atmosphere")}
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {DEFAULT_VIBE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
-                          ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                        })), { fontSize: 11, padding: "6px 14px" }))}
-                      </div>
+                      {openSections["Vibe & Atmosphere"] && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {DEFAULT_VIBE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
+                            ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                          })), { fontSize: 11, padding: "6px 14px" }))}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
-
-                {/* Browse From */}
-                <div>
-                  {sectionLabel("Browse From")}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {[
-                      { label: "🌐 All Businesses", val: "All Businesses" },
-                      { label: "❤️ My Saved", val: "My Saved" },
-                      { label: "✨ New to Me", val: "New to Me" },
-                    ].map(opt => glassPill(opt.label, filters.browseFrom === opt.val, () => setFilters(p => ({ ...p, browseFrom: opt.val })), { fontSize: 12, padding: "8px 16px" }))}
-                  </div>
-                </div>
               </div>
             )}
           </>

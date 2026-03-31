@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { AlertCircle, Bell, Check, HelpCircle, Image as ImageIcon, Mail, MessageSquare, Paperclip, Phone, Send, X, Loader2 } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 type FAQ = { q: string; a: string };
 
@@ -28,6 +29,7 @@ interface ChatMessage {
 }
 
 export default function Support({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -500,7 +502,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
           gap: "1rem",
         }}
       >
@@ -517,19 +519,20 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
           }}
-          onClick={() => window.location.href = "mailto:support@letsgo.com"}
+          onClick={() => window.location.href = "mailto:support@useletsgo.com"}
           onKeyDown={(e) => {
-            if (e.key === "Enter") window.location.href = "mailto:support@letsgo.com";
+            if (e.key === "Enter") window.location.href = "mailto:support@useletsgo.com";
           }}
         >
           <Mail size={32} style={{ color: colors.primary, marginBottom: "1rem" }} />
           <div style={{ fontSize: "1.125rem", fontWeight: 800, marginBottom: "0.5rem" }}>Email Support</div>
-          <div style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.75)" }}>support@letsgo.com</div>
+          <div style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.75)" }}>support@useletsgo.com</div>
           <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.55)", marginTop: "0.5rem" }}>
             Response within 24 hours
           </div>
         </div>
 
+        {/* Phone Support — hidden until business phone is set up
         <div
           role="button"
           tabIndex={0}
@@ -555,6 +558,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
             Mon–Fri 9AM–6PM CST
           </div>
         </div>
+        */}
 
         <div
           role="button"

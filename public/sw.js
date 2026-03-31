@@ -53,8 +53,8 @@ self.addEventListener("notificationclick", function (event) {
   var metadata = (event.notification.data && event.notification.data.metadata) || {};
   var path = typeToPath[notifType] || "/";
 
-  // Append game code if available
-  if (notifType === "game_invite" && metadata.gameCode) {
+  // Only game_complete goes directly to the results screen with the game code
+  if (notifType === "game_complete" && metadata.gameCode) {
     path = "/5v3v1?code=" + metadata.gameCode;
   }
 

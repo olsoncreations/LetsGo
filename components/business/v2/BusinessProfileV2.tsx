@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useIsMobile, useIsTablet } from "@/lib/useIsMobile";
 
 // Tabs
 import Overview from "@/components/business/v2/tabs/Overview";
@@ -123,6 +124,8 @@ function normalizeErr(e: unknown): string {
 
 export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props) {
   const router = useRouter();
+  const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const [authChecked, setAuthChecked] = useState(false);
 
   // ── Auth guard ──
@@ -381,18 +384,18 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
           background: "rgba(255, 255, 255, 0.03)",
           backdropFilter: "blur(20px)",
           borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-          padding: "1.25rem 3rem",
+          padding: isMobile ? "0.75rem 1rem" : isTablet ? "1rem 1.5rem" : "1.25rem 3rem",
           position: "sticky",
           top: 0,
           zIndex: 100,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: isMobile ? "0.5rem" : "1.5rem", flexWrap: isMobile ? "wrap" : undefined }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "1rem" }}>
             <div
               style={{
-                width: "46px",
-                height: "46px",
+                width: isMobile ? "36px" : "46px",
+                height: isMobile ? "36px" : "46px",
                 borderRadius: "12px",
                 display: "flex",
                 alignItems: "center",
@@ -410,7 +413,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
             <div>
               <div
                 style={{
-                  fontSize: "1.35rem",
+                  fontSize: isMobile ? "1.05rem" : "1.35rem",
                   fontWeight: 800,
                   background: "linear-gradient(135deg, #ffffff 0%, #14b8a6 100%)",
                   WebkitBackgroundClip: "text",
@@ -420,20 +423,20 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
               >
                 {businessName || "LetsGo Business"}
               </div>
-              <div style={{ fontSize: "0.85rem", color: "rgba(255, 255, 255, 0.5)" }}>Business ID: {businessId}</div>
+              <div style={{ fontSize: "0.85rem", color: "rgba(255, 255, 255, 0.5)", display: isMobile ? "none" : undefined }}>Business ID: {businessId}</div>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.4rem" : "0.75rem" }}>
             <NotificationBell />
             <div
               style={{
-                padding: "0.5rem 0.75rem",
+                padding: isMobile ? "0.4rem 0.5rem" : "0.5rem 0.75rem",
                 borderRadius: "10px",
                 background: isPremium ? "rgba(16,185,129,0.15)" : "rgba(249,115,22,0.15)",
                 border: isPremium ? "1px solid rgba(16,185,129,0.35)" : "1px solid rgba(249,115,22,0.35)",
                 fontWeight: 900,
-                fontSize: "0.85rem",
+                fontSize: isMobile ? "0.7rem" : "0.85rem",
                 display: "flex",
                 alignItems: "center",
                 gap: "0.5rem",
@@ -441,7 +444,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
               }}
               title="Read from v_business_plan_status.effective_plan_now"
             >
-              Plan:
+              {!isMobile && "Plan:"}
               <span style={{ fontFamily: '"Space Mono", monospace' }}>{effectivePlanNow ?? "loading…"}</span>
             </div>
 
@@ -449,7 +452,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
               type="button"
               onClick={handleSignOut}
               style={{
-                padding: "0.65rem 1rem",
+                padding: isMobile ? "0.5rem" : "0.65rem 1rem",
                 borderRadius: "10px",
                 background: "rgba(255,255,255,0.06)",
                 border: "1px solid rgba(255,255,255,0.14)",
@@ -461,16 +464,17 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
                 gap: "0.5rem",
                 opacity: 1,
               }}
+              title="Sign Out"
             >
               <LogOut size={16} />
-              Sign Out
+              {!isMobile && "Sign Out"}
             </button>
 
             <button
               type="button"
               onClick={openPublishModal}
               style={{
-                padding: "0.65rem 1.15rem",
+                padding: isMobile ? "0.5rem" : "0.65rem 1.15rem",
                 borderRadius: "10px",
                 background: "linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%)",
                 border: "1px solid rgba(20, 184, 166, 0.45)",
@@ -484,9 +488,10 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
                 whiteSpace: "nowrap",
                 opacity: publishing ? 0.75 : 1,
               }}
+              title={publishing ? "Publishing…" : "Publish Changes"}
             >
               <UploadCloud size={16} />
-              {publishing ? "Publishing…" : "Publish Changes"}
+              {!isMobile && (publishing ? "Publishing…" : "Publish Changes")}
             </button>
           </div>
         </div>
@@ -494,17 +499,20 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
       </div>
 
       {/* Main */}
-      <div style={{ padding: "2rem 3rem", maxWidth: "1600px", margin: "0 auto" }}>
+      <div style={{ padding: isMobile ? "1rem" : isTablet ? "1.5rem" : "2rem 3rem", maxWidth: "1600px", margin: "0 auto" }}>
         <div
           style={{
             display: "flex",
-            gap: "0.5rem",
-            marginBottom: "2rem",
+            gap: isMobile ? "0.25rem" : isTablet ? "0.35rem" : "0.5rem",
+            marginBottom: isMobile ? "1rem" : "2rem",
             background: "rgba(255, 255, 255, 0.02)",
-            padding: "0.5rem",
+            padding: isMobile ? "0.35rem" : "0.5rem",
             borderRadius: "12px",
             border: "1px solid rgba(255, 255, 255, 0.05)",
-          }}
+            overflowX: isMobile ? "auto" : undefined,
+            WebkitOverflowScrolling: isMobile ? "touch" : undefined,
+            flexWrap: isMobile ? "nowrap" : undefined,
+          } as React.CSSProperties}
         >
           {tabs.map((tab) => {
             const isLocked = premiumOnlyTabs.has(tab.id) && !isPremium;
@@ -517,31 +525,46 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
                   setActiveTab(tab.id);
                 }}
                 style={{
-                  flex: 1,
-                  padding: "0.875rem 1.5rem",
+                  flex: isMobile ? "0 0 auto" : 1,
+                  padding: isMobile ? "0.6rem 0.6rem" : isTablet ? "0.75rem 0.75rem" : "0.875rem 1.5rem",
                   background: activeTab === tab.id ? "linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%)" : "transparent",
                   border: "none",
                   color: "white",
                   borderRadius: "8px",
-                  fontSize: "0.875rem",
+                  fontSize: isMobile ? "0.7rem" : isTablet ? "0.75rem" : "0.875rem",
                   fontWeight: 800,
                   cursor: isLocked ? "not-allowed" : "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "0.5rem",
+                  gap: isMobile ? "0.25rem" : "0.5rem",
                   opacity: isLocked ? 0.45 : 1,
                   filter: isLocked ? "grayscale(1)" : "none",
                   pointerEvents: isLocked ? "none" : "auto",
                 }}
-                title={isLocked ? "Upgrade to Premium to unlock this feature." : undefined}
+                title={isLocked ? "Upgrade to Premium to unlock this feature." : tab.label}
               >
                 {tab.icon}
-                {tab.label}
+                {!isTablet && tab.label}
               </button>
             );
           })}
         </div>
+
+        {isTablet && (
+          <div style={{
+            fontSize: isMobile ? "1.25rem" : "1.5rem",
+            fontWeight: 800,
+            marginBottom: "1rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            color: "#ffffff",
+          }}>
+            {tabs.find((t) => t.id === activeTab)?.icon}
+            {tabs.find((t) => t.id === activeTab)?.label}
+          </div>
+        )}
 
         {activeTab === "overview" && <OverviewTab businessId={businessId} isPremium={isPremium} setActiveTab={setActiveTab} />}
         {activeTab === "analytics" && <AnalyticsTab {...tabProps} />}
@@ -566,7 +589,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
             alignItems: "center",
             justifyContent: "center",
             zIndex: 1000,
-            padding: "2rem",
+            padding: isMobile ? "0.75rem" : "2rem",
           }}
           onClick={closePublishModal}
         >
@@ -574,8 +597,8 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
             style={{
               background: "linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%)",
               border: "1px solid rgba(255, 255, 255, 0.12)",
-              borderRadius: "18px",
-              padding: "2.25rem",
+              borderRadius: isMobile ? "14px" : "18px",
+              padding: isMobile ? "1.25rem" : "2.25rem",
               maxWidth: "760px",
               width: "100%",
               maxHeight: "86vh",
@@ -587,7 +610,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
               <div>
-                <div style={{ fontSize: "1.6rem", fontWeight: 900, marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ fontSize: isMobile ? "1.2rem" : "1.6rem", fontWeight: 900, marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
                   <FileText size={22} style={{ color: colors.primary }} />
                   Terms &amp; Conditions
                 </div>

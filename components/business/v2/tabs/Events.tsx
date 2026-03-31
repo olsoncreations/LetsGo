@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchAvailableTags } from "@/lib/availableTags";
+import { useIsMobile } from "@/lib/useIsMobile";
 import {
   Calendar,
   CalendarDays,
@@ -116,6 +117,7 @@ function isoToTimeValue(iso: string): string {
 }
 
 export default function Events({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -820,7 +822,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
       </div>
 
       {/* ─── Stats ─── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
         {[
           { label: "Total Views", value: stats.totalViews.toLocaleString(), icon: <Eye size={24} />, color: colors.purple },
           { label: "Upcoming Events", value: stats.upcomingCount, icon: <Calendar size={24} />, color: colors.primary },
@@ -874,10 +876,11 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
                     borderRadius: "16px",
                     overflow: "hidden",
                     display: "flex",
-                    minHeight: "480px",
+                    flexDirection: isMobile ? "column" : "row",
+                    minHeight: isMobile ? undefined : "480px",
                   }}>
                     {/* ── Left 50%: Live View (Events page color scheme) ── */}
-                    <div style={{ width: "50%", flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid rgba(255,255,255,0.06)", background: "#0C0C14" }}>
+                    <div style={{ width: isMobile ? "100%" : "50%", flexShrink: 0, display: "flex", flexDirection: "column", borderRight: isMobile ? "none" : "1px solid rgba(255,255,255,0.06)", borderBottom: isMobile ? "1px solid rgba(255,255,255,0.06)" : "none", background: "#0C0C14" }}>
                       {/* Hero Image */}
                       <div style={{ position: "relative", height: "280px", background: "#0C0C14", overflow: "hidden", flexShrink: 0 }}>
                         {event.imageBanned ? (
@@ -1000,7 +1003,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
                     </div>
 
                     {/* ── Right 50%: Analytics + Setup + Actions ── */}
-                    <div style={{ width: "50%", display: "flex", flexDirection: "column", padding: "1.5rem" }}>
+                    <div style={{ width: isMobile ? "100%" : "50%", display: "flex", flexDirection: "column", padding: isMobile ? "1rem" : "1.5rem" }}>
                       {/* Event details summary */}
                       <div style={{ marginBottom: "1.25rem" }}>
                         <div style={{ fontSize: "1.125rem", fontWeight: 800, marginBottom: "0.5rem", lineHeight: 1.3 }}>{event.title}</div>
@@ -1022,7 +1025,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
                       {/* Analytics grid */}
                       <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Analytics</div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
                         {/* Views */}
                         <div style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: "10px", padding: "0.875rem", textAlign: "center" }}>
                           <Eye size={18} style={{ color: "#a855f7", margin: "0 auto 0.375rem" }} />
@@ -1159,7 +1162,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
         <div style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: "1.5rem" }}>Past Events</div>
 
         {pastEvents.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: "1.5rem" }}>
             {pastEvents.map((event) => (
               <div key={event.id} style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.05)", borderRadius: "16px", padding: "1rem", opacity: event.isCancelled ? 0.85 : 1 }}>
                 <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
@@ -1321,7 +1324,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
               </div>
 
               {/* Date + Start Time + End Time */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
                 <div>
                   <label style={label()}>Event Date *</label>
                   <input ref={dateRef} type="date" style={input()} />
@@ -1337,7 +1340,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
               </div>
 
               {/* Price + Price Level */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
                 <div>
                   <label style={label()}>Price *</label>
                   <input ref={priceRef} placeholder="Free, $10, $5 per card" style={input()} />
@@ -1353,7 +1356,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
               </div>
 
               {/* Event Size + Capacity */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
                 <div>
                   <label style={label()}>Event Size</label>
                   <select value={formEventSize} onChange={(e) => setFormEventSize(e.target.value)} style={input()}>
@@ -1478,7 +1481,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
               )}
             </div>
 
-            <div style={{ padding: "1.5rem 2rem", borderTop: "1px solid rgba(255, 255, 255, 0.1)", display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
+            <div style={{ padding: isMobile ? "1rem" : "1.5rem 2rem", borderTop: "1px solid rgba(255, 255, 255, 0.1)", display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
               <button type="button" onClick={() => setShowCreateEventModal(false)} style={ghostBtn()} disabled={saving}>Cancel</button>
               <button type="button" onClick={handleSaveEvent} disabled={!isPremium || saving} style={{
                 padding: "0.75rem 1.5rem",
@@ -1529,7 +1532,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
   }
 
   function modalHeader(): React.CSSProperties {
-    return { padding: "2rem", borderBottom: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" };
+    return { padding: isMobile ? "1rem" : "2rem", borderBottom: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" };
   }
 
   function modalX(): React.CSSProperties {
@@ -1557,7 +1560,7 @@ export default function Events({ businessId, isPremium }: BusinessTabProps) {
   }
 
   function photoGrid(): React.CSSProperties {
-    return { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)", maxHeight: "180px", overflowY: "auto" };
+    return { display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "0.75rem", padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)", maxHeight: "180px", overflowY: "auto" };
   }
 
   function photoCaptionOverlay(): React.CSSProperties {

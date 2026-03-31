@@ -321,7 +321,11 @@ const NotificationPanel = forwardRef<HTMLDivElement, NotificationPanelProps>(fun
 
   const handleClick = async (notif: UserNotification) => {
     if (!notif.read) await markAsRead([notif.id]);
-    const href = (notif.metadata?.href as string) || NOTIFICATION_HREFS[notif.type] || "/";
+    let href = (notif.metadata?.href as string) || NOTIFICATION_HREFS[notif.type] || "/";
+    const gameCode = notif.metadata?.gameCode as string | undefined;
+    if (notif.type === "game_complete" && gameCode) {
+      href = `/5v3v1?code=${gameCode}`;
+    }
     router.push(href);
     onClose();
   };

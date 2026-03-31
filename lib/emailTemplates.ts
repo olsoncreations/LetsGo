@@ -253,7 +253,7 @@ function gameAdvancedEmail(meta: Record<string, unknown>): EmailContent {
 }
 
 function gameCompleteEmail(meta: Record<string, unknown>): EmailContent {
-  const winnerName = String(meta.winnerName || "the winner");
+  const winnerName = String(meta.businessName || meta.winnerName || "the winner");
 
   return {
     subject: "The results are in! Where are you going?",

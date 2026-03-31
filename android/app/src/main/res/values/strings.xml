@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LetsGo</string>
+    <string name="title_activity_main">LetsGo</string>
+    <string name="package_name">com.olsoncreations.letsgo</string>
+    <string name="custom_url_scheme">com.olsoncreations.letsgo</string>
+</resources>

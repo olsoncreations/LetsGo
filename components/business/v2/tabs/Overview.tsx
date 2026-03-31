@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { LaunchBanner } from "@/components/LaunchBanner";
 import {
   BarChart3,
@@ -44,6 +45,7 @@ function money0(n: number) {
 }
 
 export default function Overview({ businessId, isPremium, setActiveTab }: OverviewProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -286,7 +288,7 @@ export default function Overview({ businessId, isPremium, setActiveTab }: Overvi
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))",
           gap: "1.5rem",
           marginBottom: "2rem",
         }}
@@ -377,7 +379,7 @@ export default function Overview({ businessId, isPremium, setActiveTab }: Overvi
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(250px, 1fr))",
           gap: "1.5rem",
           marginBottom: "1rem",
         }}

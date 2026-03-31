@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { BarChart3, CheckCircle, CreditCard, DollarSign, Download, AlertCircle, RefreshCw } from "lucide-react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { BillingBanner } from "@/components/LaunchBanner";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -152,6 +153,7 @@ function PendingAdjustments({ businessId, colors }: { businessId: string; colors
 }
 
 export default function Billing({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -876,7 +878,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "1rem" : "2rem", marginBottom: "1.5rem" }}>
           {/* Basic Plan */}
           <div
             style={{
@@ -1126,7 +1128,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
             Payment Methods
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem" }}>
             {/* Bank Card */}
             <div
               style={{

@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
+import { useIsMobile } from "@/lib/useIsMobile";
 import {
   BarChart3,
   Calendar,
@@ -148,6 +149,7 @@ function statusToUiStatus(s: string | null | undefined): ActiveAdCampaign["statu
 }
 
 export default function AdvertisingAddons({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -931,7 +933,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
           Current Add-ons & Advertising Monthly Costs
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "3rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 2fr", gap: isMobile ? "1.5rem" : "3rem" }}>
           {/* Active Add-ons */}
           <div>
             <div style={{ fontSize: "0.875rem", color: "rgba(255, 255, 255, 0.6)", marginBottom: "0.75rem" }}>
@@ -1331,7 +1333,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
           {[
             { label: "Total Spend (All Time)", value: `$${totals.spend.toLocaleString()}`, color: colors.secondary },
             { label: "Total Clicks", value: totals.clicks.toLocaleString(), color: colors.primary },
@@ -1560,7 +1562,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
         </div>
 
         {/* Spotlight */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
           {spotlightCampaigns.map((campaign, idx) => (
             <div key={idx} style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)", border: "1px solid rgba(255, 255, 255, 0.1)", borderRadius: "12px", padding: "1.5rem", position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: "-50%", right: "-30%", width: 200, height: 200, background: `radial-gradient(circle, ${campaign.color}30 0%, transparent 70%)`, borderRadius: "50%" }} />
@@ -1593,7 +1595,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
         </div>
 
         {/* Push */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", marginBottom: "2rem" }}>
           {pushCampaigns.map((campaign, idx) => (
             <div key={idx} style={{ background: "rgba(255, 255, 255, 0.05)", backdropFilter: "blur(10px)", border: `2px solid ${campaign.featured ? campaign.color : "rgba(255, 255, 255, 0.1)"}`, borderRadius: "12px", padding: "1.5rem", position: "relative", overflow: "hidden" }}>
               {campaign.featured && (
@@ -1656,7 +1658,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
             alignItems: "center",
             justifyContent: "center",
             zIndex: 1000,
-            padding: "2rem",
+            padding: isMobile ? "0.5rem" : "2rem",
             overflowY: "auto",
           }}
           onClick={() => closeScheduleModal()}
@@ -1665,8 +1667,8 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
             style={{
               background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
               border: "1px solid rgba(255, 255, 255, 0.1)",
-              borderRadius: "16px",
-              padding: "1.5rem",
+              borderRadius: isMobile ? "12px" : "16px",
+              padding: isMobile ? "1rem" : "1.5rem",
               maxWidth: "500px",
               width: "100%",
               maxHeight: "90vh",
@@ -1709,7 +1711,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
                   {selectedAdImages.length}/5 selected — tap to select or deselect
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", padding: "0.75rem", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.1)", maxHeight: 160, overflowY: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "0.5rem", padding: "0.75rem", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.1)", maxHeight: 160, overflowY: "auto" }}>
                   {mediaGallery.filter((m) => m.type === "photo").length === 0 ? (
                     <div style={{ gridColumn: "1 / -1", padding: "0.75rem", textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: "0.8rem" }}>
                       No photos uploaded yet. Go to Media tab to upload photos.
@@ -1893,7 +1895,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
                   <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem" }}>
                     Select 7 days for top Discovery placement (can be split within 60-day window)
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.375rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.375rem" }}>
                     {tourPriorityDays.map((day, idx) => (
                       <div key={`priority-${idx}`} style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
                         <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", minWidth: "28px" }}>#{idx + 1}</span>
@@ -1933,7 +1935,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
                   <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.5)", marginBottom: "0.375rem" }}>
                     Select 14 days for push notifications (can be split within 60-day window)
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.375rem", maxHeight: "160px", overflowY: "auto", padding: "0.375rem", background: "rgba(255,255,255,0.02)", borderRadius: "6px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.375rem", maxHeight: "160px", overflowY: "auto", padding: "0.375rem", background: "rgba(255,255,255,0.02)", borderRadius: "6px" }}>
                     {tourPushDays.map((day, idx) => (
                       <div key={`push-${idx}`} style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
                         <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", minWidth: "28px" }}>#{idx + 1}</span>
@@ -1974,7 +1976,7 @@ export default function AdvertisingAddons({ businessId, isPremium }: BusinessTab
               return (
                 <div style={{ marginBottom: "0.75rem", padding: "0.75rem 1rem", background: "rgba(255,107,53,0.1)", borderRadius: 10, border: "1px solid rgba(255,107,53,0.3)" }}>
                   <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "#ff6b35", marginBottom: 6 }}>🔥 Hot Day Surge: {surgeEventName} ({(multiplierBps / 10000).toFixed(2)}x)</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: "0.75rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 8, fontSize: "0.75rem" }}>
                     <div><div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem" }}>BASE</div><div style={{ fontWeight: 700, color: "#10b981" }}>{currency(baseCents / 100)}</div></div>
                     <div><div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem" }}>SURGE FEE</div><div style={{ fontWeight: 700, color: "#ff6b35" }}>+{currency(surgeFee / 100)}</div></div>
                     <div><div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem" }}>TOTAL</div><div style={{ fontWeight: 800, color: "#f97316" }}>{currency((baseCents + surgeFee) / 100)}</div></div>

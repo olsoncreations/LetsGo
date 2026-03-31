@@ -93,11 +93,11 @@ const DAY_MAP: Record<string, string> = {
 };
 
 const FALLBACK_GRADIENTS = [
-  "linear-gradient(135deg, #1a0a2e 0%, #2d1b4e 30%, #ff6b35 70%, #ffb347 100%)",
-  "linear-gradient(135deg, #2d1b00 0%, #5c3a1e 30%, #ff6b6b 70%, #ffb3b3 100%)",
-  "linear-gradient(135deg, #0a0a2e 0%, #1a1a4e 30%, #8a2be2 70%, #bf5fff 100%)",
-  "linear-gradient(135deg, #0a1a14 0%, #1a3a2e 30%, #00bfff 70%, #87CEEB 100%)",
-  "linear-gradient(135deg, #1a0a0a 0%, #3d1a1a 30%, #ff4444 70%, #ff8888 100%)",
+  "linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%)",
+  "linear-gradient(135deg, #0c0c0c 0%, #181818 50%, #0a0a0a 100%)",
+  "linear-gradient(135deg, #080808 0%, #151515 50%, #0d0d0d 100%)",
+  "linear-gradient(135deg, #0b0b0b 0%, #1c1c1c 50%, #0e0e0e 100%)",
+  "linear-gradient(135deg, #0a0a0a 0%, #141414 50%, #0c0c0c 100%)",
 ];
 
 // ─── Helper functions ───

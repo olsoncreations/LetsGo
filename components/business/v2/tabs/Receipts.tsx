@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useIsMobile } from "@/lib/useIsMobile";
 import {
   AlertCircle,
   Award,
@@ -139,6 +140,7 @@ function StatusBadge({ status, colors }: { status: ReceiptStatus; colors: Record
 // Main Component
 // ============================================================================
 export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(
     () => ({
       primary: "#14b8a6",
@@ -817,7 +819,7 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
   return (
     <div style={{ display: "grid", gap: "1.5rem" }}>
       {/* Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.5rem" }}>
         {[
           {
             icon: <Clock size={24} />,

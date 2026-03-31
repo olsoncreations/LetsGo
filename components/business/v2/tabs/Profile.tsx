@@ -12,6 +12,7 @@ import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchTagsByCategory, getVisibleCategories, type TagCategory } from "@/lib/availableTags";
 import { AlertCircle, Settings, Clock, User, Mail, Tag, X, CheckCircle } from "lucide-react";
+import { useIsMobile } from "@/lib/useIsMobile";
 
 // ============================================================================
 // Types
@@ -186,6 +187,7 @@ const STATES = [
 // Main Component
 // ============================================================================
 export default function Profile({ businessId, isPremium }: BusinessTabProps) {
+  const isMobile = useIsMobile();
   const colors = useMemo(() => ({
     primary: "#14b8a6",
     secondary: "#f97316",
@@ -766,7 +768,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
 
             <div style={{ display: "grid", gap: "1.5rem" }}>
               {/* Name & Type */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1.5rem" }}>
                 <div>
                   <label style={labelStyle}>Business Name</label>
                   <input
@@ -810,7 +812,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               </div>
 
               {/* City / State / Zip */}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "1.5rem" }}>
                 <div>
                   <label style={labelStyle}>City</label>
                   <input ref={cityRef} defaultValue="" style={inputStyle} />
@@ -830,7 +832,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               </div>
 
               {/* Phone / Email / Website */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "1.5rem" }}>
                 <div>
                   <label style={labelStyle}>Business Phone</label>
                   <input 
@@ -863,7 +865,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               </div>
 
               {/* Cuisine / Price / Age */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "1.5rem" }}>
                 <div>
                   <label style={labelStyle}>Category</label>
                   <select ref={cuisineRef} defaultValue="Other" style={selectStyle}>
@@ -908,7 +910,14 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 return (
                   <div
                     key={key}
-                    style={{
+                    style={isMobile ? {
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.5rem",
+                      padding: "0.75rem",
+                      background: "rgba(255,255,255,0.02)",
+                      borderRadius: "8px",
+                    } : {
                       display: "grid",
                       gridTemplateColumns: "120px 100px 1fr",
                       alignItems: "center",
@@ -918,23 +927,45 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                       borderRadius: "8px",
                     }}
                   >
-                    <span style={{ fontWeight: 600 }}>{label}</span>
-                    <button
-                      type="button"
-                      onClick={() => toggleDayClosed(key)}
-                      style={{
-                        padding: "0.5rem 0.75rem",
-                        background: isClosed ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)",
-                        border: `1px solid ${isClosed ? "rgba(239,68,68,0.4)" : "rgba(16,185,129,0.4)"}`,
-                        borderRadius: "6px",
-                        color: "white",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {isClosed ? "Closed" : "Open"}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <span style={{ fontWeight: 600, minWidth: isMobile ? "80px" : undefined }}>{label}</span>
+                      {isMobile && (
+                        <button
+                          type="button"
+                          onClick={() => toggleDayClosed(key)}
+                          style={{
+                            padding: "0.5rem 0.75rem",
+                            background: isClosed ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)",
+                            border: `1px solid ${isClosed ? "rgba(239,68,68,0.4)" : "rgba(16,185,129,0.4)"}`,
+                            borderRadius: "6px",
+                            color: "white",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {isClosed ? "Closed" : "Open"}
+                        </button>
+                      )}
+                    </div>
+                    {!isMobile && (
+                      <button
+                        type="button"
+                        onClick={() => toggleDayClosed(key)}
+                        style={{
+                          padding: "0.5rem 0.75rem",
+                          background: isClosed ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)",
+                          border: `1px solid ${isClosed ? "rgba(239,68,68,0.4)" : "rgba(16,185,129,0.4)"}`,
+                          borderRadius: "6px",
+                          color: "white",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isClosed ? "Closed" : "Open"}
+                      </button>
+                    )}
                     {!isClosed && (
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         <input
@@ -1089,7 +1120,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               Business Representative
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1.5rem" }}>
               <div>
                 <label style={labelStyle}>Representative Name</label>
                 <input ref={repNameRef} defaultValue="" placeholder="John Smith" style={inputStyle} />
@@ -1123,7 +1154,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
             </div>
 
             <div style={{ display: "grid", gap: "1.5rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1.5rem" }}>
                 <div>
                   <label style={labelStyle}>Login Email</label>
                   <input
@@ -1156,7 +1187,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               {/* Password Change */}
               <div>
                 <label style={labelStyle}>Change Password</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "1rem", alignItems: "end" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr auto", gap: "1rem", alignItems: "end" }}>
                   <div>
                     <input
                       type="password"
