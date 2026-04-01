@@ -377,6 +377,10 @@ export default function SettingsPage() {
     { key: "pool_ad_spend_per_100", label: "Ad Spend (per $100)", desc: "Per $100 in ad spend sold", icon: "📊", default: 500 },
     { key: "pool_repeat_monthly", label: "Repeat Customer", desc: "Monthly rate per active repeat customer", icon: "🔄", default: 50 },
   ] as const;
+  const BONUS_THRESHOLD_KEYS = [
+    { key: "bonus_rep_eligibility", label: "Rep Eligibility Threshold", desc: "Individual commission $ per quarter to qualify for a share", icon: "👤", default: 500000, type: "cents" as const },
+    { key: "bonus_company_multiplier", label: "Company Unlock Multiplier", desc: "% of (active reps × rep eligibility) needed to unlock pool", icon: "🎯", default: 75, type: "percent" as const },
+  ] as const;
   const [bonusPoolConfig, setBonusPoolConfig] = useState<Record<string, number>>({});
   const [bonusPoolEditing, setBonusPoolEditing] = useState(false);
   const [bonusPoolSaving, setBonusPoolSaving] = useState(false);
@@ -385,7 +389,14 @@ export default function SettingsPage() {
   const fetchBonusPoolData = useCallback(async () => {
     const { data } = await supabaseBrowser.from("sales_config").select("*").eq("category", "bonus_pool");
     const loaded: Record<string, number> = {};
-    if (data) data.forEach(row => { loaded[row.key] = row.value_cents || 0; });
+    if (data) data.forEach(row => {
+      // Multiplier is stored in value_int, everything else in value_cents
+      if (row.key === "bonus_company_multiplier") {
+        loaded[row.key] = row.value_int || 0;
+      } else {
+        loaded[row.key] = row.value_cents || 0;
+      }
+    });
     setBonusPoolConfig(loaded);
   }, []);
 
@@ -400,12 +411,18 @@ export default function SettingsPage() {
     try {
       const merged: Record<string, number> = {};
       BONUS_POOL_KEYS.forEach(item => { merged[item.key] = getBonusPoolVal(item.key, item.default); });
+      BONUS_THRESHOLD_KEYS.forEach(item => { merged[item.key] = getBonusPoolVal(item.key, item.default); });
       for (const [key, value] of Object.entries(merged)) {
+        const isMultiplier = key === "bonus_company_multiplier";
         const { data: existing } = await supabaseBrowser.from("sales_config").select("id").eq("category", "bonus_pool").eq("key", key).maybeSingle();
         if (existing) {
-          await supabaseBrowser.from("sales_config").update({ value_cents: value }).eq("id", existing.id);
+          await supabaseBrowser.from("sales_config").update(isMultiplier ? { value_int: value } : { value_cents: value }).eq("id", existing.id);
         } else {
-          await supabaseBrowser.from("sales_config").insert({ category: "bonus_pool", key, value_cents: value, value_int: null });
+          await supabaseBrowser.from("sales_config").insert({
+            category: "bonus_pool", key,
+            value_cents: isMultiplier ? null : value,
+            value_int: isMultiplier ? value : null,
+          });
         }
       }
       await logAudit({ tab: AUDIT_TABS.SETTINGS, targetType: "bonus_pool", action: "Updated bonus pool rates", details: JSON.stringify(merged), staffId: currentStaffId });
@@ -2830,7 +2847,7 @@ export default function SettingsPage() {
           <Card title="SIGNUP POOL CONTRIBUTIONS">
             <div style={{ padding: "12px 16px", background: "rgba(0,212,255,0.08)", borderRadius: 10, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 18 }}>💰</span>
-              <span style={{ fontSize: 13, color: COLORS.textSecondary }}>Set how much each signup type contributes to the quarterly bonus pool. These rates are used when recording sales on the Sales page.</span>
+              <span style={{ fontSize: 13, color: COLORS.textSecondary }}>Set how much each signup type contributes to the quarterly bonus pool. The pool accumulates from all sales; unlocks when the team hits the Company Target; splits equally among reps who meet the Rep Eligibility threshold.</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
               {BONUS_POOL_KEYS.slice(0, 4).map(item => {
@@ -2894,6 +2911,61 @@ export default function SettingsPage() {
                   </div>
                 );
               })}
+            </div>
+          </Card>
+
+          <Card title="UNLOCK & ELIGIBILITY THRESHOLDS">
+            <div style={{ padding: "12px 16px", background: "rgba(255,45,146,0.08)", borderRadius: 10, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>🔒</span>
+              <span style={{ fontSize: 13, color: COLORS.textSecondary }}>The bonus pool operates on a quarterly cycle (Q1-Q4). Each rep must meet the Rep Eligibility threshold (commission $). The pool unlocks when total team commission reaches Active Reps × Rep Eligibility × Company Multiplier.</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+              {BONUS_THRESHOLD_KEYS.map(item => {
+                const val = getBonusPoolVal(item.key, item.default);
+                const isPercent = item.type === "percent";
+                const displayVal = isPercent ? val : val / 100;
+                return (
+                  <div key={item.key} style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 16 }}>{item.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{item.label}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{item.desc}</div>
+                      </div>
+                    </div>
+                    {bonusPoolEditing ? (
+                      <input
+                        type="number"
+                        step={isPercent ? "1" : "100"}
+                        min="0"
+                        max={isPercent ? "200" : undefined}
+                        value={displayVal}
+                        onChange={e => setBonusPoolEdits(prev => ({
+                          ...prev,
+                          [item.key]: isPercent
+                            ? Math.round(parseFloat(e.target.value || "0"))
+                            : Math.round(parseFloat(e.target.value || "0") * 100)
+                        }))}
+                        style={{ width: "100%", padding: "10px 14px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.neonPink, fontSize: 28, fontWeight: 900, textAlign: "center" }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 32, fontWeight: 900, color: COLORS.neonPink, textAlign: "center" }}>
+                        {isPercent ? `${displayVal}%` : `$${displayVal.toLocaleString()}`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Live formula preview */}
+            <div style={{ marginTop: 16, padding: 16, background: COLORS.darkBg, borderRadius: 12, border: "1px dashed " + COLORS.cardBorder }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.neonPink, marginBottom: 8 }}>Formula Preview</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                Company Target = Active Reps × ${(getBonusPoolVal("bonus_rep_eligibility", 500000) / 100).toLocaleString()} × {getBonusPoolVal("bonus_company_multiplier", 75)}%
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>
+                Example: 5 reps × ${(getBonusPoolVal("bonus_rep_eligibility", 500000) / 100).toLocaleString()} × {getBonusPoolVal("bonus_company_multiplier", 75)}% = <strong style={{ color: COLORS.neonPink }}>${(5 * getBonusPoolVal("bonus_rep_eligibility", 500000) / 100 * getBonusPoolVal("bonus_company_multiplier", 75) / 100).toLocaleString()}</strong>
+              </div>
             </div>
           </Card>
         </div>
