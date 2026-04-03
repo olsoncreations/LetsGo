@@ -437,9 +437,10 @@ export default function PartnerOnboardingPage() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [restored, setRestored] = useState(false);
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-  const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [mapsLoaded, setMapsLoaded] = useState(() => !!(window as any).google?.maps?.places);
 
   // DB-driven tag categories for business type selection + tag pickers
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
@@ -586,7 +587,7 @@ export default function PartnerOnboardingPage() {
     if (authLoading) return;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) { setRestored(true); return; }
       const parsed = JSON.parse(raw) as { step?: number; data?: OnboardingData; completed?: boolean };
       if (parsed?.data) {
         // Preserve auth email - don't let localStorage overwrite it
@@ -600,15 +601,17 @@ export default function PartnerOnboardingPage() {
     } catch {
       // ignore
     }
+    setRestored(true);
   }, [authLoading]);
 
   useEffect(() => {
+    if (!restored) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, data, completed }));
     } catch {
       // ignore
     }
-  }, [step, data, completed]);
+  }, [step, data, completed, restored]);
 
   const submitDisabled = useMemo(() => {
     const v = validateStep(7, data, authUser?.email);
@@ -652,14 +655,15 @@ export default function PartnerOnboardingPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function saveAndExit() {
+  async function saveAndExit() {
     setError("");
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, data, completed }));
     } catch {
       // ignore
     }
-    alert("Saved! You can come back anytime to finish.");
+    await supabaseBrowser.auth.signOut();
+    router.push("/welcome");
   }
 
   function resetAll() {
@@ -824,7 +828,7 @@ async function completeSignup() {
         {step === 2 && <Step2 data={data} setData={setData} mapsLoaded={mapsLoaded} />}
         {step === 3 && <Step3 data={data} setData={setData} pkgPricing={pkgPricing} dynamicAds={dynamicAds} ccFeeBps={ccFeeBps} />}
         {step === 4 && <Step4 data={data} setData={setData} tiers={dynamicTiers} presetBps={presetBps} />}
-        {step === 5 && <Step5 data={data} setData={setData} ccFeeBps={ccFeeBps} feeBps={feeBps} feeCapCents={feeCapCents} authToken={authToken} />}
+        {step === 5 && <Step5 data={data} setData={setData} ccFeeBps={ccFeeBps} feeBps={feeBps} feeCapCents={feeCapCents} authToken={authToken} mapsLoaded={mapsLoaded} />}
         {step === 6 && <Step6 data={data} setData={setData} pkgPricing={pkgPricing} authUser={authUser} />}
         {step === 7 && <Step7 data={data} setData={setData} reviewPlanFees={reviewPlanFees} feeBps={feeBps} feeCapCents={feeCapCents} ccFeeBps={ccFeeBps} pkgPricing={pkgPricing} tiers={dynamicTiers} />}
 
@@ -2176,6 +2180,7 @@ function Step5({
   feeBps,
   feeCapCents,
   authToken,
+  mapsLoaded,
 }: {
   data: OnboardingData;
   setData: React.Dispatch<React.SetStateAction<OnboardingData>>;
@@ -2183,12 +2188,52 @@ function Step5({
   feeBps: number;
   feeCapCents: number;
   authToken: string | null;
+  mapsLoaded: boolean;
 }) {
   const bankActive = data.paymentMethod === "bank";
   const cardActive = data.paymentMethod === "card";
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState("");
+  const billingAddressRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!mapsLoaded || data.billingSameAsBusiness) return;
+    if (!billingAddressRef.current) return;
+    const g = (window as any).google;
+    if (!g?.maps?.places?.Autocomplete) return;
+
+    const autocomplete = new g.maps.places.Autocomplete(billingAddressRef.current, {
+      types: ["address"],
+      fields: ["address_components", "formatted_address"],
+    });
+
+    const getComponent = (components: any[], type: string, which: "long_name" | "short_name" = "long_name") => {
+      const hit = components?.find((c: any) => c.types?.includes(type));
+      return hit?.[which] ?? "";
+    };
+
+    const listener = autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      const comps = place?.address_components ?? [];
+      const streetNumber = getComponent(comps, "street_number");
+      const route = getComponent(comps, "route");
+      const city = getComponent(comps, "locality") || getComponent(comps, "sublocality") || getComponent(comps, "postal_town");
+      const state = getComponent(comps, "administrative_area_level_1", "short_name");
+      const zip = getComponent(comps, "postal_code");
+      const street = (streetNumber && route ? `${streetNumber} ${route}` : "") || place?.formatted_address || "";
+
+      setData((p) => ({
+        ...p,
+        billingStreet: street,
+        billingCity: city || p.billingCity,
+        billingState: state || p.billingState,
+        billingZip: zip || p.billingZip,
+      }));
+    });
+
+    return () => { if (listener?.remove) listener.remove(); };
+  }, [mapsLoaded, data.billingSameAsBusiness, setData]);
 
   // Fetch a SetupIntent when payment method type changes (or on first render)
   const fetchSetupIntent = useCallback(async () => {
@@ -2335,9 +2380,11 @@ function Step5({
                 Street Address <span className="required">*</span>
               </label>
               <input
+                ref={billingAddressRef}
                 value={data.billingStreet}
                 onChange={(e) => setData((p) => ({ ...p, billingStreet: e.target.value }))}
                 placeholder="123 Main Street"
+                autoComplete="off"
               />
             </div>
 
