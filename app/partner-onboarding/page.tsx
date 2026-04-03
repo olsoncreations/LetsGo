@@ -440,7 +440,7 @@ export default function PartnerOnboardingPage() {
   const [restored, setRestored] = useState(false);
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-  const [mapsLoaded, setMapsLoaded] = useState(() => !!(window as any).google?.maps?.places);
+  const [mapsLoaded, setMapsLoaded] = useState(() => typeof window !== "undefined" && !!(window as any).google?.maps?.places);
 
   // DB-driven tag categories for business type selection + tag pickers
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
