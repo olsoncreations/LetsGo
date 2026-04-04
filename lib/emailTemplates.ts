@@ -4,6 +4,7 @@ import type { NotificationType } from "./notificationTypes";
 interface EmailContent {
   subject: string;
   html: string;
+  text?: string;
 }
 
 // ── Branded email wrapper ──────────────────────────────
@@ -385,29 +386,34 @@ function receiptSubmittedEmail(meta: Record<string, unknown>): EmailContent {
 }
 
 function friendInviteEmail(meta: Record<string, unknown>): EmailContent {
-  const inviterName = String(meta.inviterName || "A friend");
+  const inviterName = String(meta.inviterName || "").trim();
+  const hasName = inviterName && inviterName !== "A friend";
+  const displayName = hasName ? inviterName : "Your friend";
   const contactName = String(meta.contactName || "there");
   const ref = meta.referralCode ? `?ref=${String(meta.referralCode)}` : "";
 
   return {
-    subject: `${inviterName} wants you on LetsGo!`,
+    subject: hasName
+      ? `${displayName} invited you to join LetsGo`
+      : "You've been invited to join LetsGo",
     html: wrapInTemplate(
       `Hey ${contactName}!`,
-      `<p><strong style="color:#fff">${inviterName}</strong> thinks you'd love <strong style="color:#FF2D78">LetsGo</strong> \u2014 the app where you discover restaurants and activities, earn real cash-back, and play games with friends to decide where to go.</p>
+      `<p><strong style="color:#fff">${displayName}</strong> thinks you'd love <strong style="color:#FF2D78">LetsGo</strong> \u2014 the app where you discover restaurants and activities, earn rewards for repeat visits, and play games with friends to decide where to go.</p>
        <div style="background-color:#170e20;border:1px solid #2e1a40;border-radius:12px;padding:20px;margin:20px 0;text-align:center">
          <div style="color:#8888a0;font-size:11px;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px">What you get</div>
          <div style="color:#fff;font-size:14px;line-height:2">
-           \u{1F4B0} Cash-back on every visit (5% \u2192 20%)<br>
-           \u{1F3AE} Fun voting games with friends<br>
-           \u{1F4F8} Share your best moments<br>
-           \u{1F50D} Discover new spots near you
+           Rewards on every visit (5% \u2192 20%)<br>
+           Fun voting games with friends<br>
+           Share your best moments<br>
+           Discover new spots near you
          </div>
        </div>
-       <p>Join ${inviterName} and start getting paid to live your best life!</p>`,
+       <p>Join ${hasName ? displayName : "the crew"} and start exploring!</p>`,
       "#FF2D78",
       `/welcome${ref}`,
       "Join LetsGo"
     ),
+    text: `Hey ${contactName}!\n\n${displayName} thinks you'd love LetsGo — the app where you discover restaurants and activities, earn rewards for repeat visits, and play games with friends to decide where to go.\n\nWhat you get:\n- Rewards on every visit (5% to 20%)\n- Fun voting games with friends\n- Share your best moments\n- Discover new spots near you\n\nJoin ${hasName ? displayName : "the crew"} and start exploring!\n\nSign up: ${process.env.NEXT_PUBLIC_SITE_URL || "https://www.useletsgo.com"}/welcome${ref}`,
   };
 }
 

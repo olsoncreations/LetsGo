@@ -85,9 +85,22 @@ export async function POST(req: NextRequest): Promise<Response> {
       .eq("id", userId)
       .maybeSingle();
 
-    const inviterName = inviterProfile?.full_name
+    let inviterName = inviterProfile?.full_name
       || [inviterProfile?.first_name, inviterProfile?.last_name].filter(Boolean).join(" ")
-      || "A friend";
+      || "";
+
+    // Fallback to auth user metadata if profile name is empty
+    if (!inviterName) {
+      try {
+        const { data: { user: authUser } } = await supabaseServer.auth.admin.getUserById(userId);
+        const meta = authUser?.user_metadata;
+        if (meta) {
+          inviterName = meta.full_name || meta.name
+            || [meta.first_name, meta.last_name].filter(Boolean).join(" ")
+            || "";
+        }
+      } catch { /* ignore auth lookup failure */ }
+    }
     const referralCode = inviterProfile?.referral_code || "";
 
     let sent = 0;
@@ -127,11 +140,17 @@ export async function POST(req: NextRequest): Promise<Response> {
           referralCode,
         });
 
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.useletsgo.com";
         await resend.emails.send({
           from: FROM_EMAIL,
           to: email,
           subject: emailContent.subject,
           html: emailContent.html,
+          ...(emailContent.text ? { text: emailContent.text } : {}),
+          headers: {
+            "List-Unsubscribe": `<${siteUrl}/profile>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          },
         });
 
         sent++;
