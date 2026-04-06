@@ -272,21 +272,17 @@ export default function FindFriendsPage() {
       }
     }
 
-    // Build SMS batches of 10 for contacts with phone numbers
+    // Build individual SMS links — one per contact to avoid group chats
     if (withPhone.length > 0) {
-      const SMS_BATCH_SIZE = 10;
-      const batches: string[][] = [];
-      for (let i = 0; i < withPhone.length; i += SMS_BATCH_SIZE) {
-        batches.push(withPhone.slice(i, i + SMS_BATCH_SIZE).map((c) => c.phone!));
-      }
+      const phones = withPhone.map((c) => c.phone!);
+      const batches = phones.map((p) => [p]);
       setSmsBatches(batches);
       setSmsBatchIndex(0);
 
-      // Open the first batch
+      // Open the first one
       const siteUrl = window.location.origin;
       const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
-      const firstBatch = batches[0].join(",");
-      window.open(`sms:${firstBatch}?body=${body}`, "_self");
+      window.open(`sms:${phones[0]}?body=${body}`, "_self");
     }
 
     setInviteResult({
@@ -772,19 +768,24 @@ export default function FindFriendsPage() {
               </div>
             )}
 
-            {/* SMS batch navigation — show if there are more batches to send */}
+            {/* SMS navigation — show if there are more contacts to text */}
             {smsBatches.length > 1 && smsBatchIndex < smsBatches.length - 1 && (
               <div style={{ marginBottom: 20 }}>
                 <p style={{ fontSize: 13, color: TEXT_DIM, marginBottom: 12 }}>
-                  Text batch {smsBatchIndex + 1} of {smsBatches.length} opened.
+                  {smsBatchIndex + 1} of {smsBatches.length} texts sent
                 </p>
                 <button
                   onClick={handleNextSmsBatch}
                   style={{ ...btnGreen, width: "100%" }}
                 >
-                  Open Next Batch ({smsBatches[smsBatchIndex + 1].length} contacts)
+                  Next Contact ({smsBatches.length - smsBatchIndex - 1} remaining)
                 </button>
               </div>
+            )}
+            {smsBatches.length > 0 && smsBatchIndex >= smsBatches.length - 1 && smsBatches.length > 1 && (
+              <p style={{ fontSize: 13, color: GREEN, marginBottom: 20 }}>
+                All {smsBatches.length} texts done!
+              </p>
             )}
 
             <p style={{ fontSize: 13, color: TEXT_MUTED, marginBottom: 32, lineHeight: 1.6 }}>
