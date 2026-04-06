@@ -68,11 +68,11 @@ async function apiFetch(url: string, token: string, opts?: RequestInit) {
   return res.json();
 }
 
-// ─── Contact Picker detection ───
+// ─── Mobile detection ───
 
-function hasContactPicker(): boolean {
+function isMobile(): boolean {
   if (typeof window === "undefined") return false;
-  return "contacts" in navigator && "ContactsManager" in window;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 // ═══════════════════════════════════════════════════
@@ -95,11 +95,13 @@ export default function FindFriendsPage() {
   const [friendRequestsSent, setFriendRequestsSent] = useState<Set<string>>(new Set());
   const [sendingFriendReq, setSendingFriendReq] = useState<string | null>(null);
 
-  // Invite state
+  // Invite state — selectedInvites uses a unique key per contact (email or phone)
   const [selectedInvites, setSelectedInvites] = useState<Set<string>>(new Set());
   const [sendingInvites, setSendingInvites] = useState(false);
   const [invitesSent, setInvitesSent] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ sent: number; skipped: number } | null>(null);
+  const [inviteResult, setInviteResult] = useState<{ sent: number; skipped: number; texted: number } | null>(null);
+  const [smsBatchIndex, setSmsBatchIndex] = useState(0);
+  const [smsBatches, setSmsBatches] = useState<string[][]>([]);
 
   // Manual email entry (iOS fallback)
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -123,7 +125,7 @@ export default function FindFriendsPage() {
           return;
         }
         setToken(t);
-        setContactPickerAvailable(hasContactPicker());
+        setContactPickerAvailable(isMobile());
       } catch (err) {
         console.error("[find-friends] Auth check failed:", err);
         setError("Failed to verify your session. Please try signing in again.");
@@ -150,13 +152,19 @@ export default function FindFriendsPage() {
     try {
       // Use the Contact Picker API
       const nav = navigator as Navigator & {
-        contacts: {
+        contacts?: {
           select: (
             properties: string[],
             options?: { multiple?: boolean }
           ) => Promise<Array<{ name?: string[]; email?: string[]; tel?: string[] }>>;
         };
       };
+
+      if (!nav.contacts) {
+        setError("Your browser doesn't support importing contacts. Try opening this page in Chrome.");
+        setImporting(false);
+        return;
+      }
 
       const contacts = await nav.contacts.select(["name", "email", "tel"], {
         multiple: true,
@@ -184,12 +192,13 @@ export default function FindFriendsPage() {
       setUnmatched(result.unmatched || []);
       setImported(true);
 
-      // Pre-select all unmatched contacts with emails for invite
-      const withEmails = new Set<string>();
+      // Pre-select all unmatched contacts with email or phone for invite
+      const invitable = new Set<string>();
       for (const c of (result.unmatched || []) as UnmatchedContact[]) {
-        if (c.email) withEmails.add(c.email);
+        const key = c.email || c.phone;
+        if (key) invitable.add(key);
       }
-      setSelectedInvites(withEmails);
+      setSelectedInvites(invitable);
     } catch (err) {
       console.error("[find-friends] Import error:", err);
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -216,8 +225,14 @@ export default function FindFriendsPage() {
       });
       setFriendRequestsSent((prev) => new Set([...prev, userId]));
     } catch (err) {
-      console.error("[find-friends] Friend request error:", err);
-      setError("Failed to send friend request. Please try again.");
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("Already friends") || message.includes("already pending")) {
+        // Still mark as sent so the UI shows "Sent!" instead of error
+        setFriendRequestsSent((prev) => new Set([...prev, userId]));
+      } else {
+        console.error("[find-friends] Friend request error:", err);
+        setError("Failed to send friend request. Please try again.");
+      }
     }
 
     setSendingFriendReq(null);
@@ -225,29 +240,74 @@ export default function FindFriendsPage() {
 
   // ─── Send Invites ───
 
+  /** Get a unique key for an unmatched contact */
+  const contactKey = (c: UnmatchedContact): string => c.email || c.phone || c.contactName;
+
   const handleSendInvites = async () => {
     if (!token || sendingInvites || selectedInvites.size === 0) return;
     setSendingInvites(true);
-
     setError(null);
-    try {
-      const inviteList = unmatched
-        .filter((c) => c.email && selectedInvites.has(c.email))
-        .map((c) => ({ name: c.contactName, email: c.email! }));
 
-      const result = await apiFetch("/api/contacts/invite", token, {
-        method: "POST",
-        body: JSON.stringify({ invites: inviteList }),
-      });
+    const selected = unmatched.filter((c) => selectedInvites.has(contactKey(c)));
 
-      setInviteResult(result);
-      setInvitesSent(true);
-    } catch (err) {
-      console.error("[find-friends] Invite send error:", err);
-      setError("Failed to send invites. Please try again.");
+    // Split into phone contacts (SMS) and email-only contacts
+    const withPhone = selected.filter((c) => c.phone);
+    const emailOnly = selected.filter((c) => !c.phone && c.email);
+
+    let emailSent = 0;
+    let emailSkipped = 0;
+
+    // Send email invites for contacts without phone numbers
+    if (emailOnly.length > 0) {
+      try {
+        const inviteList = emailOnly.map((c) => ({ name: c.contactName, email: c.email! }));
+        const result = await apiFetch("/api/contacts/invite", token, {
+          method: "POST",
+          body: JSON.stringify({ invites: inviteList }),
+        });
+        emailSent = result.sent || 0;
+        emailSkipped = result.skipped || 0;
+      } catch (err) {
+        console.error("[find-friends] Email invite error:", err);
+      }
     }
 
+    // Build SMS batches of 10 for contacts with phone numbers
+    if (withPhone.length > 0) {
+      const SMS_BATCH_SIZE = 10;
+      const batches: string[][] = [];
+      for (let i = 0; i < withPhone.length; i += SMS_BATCH_SIZE) {
+        batches.push(withPhone.slice(i, i + SMS_BATCH_SIZE).map((c) => c.phone!));
+      }
+      setSmsBatches(batches);
+      setSmsBatchIndex(0);
+
+      // Open the first batch
+      const siteUrl = window.location.origin;
+      const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
+      const firstBatch = batches[0].join(",");
+      window.open(`sms:${firstBatch}?body=${body}`, "_self");
+    }
+
+    setInviteResult({
+      sent: emailSent,
+      skipped: emailSkipped,
+      texted: withPhone.length,
+    });
+    setInvitesSent(true);
     setSendingInvites(false);
+  };
+
+  /** Open the next SMS batch */
+  const handleNextSmsBatch = () => {
+    const nextIdx = smsBatchIndex + 1;
+    if (nextIdx >= smsBatches.length) return;
+    setSmsBatchIndex(nextIdx);
+
+    const siteUrl = window.location.origin;
+    const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
+    const batch = smsBatches[nextIdx].join(",");
+    window.open(`sms:${batch}?body=${body}`, "_self");
   };
 
   // ─── Manual Email Invite ───
@@ -313,11 +373,11 @@ export default function FindFriendsPage() {
 
   // ─── Toggle invite selection ───
 
-  const toggleInvite = (email: string) => {
+  const toggleInvite = (key: string) => {
     setSelectedInvites((prev) => {
       const next = new Set(prev);
-      if (next.has(email)) next.delete(email);
-      else next.add(email);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -325,7 +385,8 @@ export default function FindFriendsPage() {
   const selectAllInvites = () => {
     const all = new Set<string>();
     for (const c of unmatched) {
-      if (c.email) all.add(c.email);
+      const key = contactKey(c);
+      if (key) all.add(key);
     }
     setSelectedInvites(all);
   };
@@ -568,13 +629,13 @@ export default function FindFriendsPage() {
             )}
 
             {/* Unmatched contacts — invite to LetsGo */}
-            {unmatched.filter((c) => c.email).length > 0 && (
+            {unmatched.filter((c) => c.email || c.phone).length > 0 && (
               <div style={{ marginBottom: 28 }}>
                 <div style={{
                   fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                   color: PINK, marginBottom: 10, display: "flex", alignItems: "center", gap: 8,
                 }}>
-                  <span>&#x1F4E9;</span> Invite to LetsGo ({unmatched.filter((c) => c.email).length})
+                  <span>&#x1F4E9;</span> Invite to LetsGo ({unmatched.filter((c) => c.email || c.phone).length})
                 </div>
                 <div style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -598,12 +659,14 @@ export default function FindFriendsPage() {
                   display: "flex", flexDirection: "column", gap: 6,
                   maxHeight: 300, overflowY: "auto",
                 }}>
-                  {unmatched.filter((c) => c.email).map((contact, idx) => {
-                    const isSelected = selectedInvites.has(contact.email!);
+                  {unmatched.filter((c) => c.email || c.phone).map((contact, idx) => {
+                    const key = contactKey(contact);
+                    const isSelected = selectedInvites.has(key);
+                    const viaPhone = !!contact.phone;
                     return (
                       <div
-                        key={contact.email! + idx}
-                        onClick={() => toggleInvite(contact.email!)}
+                        key={key + idx}
+                        onClick={() => toggleInvite(key)}
                         style={{
                           display: "flex", alignItems: "center", gap: 12,
                           padding: "10px 14px", borderRadius: 10, cursor: "pointer",
@@ -629,8 +692,9 @@ export default function FindFriendsPage() {
                           <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {contact.contactName}
                           </div>
-                          <div style={{ fontSize: 11, color: TEXT_DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {contact.email}
+                          <div style={{ fontSize: 11, color: TEXT_DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>{viaPhone ? "via text" : "via email"}</span>
+                            <span style={{ color: TEXT_MUTED }}>{viaPhone ? contact.phone : contact.email}</span>
                           </div>
                         </div>
                       </div>
@@ -656,9 +720,9 @@ export default function FindFriendsPage() {
             )}
 
             {/* No results at all */}
-            {matched.length === 0 && unmatched.filter((c) => c.email).length === 0 && (
+            {matched.length === 0 && unmatched.filter((c) => c.email || c.phone).length === 0 && (
               <div style={{ textAlign: "center", padding: "32px 0", color: TEXT_DIM, fontSize: 14 }}>
-                No contacts with email addresses found. Share your invite link instead!
+                No contacts with email or phone found. Share your invite link instead!
               </div>
             )}
 
@@ -689,13 +753,47 @@ export default function FindFriendsPage() {
               Invites Sent!
             </h2>
             {inviteResult && (
-              <p style={{ fontSize: 14, color: TEXT_DIM, marginBottom: 8, lineHeight: 1.6 }}>
-                {inviteResult.sent} invite{inviteResult.sent !== 1 ? "s" : ""} sent
-                {inviteResult.skipped > 0 && `, ${inviteResult.skipped} skipped`}
-              </p>
+              <div style={{ fontSize: 14, color: TEXT_DIM, marginBottom: 8, lineHeight: 1.6 }}>
+                {inviteResult.texted > 0 && (
+                  <p style={{ margin: "0 0 4px" }}>
+                    {inviteResult.texted} text invite{inviteResult.texted !== 1 ? "s" : ""} opened
+                  </p>
+                )}
+                {inviteResult.sent > 0 && (
+                  <p style={{ margin: "0 0 4px" }}>
+                    {inviteResult.sent} email invite{inviteResult.sent !== 1 ? "s" : ""} sent
+                  </p>
+                )}
+                {inviteResult.skipped > 0 && (
+                  <p style={{ margin: 0, color: TEXT_MUTED }}>
+                    {inviteResult.skipped} skipped
+                  </p>
+                )}
+              </div>
             )}
+
+            {/* SMS batch navigation — show if there are more batches to send */}
+            {smsBatches.length > 1 && smsBatchIndex < smsBatches.length - 1 && (
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 13, color: TEXT_DIM, marginBottom: 12 }}>
+                  Text batch {smsBatchIndex + 1} of {smsBatches.length} opened.
+                </p>
+                <button
+                  onClick={handleNextSmsBatch}
+                  style={{ ...btnGreen, width: "100%" }}
+                >
+                  Open Next Batch ({smsBatches[smsBatchIndex + 1].length} contacts)
+                </button>
+              </div>
+            )}
+
             <p style={{ fontSize: 13, color: TEXT_MUTED, marginBottom: 32, lineHeight: 1.6 }}>
-              Your friends will get an email with a link to join LetsGo.
+              {inviteResult && inviteResult.texted > 0 && inviteResult.sent > 0
+                ? "Your friends will get a text or email with a link to join LetsGo."
+                : inviteResult && inviteResult.texted > 0
+                  ? "Hit send in your messaging app to deliver the invites."
+                  : "Your friends will get an email with a link to join LetsGo."
+              }
               {matched.length > 0 && friendRequestsSent.size > 0 && (
                 <><br />Friend requests sent to {friendRequestsSent.size} user{friendRequestsSent.size !== 1 ? "s" : ""} already on the app.</>
               )}
