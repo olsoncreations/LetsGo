@@ -100,8 +100,6 @@ export default function FindFriendsPage() {
   const [sendingInvites, setSendingInvites] = useState(false);
   const [invitesSent, setInvitesSent] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ sent: number; skipped: number; texted: number } | null>(null);
-  const [smsBatchIndex, setSmsBatchIndex] = useState(0);
-  const [smsBatches, setSmsBatches] = useState<string[][]>([]);
 
   // Manual email entry (iOS fallback)
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -250,12 +248,14 @@ export default function FindFriendsPage() {
 
     const selected = unmatched.filter((c) => selectedInvites.has(contactKey(c)));
 
-    // Split into phone contacts (SMS) and email-only contacts
+    // Split into phone contacts (SMS via Twilio) and email-only contacts
     const withPhone = selected.filter((c) => c.phone);
     const emailOnly = selected.filter((c) => !c.phone && c.email);
 
     let emailSent = 0;
     let emailSkipped = 0;
+    let smsSent = 0;
+    let smsFailed = 0;
 
     // Send email invites for contacts without phone numbers
     if (emailOnly.length > 0) {
@@ -272,38 +272,29 @@ export default function FindFriendsPage() {
       }
     }
 
-    // Build individual SMS links — one per contact to avoid group chats
+    // Send SMS invites via Twilio API (all at once, no manual tapping)
     if (withPhone.length > 0) {
-      const phones = withPhone.map((c) => c.phone!);
-      const batches = phones.map((p) => [p]);
-      setSmsBatches(batches);
-      setSmsBatchIndex(0);
-
-      // Open the first one
-      const siteUrl = window.location.origin;
-      const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
-      window.open(`sms:${phones[0]}?body=${body}`, "_self");
+      try {
+        const smsInvites = withPhone.map((c) => ({ name: c.contactName, phone: c.phone! }));
+        const result = await apiFetch("/api/contacts/invite-sms", token, {
+          method: "POST",
+          body: JSON.stringify({ invites: smsInvites }),
+        });
+        smsSent = result.sent || 0;
+        smsFailed = result.failed || 0;
+      } catch (err) {
+        console.error("[find-friends] SMS invite error:", err);
+        setError("Failed to send text invites. Please try again.");
+      }
     }
 
     setInviteResult({
       sent: emailSent,
-      skipped: emailSkipped,
-      texted: withPhone.length,
+      skipped: emailSkipped + smsFailed,
+      texted: smsSent,
     });
     setInvitesSent(true);
     setSendingInvites(false);
-  };
-
-  /** Open the next SMS batch */
-  const handleNextSmsBatch = () => {
-    const nextIdx = smsBatchIndex + 1;
-    if (nextIdx >= smsBatches.length) return;
-    setSmsBatchIndex(nextIdx);
-
-    const siteUrl = window.location.origin;
-    const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
-    const batch = smsBatches[nextIdx].join(",");
-    window.open(`sms:${batch}?body=${body}`, "_self");
   };
 
   // ─── Manual Email Invite ───
@@ -752,7 +743,7 @@ export default function FindFriendsPage() {
               <div style={{ fontSize: 14, color: TEXT_DIM, marginBottom: 8, lineHeight: 1.6 }}>
                 {inviteResult.texted > 0 && (
                   <p style={{ margin: "0 0 4px" }}>
-                    {inviteResult.texted} text invite{inviteResult.texted !== 1 ? "s" : ""} opened
+                    {inviteResult.texted} text invite{inviteResult.texted !== 1 ? "s" : ""} sent
                   </p>
                 )}
                 {inviteResult.sent > 0 && (
@@ -768,31 +759,11 @@ export default function FindFriendsPage() {
               </div>
             )}
 
-            {/* SMS navigation — show if there are more contacts to text */}
-            {smsBatches.length > 1 && smsBatchIndex < smsBatches.length - 1 && (
-              <div style={{ marginBottom: 20 }}>
-                <p style={{ fontSize: 13, color: TEXT_DIM, marginBottom: 12 }}>
-                  {smsBatchIndex + 1} of {smsBatches.length} texts sent
-                </p>
-                <button
-                  onClick={handleNextSmsBatch}
-                  style={{ ...btnGreen, width: "100%" }}
-                >
-                  Next Contact ({smsBatches.length - smsBatchIndex - 1} remaining)
-                </button>
-              </div>
-            )}
-            {smsBatches.length > 0 && smsBatchIndex >= smsBatches.length - 1 && smsBatches.length > 1 && (
-              <p style={{ fontSize: 13, color: GREEN, marginBottom: 20 }}>
-                All {smsBatches.length} texts done!
-              </p>
-            )}
-
             <p style={{ fontSize: 13, color: TEXT_MUTED, marginBottom: 32, lineHeight: 1.6 }}>
               {inviteResult && inviteResult.texted > 0 && inviteResult.sent > 0
                 ? "Your friends will get a text or email with a link to join LetsGo."
                 : inviteResult && inviteResult.texted > 0
-                  ? "Hit send in your messaging app to deliver the invites."
+                  ? "Your friends will get a text with a link to join LetsGo."
                   : "Your friends will get an email with a link to join LetsGo."
               }
               {matched.length > 0 && friendRequestsSent.size > 0 && (
