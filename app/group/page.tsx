@@ -913,9 +913,10 @@ const GameSetup = ({ friends, onBack, onCreateGame }: GameSetupProps) => {
     "Who\u2019s playing tonight?",
   ];
 
+  const backAction = step === 0 ? onBack : () => setStep(step - 1);
+
   return (
     <div style={{ animation: "fadeIn 0.5s ease both" }}>
-      <BackBtn onClick={step === 0 ? onBack : () => setStep(step - 1)} label={step === 0 ? undefined : "Back"} />
       <SectionLabel text="ROUND 0 — SETUP" />
       <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 28, fontWeight: 700, color: TEXT_PRIMARY, marginBottom: 6 }}>
         {stepTitles[step]}
@@ -964,7 +965,8 @@ const GameSetup = ({ friends, onBack, onCreateGame }: GameSetupProps) => {
               onBlur={(e: React.FocusEvent<HTMLInputElement>) => { (e.target as HTMLElement).style.borderColor = `rgba(${NEON_RGB}, 0.15)`; }} />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            <NeonBtn variant="filled" onClick={backAction}>← Back</NeonBtn>
             <NeonBtn variant="filled" onClick={() => setStep(1)} disabled={!location.trim()}>Next</NeonBtn>
           </div>
         </div>
@@ -1094,7 +1096,8 @@ const GameSetup = ({ friends, onBack, onCreateGame }: GameSetupProps) => {
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            <NeonBtn variant="filled" onClick={() => setStep(0)}>← Back</NeonBtn>
             <NeonBtn variant="filled" onClick={() => setStep(2)}>Next</NeonBtn>
           </div>
         </div>
@@ -1186,7 +1189,8 @@ const GameSetup = ({ friends, onBack, onCreateGame }: GameSetupProps) => {
             ))}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            <NeonBtn variant="filled" onClick={() => setStep(1)}>← Back</NeonBtn>
             <NeonBtn variant="filled" onClick={() => setStep(3)}>Next</NeonBtn>
           </div>
         </div>
@@ -1244,7 +1248,8 @@ const GameSetup = ({ friends, onBack, onCreateGame }: GameSetupProps) => {
               {createdGameCode || "Launch to get code"}
             </div>
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <NeonBtn variant="filled" onClick={() => setStep(2)}>← Back</NeonBtn>
             <NeonBtn variant="filled" onClick={handleLaunch} disabled={creating}>
               {creating ? "Creating..." : "Launch Game ⬡"}
             </NeonBtn>
