@@ -1,0 +1,181 @@
+/* ==============================================
+   Admin Mobile Responsiveness
+   ONLY applies to the Sales page (/admin/sales)
+   All other admin pages remain desktop-only.
+   ============================================== */
+
+@media (max-width: 768px) {
+  /* ---- Hide sidebar & header on Sales page only ---- */
+  .admin-sales-active > nav {
+    display: none !important;
+  }
+
+  .admin-sales-active > div > header {
+    display: none !important;
+  }
+
+  /* ---- Prevent horizontal scroll ---- */
+  .admin-sales-active {
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  .admin-sales-active > div {
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
+  /* ---- Sales Page: Main container padding ---- */
+  .sales-page {
+    padding: 16px !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ---- Sales Page: Header ---- */
+  .sales-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .sales-header h1 {
+    font-size: 20px !important;
+  }
+
+  .sales-header-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .sales-header-actions button {
+    flex: 1;
+    font-size: 11px !important;
+    padding: 8px 12px !important;
+  }
+
+  /* ---- Sales Page: Filters bar ---- */
+  .sales-filters-bar {
+    gap: 8px !important;
+    max-width: 100% !important;
+  }
+
+  .sales-filters-bar > * {
+    min-width: 0 !important;
+  }
+
+  .sales-filters-bar select,
+  .sales-filters-bar input[type="date"] {
+    font-size: 11px !important;
+    padding: 6px 8px !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* ---- Sales Page: Sub-tabs (horizontally scrollable) ---- */
+  .sales-tabs {
+    width: auto !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+  }
+
+  .sales-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sales-tabs button {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 8px 14px !important;
+    font-size: 12px !important;
+  }
+
+  /* ---- Sales Page: Stat cards grid ---- */
+  .sales-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .sales-stats-grid > div {
+    padding: 12px !important;
+  }
+
+  /* ---- Sales Page: All cards constrained ---- */
+  .sales-page > * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ---- Sales Page: Overview filters card ---- */
+  .sales-overview-filters {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+
+  .sales-overview-filters > div {
+    min-width: 0;
+  }
+
+  .sales-overview-filters select,
+  .sales-overview-filters input[type="date"] {
+    width: 100% !important;
+    font-size: 11px !important;
+  }
+
+  /* ---- Sales Page: Attainment grid ---- */
+  .sales-attainment-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ---- Sales Page: Two-column grids → single column ---- */
+  .sales-two-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ---- Sales Page: Three-column grids → single column ---- */
+  .sales-three-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ---- Sales Page: Four-column grids → two columns ---- */
+  .sales-four-col {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ---- Sales Page: Rep cards grid ---- */
+  .sales-reps-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* ---- DataTable horizontal scroll ---- */
+  .sales-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sales-table-wrap table {
+    min-width: 600px;
+  }
+}
+
+/* Smaller phones */
+@media (max-width: 420px) {
+  .sales-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sales-four-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sales-tabs button {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+}

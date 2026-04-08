@@ -224,6 +224,7 @@ export async function POST(req: NextRequest) {
 
       if (place.addressComponents) {
         for (const comp of place.addressComponents) {
+          if (!comp.types) continue;
           if (comp.types.includes("locality")) city = comp.longText;
           if (comp.types.includes("administrative_area_level_1")) state = comp.shortText;
           if (comp.types.includes("postal_code")) zip = comp.longText;

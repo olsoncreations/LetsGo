@@ -9,6 +9,7 @@ import AdminHeader from "@/components/admin/AdminHeader";
 import { COLORS } from "@/components/admin/constants";
 import { StaffProvider, useStaffContext } from "@/components/admin/StaffContext";
 import { canAccessRoute, NAV_PERMISSIONS } from "@/components/admin/permissions";
+import "./admin-mobile.css";
 
 /** Inner component that can use StaffContext (must be inside StaffProvider). */
 function RouteGuard({ children }: { children: React.ReactNode }) {
@@ -168,6 +169,7 @@ export default function AdminLayout({
       />
 
       <div
+        className={pathname === "/admin/sales" ? "admin-layout admin-sales-active" : "admin-layout"}
         style={{
           minHeight: "100vh",
           background: COLORS.darkBg,

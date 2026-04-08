@@ -1939,7 +1939,7 @@ export default function SalesPage() {
   ]);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 32, background: COLORS.darkBg, minHeight: "calc(100vh - 60px)" }}>
+    <div className="sales-page" style={{ flex: 1, overflowY: "auto", padding: 32, background: COLORS.darkBg, minHeight: "calc(100vh - 60px)" }}>
       {/* ADD SALE MODAL */}
       {showAddSaleModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1001 }} onClick={() => setShowAddSaleModal(false)}>
@@ -2481,9 +2481,9 @@ export default function SalesPage() {
       )}
 
       {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div className="sales-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, background: COLORS.gradient1, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>💼 Sales Commission & Bonus Pool</h1>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="sales-header-actions" style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShowAddSaleModal(true)} style={{ padding: "10px 20px", background: COLORS.gradient2, border: "none", borderRadius: 8, color: "#000", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>+ Add Sale</button>
           <button onClick={() => downloadCSV(`sales_${new Date().toISOString().slice(0, 10)}.csv`, exportHeaders, exportRows)} style={{ padding: "10px 16px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, cursor: "pointer", fontSize: 12 }}>CSV</button>
           <button onClick={() => downloadXLSX(`sales_${new Date().toISOString().slice(0, 10)}.xlsx`, exportHeaders, exportRows)} style={{ padding: "10px 16px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8, color: COLORS.textPrimary, cursor: "pointer", fontSize: 12 }}>XLSX</button>
@@ -2491,7 +2491,7 @@ export default function SalesPage() {
       </div>
 
       {/* FILTERS BAR */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="sales-filters-bar" style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 4, background: COLORS.cardBg, padding: 4, borderRadius: 8 }}>
           {["day", "week", "month", "year"].map((p) => (
             <button key={p} onClick={() => setSalesPeriod(p)} style={{ padding: "8px 14px", borderRadius: 6, border: "none", cursor: "pointer", background: salesPeriod === p ? COLORS.gradient1 : "transparent", color: salesPeriod === p ? "#fff" : COLORS.textSecondary, fontSize: 12, fontWeight: salesPeriod === p ? 600 : 400, textTransform: "capitalize" }}>{p}</button>
@@ -2527,7 +2527,7 @@ export default function SalesPage() {
       </div>
 
       {/* SUB-TABS */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.cardBg, padding: 8, borderRadius: 12, width: "fit-content" }}>
+      <div className="sales-tabs" style={{ display: "flex", gap: 8, marginBottom: 24, background: COLORS.cardBg, padding: 8, borderRadius: 12, width: "fit-content" }}>
         {tabs.map((tab) => (
           <button key={tab.key} onClick={() => setSalesTab(tab.key)} style={{ padding: "10px 20px", borderRadius: 8, border: "none", cursor: "pointer", background: salesTab === tab.key ? COLORS.gradient1 : "transparent", color: salesTab === tab.key ? "#fff" : COLORS.textSecondary, fontWeight: salesTab === tab.key ? 700 : 500, fontSize: 13 }}>{tab.label}</button>
         ))}
@@ -2540,7 +2540,7 @@ export default function SalesPage() {
             <>
               {/* GLOBAL FILTERS BAR */}
               <Card style={{ marginBottom: 24, padding: 16 }}>
-                <div style={{ display: "flex", gap: 16, alignItems: "end", flexWrap: "wrap" }}>
+                <div className="sales-overview-filters" style={{ display: "flex", gap: 16, alignItems: "end", flexWrap: "wrap" }}>
                   {/* Quick Period Filters */}
                   <div>
                     <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Quick Filters</label>
@@ -2693,7 +2693,7 @@ export default function SalesPage() {
               </Card>
 
               {/* TOP STATS ROW */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginBottom: 24 }}>
+              <div className="sales-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Total Commissions", value: formatMoney(totalCommissions), sub: periodLabel, color: COLORS.neonGreen },
                   { label: "Bonus Pool", value: formatMoney(computedBonusPool), sub: `${currentQuarter.label}${poolUnlocked ? " \u2022 Unlocked" : ""}`, color: COLORS.neonPurple },
@@ -2777,7 +2777,7 @@ export default function SalesPage() {
                 };
 
                 return (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 20, marginBottom: 24 }}>
+                  <div className="sales-attainment-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 20, marginBottom: 24 }}>
                     {/* Monthly Attainment — All Months */}
                     <Card>
                       <div style={{ padding: "12px 0" }}>
@@ -2916,7 +2916,7 @@ export default function SalesPage() {
               })()}
 
               {/* RECENT SIGNUPS + COMMISSION RATES & QUOTAS */}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginBottom: 24 }}>
+              <div className="sales-two-col" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginBottom: 24 }}>
                 <Card title="📈 Recent Signups">
                   {filteredSignups.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No signups in this period</div> : (
                     <DataTable columns={[
@@ -3304,7 +3304,7 @@ export default function SalesPage() {
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                   <span>💵</span> Top Locations by Revenue (Package + Ad Sales)
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                <div className="sales-three-col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {(() => {
                     // Revenue = plan price + ad spend per signup
                     const divTotals = divisions.map(d => {
@@ -3349,7 +3349,7 @@ export default function SalesPage() {
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                   <span>💰</span> Top Locations by Sales Spend (Commission + Bonus)
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                <div className="sales-three-col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {(() => {
                     // For commission, use the commission_cents from signups
                     // For bonus, we'll estimate based on pool share
@@ -3526,7 +3526,7 @@ export default function SalesPage() {
               </div>
             }>
               {salesReps.length === 0 ? <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>No sales team members</div> : (
-                <div style={{ overflowX: "auto" }}>
+                <div className="sales-table-wrap" style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={{ borderBottom: "2px solid " + COLORS.cardBorder }}>
@@ -3668,8 +3668,8 @@ export default function SalesPage() {
           {salesTab === "signups" && (
             <>
               {/* Type Filter + Export Button */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <div style={{ display: "flex", gap: 8 }}>
+              <div className="sales-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {["all", "outbound", "inbound"].map((f) => <button key={f} onClick={() => setSignupTypeFilter(f)} style={{ padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", background: signupTypeFilter === f ? COLORS.gradient1 : COLORS.cardBg, color: signupTypeFilter === f ? "#fff" : COLORS.textSecondary, fontSize: 12, fontWeight: 600 }}>{f === "all" ? "All Signups" : f === "outbound" ? "Outbound (Sales Rep)" : "Inbound (No Rep)"}</button>)}
                 </div>
                 <button
@@ -3682,7 +3682,7 @@ export default function SalesPage() {
 
               {/* Search & Filters */}
               <Card style={{ marginBottom: 16, padding: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 12, alignItems: "end" }}>
+                <div className="sales-overview-filters" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 12, alignItems: "end" }}>
                   {/* Search */}
                   <div>
                     <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>Search Business</label>
@@ -3897,7 +3897,7 @@ export default function SalesPage() {
               {/* ELIGIBLE FOR BONUS SECTION */}
               <Card title={`✓ Eligible for Bonus (${formatMoney(bonusRepEligibility)} commission threshold)`} style={{ marginBottom: 24 }}>
                 {eligibleReps.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>No reps have reached the {formatMoney(bonusRepEligibility)} commission threshold yet this quarter</div> : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                  <div className="sales-three-col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                     {eligibleReps.map((rep) => {
                       const repComm = getRepQuarterlyCommission(rep.id);
                       return (
@@ -3952,7 +3952,7 @@ export default function SalesPage() {
                     });
 
                     return (
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                      <div className="sales-four-col" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
                         {projections.map((proj, i) => (
                           <div key={i} style={{ padding: 16, background: COLORS.cardBg, borderRadius: 12, border: "1px solid " + COLORS.cardBorder, textAlign: "center" }}>
                             <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8 }}>+{proj.signups} More Signups</div>
@@ -4036,7 +4036,7 @@ export default function SalesPage() {
               {/* HISTORICAL QUARTER COMPARISON */}
               {previousPools.length > 0 && (
                 <Card title="📊 Quarter-over-Quarter Comparison" style={{ marginBottom: 24 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+                  <div className="sales-four-col" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
                     {[computedPoolData as BonusPool, ...previousPools.slice(0, 3)].filter(Boolean).map((pool, i) => {
                       const prevPool = i < 3 ? [computedPoolData as BonusPool, ...previousPools][i + 1] : null;
                       const poolChange = prevPool ? ((pool!.total_pool_cents - prevPool.total_pool_cents) / prevPool.total_pool_cents) * 100 : 0;
@@ -4159,9 +4159,9 @@ export default function SalesPage() {
                 return (
                   <>
                     {/* Division Cards + Summary Table */}
-                    <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 20, marginBottom: 24 }}>
+                    <div className="sales-two-col" style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 20, marginBottom: 24 }}>
                       {/* Left: 3x2 Division Cards */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridTemplateRows: "repeat(2, 1fr)", gap: 14 }}>
+                      <div className="sales-three-col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridTemplateRows: "repeat(2, 1fr)", gap: 14 }}>
                         {divData.map((div, i) => {
                           const fullNames = div.states.map(s => stateNames[s] || s);
                           const half = Math.ceil(fullNames.length / 2);
@@ -4788,7 +4788,7 @@ export default function SalesPage() {
           {salesTab === "payouts" && (
             <>
               {/* Summary Cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+              <div className="sales-three-col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
                 <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>{currentMonthName} {currentYear} Commissions</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonGreen }}>{formatMoney(monthSignups.reduce((a, s) => a + s.commission_cents, 0))}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Due: {monthNames[currentMonth % 12]} 5, {currentMonth === 12 ? currentYear + 1 : currentYear}</div></Card>
                 <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Next Bonus Payout</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonPurple }}>{formatMoney(computedPoolData.total_pool_cents)}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>{computedPoolData.quarter}{poolUnlocked ? " • Unlocked" : " • Locked"}</div></Card>
                 <Card><div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>YTD Total Paid</div><div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonOrange }}>{formatMoney(ytdPaid)}</div><div style={{ fontSize: 12, color: COLORS.textSecondary }}>Commissions + Bonuses</div></Card>
@@ -4985,7 +4985,7 @@ export default function SalesPage() {
                 ) : applications.length === 0 ? (
                   <div style={{ textAlign: "center", padding: 40, color: COLORS.textSecondary }}>No applications found</div>
                 ) : (
-                  <div style={{ overflowX: "auto" }}>
+                  <div className="sales-table-wrap" style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                       <thead>
                         <tr style={{ borderBottom: "1px solid " + COLORS.cardBorder }}>
@@ -5438,7 +5438,7 @@ export default function SalesPage() {
                 </div>
 
                 {/* Summary Cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+                <div className="sales-four-col" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
                   <Card>
                     <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase" }}>Reps with Earnings</div>
                     <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.neonBlue }}>{repsWithEarnings.length}</div>
