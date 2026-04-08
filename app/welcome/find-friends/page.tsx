@@ -101,6 +101,9 @@ export default function FindFriendsPage() {
   const [invitesSent, setInvitesSent] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ sent: number; skipped: number; texted: number } | null>(null);
 
+  // SMS fallback queue (when Twilio isn't approved yet)
+  const [smsFallbackQueue, setSmsFallbackQueue] = useState<string[]>([]);
+
   // Manual email entry (iOS fallback)
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualEmails, setManualEmails] = useState("");
@@ -273,6 +276,7 @@ export default function FindFriendsPage() {
     }
 
     // Send SMS invites via Twilio API (all at once, no manual tapping)
+    let twilioFailed = false;
     if (withPhone.length > 0) {
       try {
         const smsInvites = withPhone.map((c) => ({ name: c.contactName, phone: c.phone! }));
@@ -282,19 +286,53 @@ export default function FindFriendsPage() {
         });
         smsSent = result.sent || 0;
         smsFailed = result.failed || 0;
-      } catch (err) {
-        console.error("[find-friends] SMS invite error:", err);
-        setError("Failed to send text invites. Please try again.");
+
+        // If ALL texts failed, Twilio is likely not approved yet — fall back to sms: URI
+        if (smsSent === 0 && smsFailed > 0) {
+          twilioFailed = true;
+        }
+      } catch {
+        // API call itself failed — fall back to sms: URI
+        twilioFailed = true;
+      }
+
+      // Fallback: open native SMS app one contact at a time
+      if (twilioFailed) {
+        smsSent = 0;
+        smsFailed = 0;
+        const siteUrl = window.location.origin;
+        const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
+
+        // Open first contact in SMS app
+        window.open(`sms:${withPhone[0].phone}?body=${body}`, "_self");
+
+        // Queue remaining contacts for "Next Contact" button
+        if (withPhone.length > 1) {
+          const remaining = withPhone.slice(1).map((c) => c.phone!);
+          setSmsFallbackQueue(remaining);
+        }
+        smsSent = withPhone.length; // Optimistically count as opened
       }
     }
 
     setInviteResult({
       sent: emailSent,
-      skipped: emailSkipped + smsFailed,
+      skipped: emailSkipped + (twilioFailed ? 0 : smsFailed),
       texted: smsSent,
     });
     setInvitesSent(true);
     setSendingInvites(false);
+  };
+
+  /** Open the next contact in the SMS fallback queue */
+  const handleNextFallbackSms = () => {
+    if (smsFallbackQueue.length === 0) return;
+    const [next, ...rest] = smsFallbackQueue;
+    setSmsFallbackQueue(rest);
+
+    const siteUrl = window.location.origin;
+    const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
+    window.open(`sms:${next}?body=${body}`, "_self");
   };
 
   // ─── Manual Email Invite ───
@@ -743,7 +781,7 @@ export default function FindFriendsPage() {
               <div style={{ fontSize: 14, color: TEXT_DIM, marginBottom: 8, lineHeight: 1.6 }}>
                 {inviteResult.texted > 0 && (
                   <p style={{ margin: "0 0 4px" }}>
-                    {inviteResult.texted} text invite{inviteResult.texted !== 1 ? "s" : ""} sent
+                    {inviteResult.texted} text invite{inviteResult.texted !== 1 ? "s" : ""} {smsFallbackQueue.length > 0 ? "opened" : "sent"}
                   </p>
                 )}
                 {inviteResult.sent > 0 && (
@@ -759,11 +797,25 @@ export default function FindFriendsPage() {
               </div>
             )}
 
+            {/* SMS fallback: step through remaining contacts */}
+            {smsFallbackQueue.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <button
+                  onClick={handleNextFallbackSms}
+                  style={{ ...btnGreen, width: "100%" }}
+                >
+                  Next Contact ({smsFallbackQueue.length} remaining)
+                </button>
+              </div>
+            )}
+
             <p style={{ fontSize: 13, color: TEXT_MUTED, marginBottom: 32, lineHeight: 1.6 }}>
-              {inviteResult && inviteResult.texted > 0 && inviteResult.sent > 0
-                ? "Your friends will get a text or email with a link to join LetsGo."
-                : inviteResult && inviteResult.texted > 0
-                  ? "Your friends will get a text with a link to join LetsGo."
+              {smsFallbackQueue.length > 0
+                ? "Hit send in your messaging app, then come back to send the next one."
+                : inviteResult && inviteResult.texted > 0 && inviteResult.sent > 0
+                  ? "Your friends will get a text or email with a link to join LetsGo."
+                  : inviteResult && inviteResult.texted > 0
+                    ? "Your friends will get a text with a link to join LetsGo."
                   : "Your friends will get an email with a link to join LetsGo."
               }
               {matched.length > 0 && friendRequestsSent.size > 0 && (
