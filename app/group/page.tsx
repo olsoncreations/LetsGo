@@ -1034,7 +1034,7 @@ const GameSetup = ({ friends, onBack, onCreateGame }: GameSetupProps) => {
                   return (
                     <div key={idx} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
                       <div style={{
-                        width: `${widthPercent}%`, padding: "10px 16px", borderRadius: 4,
+                        width: `${widthPercent}%`, minWidth: 220, padding: "10px 16px", borderRadius: 4,
                         background: `rgba(${idx === 0 ? NEON_RGB : idx === 1 ? "0,229,255" : idx === 2 ? "255,214,0" : PINK_RGB}, 0.06)`,
                         border: `1px solid ${thisColor}30`,
                         display: "flex", alignItems: "center", justifyContent: "space-between",
