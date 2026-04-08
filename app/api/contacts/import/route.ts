@@ -32,7 +32,16 @@ type ProfileRow = {
   username: string | null;
   avatar_url: string | null;
   email: string | null;
+  phone: string | null;
 };
+
+/** Normalize a phone number to just digits (strip +, spaces, dashes, parens) */
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  // If 11 digits starting with 1, strip the country code
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  return digits;
+}
 
 function getDisplayName(p: ProfileRow): string {
   if (p.full_name) return p.full_name;
@@ -56,7 +65,7 @@ async function extractUserId(req: NextRequest): Promise<string | null> {
 // POST /api/contacts/import
 //
 // Process imported contacts — match against existing
-// LetsGo users by email (case-insensitive).
+// LetsGo users by email and phone number.
 //
 // Body: { contacts: ContactInput[] }
 // Returns: { matched: MatchedUser[], unmatched: UnmatchedContact[] }
@@ -96,70 +105,106 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     }
 
+    // Collect all unique phone numbers (normalized to 10 digits) from contacts
+    const phoneToContact = new Map<string, ContactInput>();
+    for (const c of capped) {
+      for (const phone of c.phones) {
+        const normalized = normalizePhone(phone);
+        if (normalized.length >= 10) {
+          phoneToContact.set(normalized, c);
+        }
+      }
+    }
+
     const allEmails = [...emailToContact.keys()];
+    const allPhones = [...phoneToContact.keys()];
 
-    if (allEmails.length === 0) {
-      // No valid emails — return all as unmatched
-      const unmatched: UnmatchedContact[] = capped.map((c) => ({
-        contactName: c.name,
-        email: c.emails[0] || null,
-        phone: c.phones[0] || null,
-      }));
-      return NextResponse.json({ matched: [], unmatched });
-    }
-
-    // Query profiles by email (case-insensitive) — batch in chunks of 100
-    const matchedProfiles: ProfileRow[] = [];
-    for (let i = 0; i < allEmails.length; i += 100) {
-      const batch = allEmails.slice(i, i + 100);
-      const { data } = await supabaseServer
-        .from("profiles")
-        .select("id, full_name, first_name, last_name, username, avatar_url, email")
-        .in("email", batch);
-
-      if (data) {
-        matchedProfiles.push(...(data as ProfileRow[]));
-      }
-    }
-
-    // Build set of matched emails
-    const matchedEmailSet = new Set<string>();
-    const matchedContactSet = new Set<string>(); // track which contacts matched
-
+    // Track matched user IDs to avoid duplicates (same person matched by email AND phone)
+    const matchedUserIds = new Set<string>();
+    const matchedContactKeys = new Set<string>();
     const matched: MatchedUser[] = [];
-    for (const profile of matchedProfiles) {
-      // Skip the requesting user
-      if (profile.id === userId) continue;
 
-      const profileEmail = (profile.email || "").toLowerCase().trim();
-      if (!profileEmail) continue;
+    // Helper to get a unique key for a contact
+    const contactKey = (c: ContactInput) => c.name + "|" + (c.emails[0] || "") + "|" + (c.phones[0] || "");
 
-      matchedEmailSet.add(profileEmail);
+    // Helper to add a matched profile
+    const addMatch = (profile: ProfileRow, contact: ContactInput) => {
+      if (profile.id === userId) return; // Skip the requesting user
+      if (matchedUserIds.has(profile.id)) return; // Already matched
+      matchedUserIds.add(profile.id);
+      matchedContactKeys.add(contactKey(contact));
+      matched.push({
+        contactName: contact.name,
+        userId: profile.id,
+        userName: getDisplayName(profile),
+        username: profile.username,
+        avatarUrl: profile.avatar_url,
+      });
+    };
 
-      const contact = emailToContact.get(profileEmail);
-      if (contact) {
-        matchedContactSet.add(contact.name + "|" + (contact.emails[0] || ""));
-        matched.push({
-          contactName: contact.name,
-          userId: profile.id,
-          userName: getDisplayName(profile),
-          username: profile.username,
-          avatarUrl: profile.avatar_url,
-        });
+    // Match by email — batch in chunks of 100
+    if (allEmails.length > 0) {
+      for (let i = 0; i < allEmails.length; i += 100) {
+        const batch = allEmails.slice(i, i + 100);
+        const { data } = await supabaseServer
+          .from("profiles")
+          .select("id, full_name, first_name, last_name, username, avatar_url, email, phone")
+          .in("email", batch);
+
+        for (const profile of (data || []) as ProfileRow[]) {
+          const profileEmail = (profile.email || "").toLowerCase().trim();
+          const contact = emailToContact.get(profileEmail);
+          if (contact) addMatch(profile, contact);
+        }
       }
     }
 
-    // Build unmatched list — contacts whose emails didn't match any profile
+    // Match by phone number — batch in chunks of 100
+    if (allPhones.length > 0) {
+      // Query profiles that have a phone set, then compare normalized values
+      // Supabase doesn't support function-based matching, so fetch all profiles with phones
+      // and filter client-side. For efficiency, batch by phone digits.
+      for (let i = 0; i < allPhones.length; i += 100) {
+        const batch = allPhones.slice(i, i + 100);
+        // Try matching with multiple formats: raw 10 digits, with +1, with 1
+        const phoneVariants: string[] = [];
+        for (const p of batch) {
+          phoneVariants.push(p);           // 4025150880
+          phoneVariants.push("1" + p);     // 14025150880
+          phoneVariants.push("+1" + p);    // +14025150880
+        }
+
+        const { data } = await supabaseServer
+          .from("profiles")
+          .select("id, full_name, first_name, last_name, username, avatar_url, email, phone")
+          .in("phone", phoneVariants);
+
+        for (const profile of (data || []) as ProfileRow[]) {
+          if (!profile.phone) continue;
+          const normalizedProfilePhone = normalizePhone(profile.phone);
+          const contact = phoneToContact.get(normalizedProfilePhone);
+          if (contact) addMatch(profile, contact);
+        }
+      }
+    }
+
+    // Build unmatched list — contacts that didn't match by email or phone
     const unmatched: UnmatchedContact[] = [];
     for (const c of capped) {
-      const key = c.name + "|" + (c.emails[0] || "");
-      if (matchedContactSet.has(key)) continue;
+      if (matchedContactKeys.has(contactKey(c))) continue;
 
-      // Check if ANY of this contact's emails matched
-      const anyMatch = c.emails.some((e) =>
-        matchedEmailSet.has(e.toLowerCase().trim())
-      );
-      if (anyMatch) continue;
+      // Double-check: did any of this contact's emails or phones match?
+      const emailMatch = c.emails.some((e) => {
+        const lower = e.toLowerCase().trim();
+        return [...emailToContact.keys()].some((k) => k === lower) && matchedContactKeys.has(contactKey(emailToContact.get(lower)!));
+      });
+      if (emailMatch) continue;
+
+      const phoneMatch = c.phones.some((p) => {
+        const normalized = normalizePhone(p);
+        return phoneToContact.has(normalized) && matchedContactKeys.has(contactKey(phoneToContact.get(normalized)!));
+      });
+      if (phoneMatch) continue;
 
       unmatched.push({
         contactName: c.name,
