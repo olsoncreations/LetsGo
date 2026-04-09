@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
       const mediaRows = photos.map((photo, idx) => ({
         business_id: businessId,
         bucket: "prospect-media",
-        path: photo.url.split("/business-media/")[1] || photo.url,
+        path: photo.url.split("/prospect-media/")[1] || photo.url,
         sort_order: idx,
         media_type: "photo",
         is_active: true,
