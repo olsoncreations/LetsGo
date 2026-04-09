@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LetsGo — Business Partner Brochure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & BASE ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:    #080D1A;
+  --navy2:   #0F1629;
+  --navy3:   #141D35;
+  --yellow:  #FFD600;
+  --orange:  #FF6B35;
+  --green:   #00C896;
+  --pink:    #FF3B82;
+  --purple:  #D050FF;
+  --blue:    #1A9EFF;
+  --white:   #FFFFFF;
+  --muted:   rgba(255,255,255,0.55);
+  --border:  rgba(255,255,255,0.08);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--navy);
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── SHARED ───────────────────────────────────────────────────── */
+.section { max-width: 960px; margin: 0 auto; padding: 72px 40px; }
+.label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+  display: block;
+}
+.h1 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(52px, 8vw, 92px);
+  font-weight: 900;
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+.h2 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(36px, 5vw, 58px);
+  font-weight: 800;
+  text-transform: uppercase;
+  line-height: 1.0;
+  letter-spacing: -0.01em;
+}
+.h3 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.accent-y { color: var(--yellow); }
+.accent-o { color: var(--orange); }
+.accent-g { color: var(--green); }
+.accent-p { color: var(--pink); }
+.accent-b { color: var(--blue); }
+
+.divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+/* ── COVER ────────────────────────────────────────────────────── */
+.cover {
+  min-height: 100vh;
+  background: var(--navy);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cover-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(255,214,0,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 10% 80%, rgba(255,107,53,0.06) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.cover-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+.cover-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 40px 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.cover-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--yellow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  color: var(--navy);
+  letter-spacing: -0.04em;
+  flex-shrink: 0;
+}
+.logo-text {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.logo-text span { color: var(--yellow); }
+
+.cover-tag {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 100px;
+}
+
+.cover-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px 0 40px;
+}
+
+.cover-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.eyebrow-line {
+  width: 40px;
+  height: 2px;
+  background: var(--yellow);
+}
+.eyebrow-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
+
+.cover-headline {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(58px, 10vw, 108px);
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  margin-bottom: 32px;
+}
+
+.cover-sub {
+  font-size: 17px;
+  color: rgba(255,255,255,0.7);
+  max-width: 480px;
+  line-height: 1.65;
+  margin-bottom: 48px;
+}
+
+.cover-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 600px;
+}
+.cover-stat {
+  background: rgba(255,255,255,0.03);
+  padding: 20px 24px;
+}
+.cover-stat-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.cover-stat-label {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.cover-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 32px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 48px;
+}
+.cover-footer-info { font-size: 11px; color: var(--muted); line-height: 1.8; }
+
+/* ── PAGE BREAK SEPARATOR ─────────────────────────────────────── */
+.page-sep {
+  height: 2px;
+  background: var(--border);
+}
+
+/* ── SECTION: PROBLEM ─────────────────────────────────────────── */
+.problem-section {
+  background: var(--navy2);
+  padding: 0;
+}
+.problem-inner { max-width: 960px; margin: 0 auto; padding: 72px 40px; }
+
+.problem-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: start;
+  margin-bottom: 64px;
+}
+
+.big-stat {
+  position: relative;
+}
+.big-stat-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(96px, 14vw, 160px);
+  font-weight: 900;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
+  color: var(--orange);
+  display: block;
+}
+.big-stat-label {
+  font-size: 18px;
+  color: rgba(255,255,255,0.75);
+  margin-top: 16px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.problem-text { padding-top: 20px; }
+.problem-text p { color: rgba(255,255,255,0.7); margin-bottom: 16px; font-size: 15px; line-height: 1.7; }
+.problem-text strong { color: var(--white); }
+
+.problem-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.problem-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 20px;
+}
+.problem-card-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.problem-card-text { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── SECTION: HOW IT WORKS ────────────────────────────────────── */
+.how-section { background: var(--navy); }
+
+.how-intro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: end;
+  margin-bottom: 56px;
+}
+.how-intro-right { color: rgba(255,255,255,0.65); font-size: 15px; line-height: 1.7; }
+.how-intro-right p { margin-bottom: 12px; }
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.feature-card {
+  background: var(--navy2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.feature-card:hover {
+  transform: translateY(-3px);
+}
+
+/* Colored top border per card */
+.feature-card.pink  { border-top: 2px solid var(--pink); }
+.feature-card.yellow { border-top: 2px solid var(--yellow); }
+.feature-card.green  { border-top: 2px solid var(--green); }
+.feature-card.orange { border-top: 2px solid var(--orange); }
+.feature-card.purple { border-top: 2px solid var(--purple); }
+.feature-card.blue   { border-top: 2px solid var(--blue); }
+
+/* Screenshot container */
+.feature-screen-wrap {
+  width: 100%;
+  height: 300px;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+.feature-screen-wrap::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 60px;
+  pointer-events: none;
+}
+/* Gradient fades per accent */
+.pink-glow::after   { background: linear-gradient(transparent, var(--navy2)); }
+.yellow-glow::after { background: linear-gradient(transparent, var(--navy2)); }
+.green-glow::after  { background: linear-gradient(transparent, var(--navy2)); }
+.blue-glow::after   { background: linear-gradient(transparent, var(--navy2)); }
+.purple-glow::after { background: linear-gradient(transparent, var(--navy2)); }
+.orange-glow::after { background: linear-gradient(transparent, var(--navy2)); }
+
+/* Subtle ambient glow at the top of each screenshot */
+.pink-glow   { box-shadow: inset 0 0 40px rgba(255,59,130,0.12); }
+.yellow-glow { box-shadow: inset 0 0 40px rgba(255,214,0,0.10); }
+.green-glow  { box-shadow: inset 0 0 40px rgba(0,200,150,0.10); }
+.blue-glow   { box-shadow: inset 0 0 40px rgba(26,158,255,0.10); }
+.purple-glow { box-shadow: inset 0 0 40px rgba(208,80,255,0.10); }
+.orange-glow { box-shadow: inset 0 0 40px rgba(255,107,53,0.10); }
+
+.feature-screen {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+/* Text body */
+.feature-body {
+  padding: 18px 20px 22px;
+  flex: 1;
+}
+
+/* Feature app-style tag label */
+.feature-tag {
+  display: inline-block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 100px;
+  margin-bottom: 10px;
+}
+.pink-tag   { background: rgba(255,59,130,0.12);  color: var(--pink); }
+.yellow-tag { background: rgba(255,214,0,0.12);   color: var(--yellow); }
+.green-tag  { background: rgba(0,200,150,0.12);   color: var(--green); }
+.blue-tag   { background: rgba(26,158,255,0.12);  color: var(--blue); }
+.purple-tag { background: rgba(208,80,255,0.12);  color: var(--purple); }
+.orange-tag { background: rgba(255,107,53,0.12);  color: var(--orange); }
+
+.feature-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+.feature-name.pink   { color: var(--pink); }
+.feature-name.yellow { color: var(--yellow); }
+.feature-name.green  { color: var(--green); }
+.feature-name.orange { color: var(--orange); }
+.feature-name.purple { color: var(--purple); }
+.feature-name.blue   { color: var(--blue); }
+
+.feature-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+.how-loop {
+  background: var(--navy2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 36px 40px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  position: relative;
+}
+.loop-step {
+  text-align: center;
+  padding: 0 16px;
+  position: relative;
+}
+.loop-step + .loop-step::before {
+  content: '\2192';
+  position: absolute;
+  left: -8px;
+  top: 14px;
+  color: var(--muted);
+  font-size: 16px;
+}
+.loop-num {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+.loop-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  color: var(--yellow);
+}
+.loop-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── SECTION: PLANS & PRICING ─────────────────────────────────── */
+.pricing-section { background: var(--navy2); }
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 48px;
+}
+
+.plan-card {
+  border-radius: 16px;
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+}
+.plan-card.basic {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.plan-card.premium {
+  background: rgba(255,214,0,0.06);
+  border: 1px solid rgba(255,214,0,0.25);
+}
+
+.plan-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 100px;
+  margin-bottom: 20px;
+}
+.plan-card.basic .plan-badge { background: rgba(255,255,255,0.08); color: var(--muted); }
+.plan-card.premium .plan-badge { background: rgba(255,214,0,0.15); color: var(--yellow); }
+
+.plan-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 40px;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.plan-price-hero {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 6px;
+  color: var(--orange);
+}
+
+.plan-access-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin: 4px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.plan-access {
+  margin-bottom: 20px !important;
+}
+
+.plan-price {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+.plan-price strong { color: var(--white); font-size: 15px; }
+
+.plan-features { list-style: none; margin-bottom: 28px; }
+.plan-features li {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.75);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.plan-features li:last-child { border-bottom: none; }
+.plan-features li .check { font-size: 13px; flex-shrink: 0; }
+.plan-features li .check.y { color: var(--yellow); }
+.plan-features li .check.g { color: var(--green); }
+
+.plan-math {
+  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.plan-math-title { font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.plan-math-row { display: flex; justify-content: space-between; font-size: 13px; color: rgba(255,255,255,0.7); padding: 3px 0; }
+.plan-math-row.total { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 8px; font-weight: 600; color: var(--white); }
+
+/* ── PAYOUT TIERS ─────────────────────────────────────────────── */
+.tiers-block {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px 32px;
+  margin-bottom: 20px;
+}
+.tiers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  gap: 32px;
+}
+.tiers-header-right { font-size: 13px; color: var(--muted); max-width: 300px; line-height: 1.6; }
+
+.tiers-table { width: 100%; border-collapse: collapse; }
+.tiers-table th {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tiers-table td {
+  padding: 10px 0;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+.tier-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.tier-pct {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.fee-note {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.fee-note-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+}
+.fee-note-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.fee-note-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.fee-note-sub { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── SECTION: WHY LETSGO / CLOSE ──────────────────────────────── */
+.close-section { background: var(--navy); }
+
+.advantages-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 56px;
+}
+.adv-card {
+  background: var(--navy2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 24px;
+}
+.adv-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 0.9;
+  margin-bottom: 12px;
+}
+.adv-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  color: var(--white);
+}
+.adv-desc { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+.objections-block {
+  background: var(--navy2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px 40px;
+  margin-bottom: 56px;
+}
+.objections-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 24px;
+  color: var(--muted);
+}
+.objection-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+.objection-row:last-child { border-bottom: none; }
+.objection-q {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.5);
+  font-style: italic;
+  padding-right: 16px;
+}
+.objection-a { font-size: 13.5px; color: rgba(255,255,255,0.8); line-height: 1.55; }
+.objection-a strong { color: var(--green); }
+
+/* ── CTA ──────────────────────────────────────────────────────── */
+.cta-block {
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255,214,0,0.07) 0%, rgba(255,107,53,0.05) 100%);
+  border: 1px solid rgba(255,214,0,0.2);
+  position: relative;
+  overflow: hidden;
+  padding: 56px 48px 36px;
+}
+.cta-block::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 60% at 30% 0%, rgba(255,214,0,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.cta-top-row { margin-bottom: 40px; }
+.cta-top-left { max-width: 620px; }
+
+.cta-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--yellow);
+  margin-bottom: 16px;
+  display: block;
+}
+.cta-headline {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(42px, 6vw, 72px);
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 0.95;
+  margin-bottom: 18px;
+  letter-spacing: -0.01em;
+  text-align: left;
+}
+.cta-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  max-width: 500px;
+  margin: 0 0 28px;
+  line-height: 1.65;
+  text-align: left;
+}
+
+.cta-steps {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-bottom: 0;
+}
+.cta-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+}
+.cta-step-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(255,214,0,0.15);
+  color: var(--yellow);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 13px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cta-step-arrow {
+  width: 28px;
+  height: 1px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Bottom actions row: QR + divider + 3 buttons */
+.cta-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding-top: 36px;
+  border-top: 1px solid var(--border);
+  margin-bottom: 28px;
+}
+
+/* QR Code */
+.cta-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+.cta-qr {
+  width: 130px;
+  height: 130px;
+  border-radius: 12px;
+  display: block;
+  margin-bottom: 10px;
+  border: 2px solid rgba(255,214,0,0.2);
+}
+.cta-qr-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+.cta-qr-url {
+  font-size: 11px;
+  color: var(--yellow);
+  text-align: center;
+  margin-top: 2px;
+}
+
+/* Vertical divider */
+.cta-divider-v {
+  width: 1px;
+  height: 140px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* Button stack */
+.cta-btn-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cta-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  font-family: 'DM Sans', sans-serif;
+}
+.cta-action-btn:hover { transform: translateY(-1px); }
+
+.cta-action-btn.primary {
+  background: var(--yellow);
+  color: var(--navy);
+  box-shadow: 0 4px 20px rgba(255,214,0,0.2);
+}
+.cta-action-btn.primary:hover { box-shadow: 0 8px 32px rgba(255,214,0,0.35); }
+
+.cta-action-btn.secondary {
+  background: rgba(255,255,255,0.05);
+  color: var(--white);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.cta-action-btn.secondary:hover { background: rgba(255,255,255,0.08); }
+
+.cta-action-btn.tertiary {
+  background: rgba(255,255,255,0.03);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.cta-action-btn.tertiary:hover { color: var(--white); background: rgba(255,255,255,0.06); }
+
+.cta-action-icon { font-size: 20px; flex-shrink: 0; }
+
+.cta-action-text { flex: 1; }
+.cta-action-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.cta-action-btn.primary .cta-action-title { color: var(--navy); }
+.cta-action-btn.primary .cta-action-sub   { color: rgba(0,0,0,0.55); }
+
+.cta-action-sub { font-size: 11.5px; opacity: 0.7; }
+.cta-action-arrow {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.cta-note {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ── ACTION BAR ───────────────────────────────────────────────── */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: var(--navy2);
+  border-top: 1px solid rgba(255,214,0,0.2);
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+}
+.action-bar-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 18px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.action-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.action-bar-tagline {
+  font-size: 13px;
+  color: var(--muted);
+  display: none;
+}
+@media (min-width: 600px) {
+  .action-bar-tagline { display: block; }
+}
+.action-bar-btns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.btn-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.btn-pdf:hover {
+  color: var(--white);
+  border-color: rgba(255,255,255,0.25);
+}
+.btn-icon { font-size: 14px; }
+
+.btn-signup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--yellow);
+  color: var(--navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+}
+.btn-signup:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(255,214,0,0.25);
+}
+.btn-arrow { font-size: 16px; }
+
+/* ── FOOTER WRAPPER ───────────────────────────────────────────── */
+.brochure-footer-wrap {
+  background: var(--navy2);
+  border-top: 1px solid var(--border);
+}
+
+/* ── BROCHURE FOOTER ──────────────────────────────────────────── */
+.brochure-footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.footer-info { font-size: 12px; color: var(--muted); text-align: right; line-height: 1.7; }
+.footer-info a { color: var(--yellow); text-decoration: none; }
+
+/* ── DOWNLOAD CONTROLS ────────────────────────────────────────── */
+.download-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: rgba(8,13,26,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.download-bar-label {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.dl-btn:hover { transform: translateY(-1px); }
+.dl-btn.dl-png {
+  background: var(--yellow);
+  color: var(--navy);
+}
+.dl-btn.dl-print {
+  background: rgba(255,255,255,0.08);
+  color: var(--white);
+  border: 1px solid var(--border);
+}
+
+/* ── PRINT STYLES ─────────────────────────────────────────────── */
+@media print {
+  @page { margin: 0.4in 0.5in; size: letter; }
+
+  .no-print, .download-bar, .action-bar { display: none !important; }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  body {
+    background: var(--navy) !important;
+    color: var(--white) !important;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  /* Page breaks after each section */
+  .cover {
+    min-height: auto;
+    page-break-after: always;
+    padding-bottom: 20px;
+  }
+  .cover-hero { padding: 24px 0 16px; }
+  .cover-headline { font-size: 64px !important; margin-bottom: 16px; }
+  .cover-sub { font-size: 13px; margin-bottom: 24px; }
+  .cover-stat { padding: 12px 16px; }
+  .cover-stat-num { font-size: 28px; }
+  .cover-stat-label { font-size: 9px; }
+  .cover-footer { margin-top: 20px; padding: 16px 0; }
+
+  .problem-section { page-break-after: always; }
+  .how-section { page-break-after: always; }
+  .pricing-section { page-break-after: always; }
+  .close-section { page-break-after: auto; }
+
+  /* Tighten padding on all sections */
+  .section, .problem-inner { padding: 28px 24px; }
+
+  /* Problem section compact */
+  .h2 { font-size: 32px !important; }
+  .big-stat-num { font-size: 80px !important; }
+  .big-stat-label { font-size: 13px; }
+  .problem-top { gap: 28px; margin-bottom: 28px; }
+  .problem-text p { font-size: 11px; margin-bottom: 8px; line-height: 1.5; }
+  .problem-card { padding: 14px 12px; }
+  .problem-card-num { font-size: 26px; }
+  .problem-card-text { font-size: 9px; }
+
+  /* Features grid compact */
+  .how-intro { gap: 28px; margin-bottom: 28px; }
+  .how-intro-right { font-size: 11px; }
+  .features-grid { gap: 8px; margin-bottom: 24px; }
+  .feature-screen-wrap { height: 100px; }
+  .feature-body { padding: 10px 12px 14px; }
+  .feature-tag { font-size: 7px; padding: 2px 6px; margin-bottom: 6px; }
+  .feature-name { font-size: 14px; margin-bottom: 4px; }
+  .feature-desc { font-size: 9px; line-height: 1.4; }
+
+  /* How loop compact */
+  .how-loop { padding: 20px 24px; }
+  .loop-num { width: 28px; height: 28px; font-size: 14px; }
+  .loop-title { font-size: 13px; }
+  .loop-desc { font-size: 9px; }
+
+  /* Plans compact */
+  .plans-grid { gap: 12px; margin-bottom: 24px; }
+  .plan-card { padding: 20px 18px; }
+  .plan-name { font-size: 28px; }
+  .plan-price-hero { font-size: 26px; }
+  .plan-features li { font-size: 10px; padding: 3px 0; }
+  .plan-math { padding: 10px 12px; }
+  .plan-math-row { font-size: 10px; }
+
+  /* Tiers compact */
+  .tiers-block { padding: 20px 18px; margin-bottom: 12px; }
+  .h3 { font-size: 16px; }
+  .tiers-table td { padding: 5px 0; font-size: 10px; }
+  .tiers-table th { font-size: 8px; }
+  .tier-pct { font-size: 16px; }
+
+  /* Fee note compact */
+  .fee-note-card { padding: 12px 16px; }
+  .fee-note-val { font-size: 20px; }
+  .fee-note-sub { font-size: 9px; }
+
+  /* Advantages compact */
+  .advantages-grid { gap: 8px; margin-bottom: 28px; }
+  .adv-card { padding: 16px 14px; }
+  .adv-num { font-size: 36px; margin-bottom: 6px; }
+  .adv-title { font-size: 12px; margin-bottom: 4px; }
+  .adv-desc { font-size: 9px; }
+
+  /* Objections compact */
+  .objections-block { padding: 20px 24px; margin-bottom: 28px; }
+  .objections-title { font-size: 18px; margin-bottom: 14px; }
+  .objection-row { padding: 10px 0; }
+  .objection-q { font-size: 10px; }
+  .objection-a { font-size: 10px; }
+
+  /* CTA compact */
+  .cta-block { padding: 28px 28px 20px; }
+  .cta-top-row { margin-bottom: 20px; }
+  .cta-headline { font-size: 42px !important; margin-bottom: 10px; }
+  .cta-sub { font-size: 11px; margin-bottom: 16px; }
+  .cta-qr { width: 100px; height: 100px; }
+  .cta-divider-v { height: 100px; }
+  .cta-actions-row { padding-top: 20px; margin-bottom: 14px; }
+  .cta-action-btn { padding: 8px 14px; }
+  .cta-action-title { font-size: 13px; }
+  .cta-action-sub { font-size: 9px; }
+
+  /* Avoid breaking inside key blocks */
+  .feature-card, .plan-card, .adv-card, .tiers-block,
+  .objections-block, .cta-block, .how-loop, .fee-note { break-inside: avoid; }
+
+  a { color: inherit !important; text-decoration: none !important; }
+  .page-sep, .divider { display: none; }
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .section, .problem-inner { padding: 48px 20px; }
+  .problem-top, .how-intro, .plans-grid, .fee-note { grid-template-columns: 1fr; gap: 32px; }
+  .features-grid { grid-template-columns: 1fr 1fr; }
+  .advantages-grid { grid-template-columns: 1fr 1fr; }
+  .problem-cards { grid-template-columns: 1fr 1fr; }
+  .how-loop { grid-template-columns: 1fr 1fr; }
+  .objection-row { grid-template-columns: 1fr; gap: 8px; }
+  .cta-steps { flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .cta-step-arrow { display: none; }
+  .cta-actions-row { flex-direction: column; gap: 24px; }
+  .cta-divider-v { width: 100%; height: 1px; }
+  .brochure-footer { flex-direction: column; gap: 16px; text-align: center; }
+  .footer-info { text-align: center; }
+  .cover-stats { grid-template-columns: 1fr; }
+  .tiers-header { flex-direction: column; gap: 16px; }
+  .download-bar { padding: 10px 16px; gap: 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── DOWNLOAD BAR ── -->
+<div class="download-bar no-print">
+  <span class="download-bar-label">Export</span>
+  <button class="dl-btn dl-print" onclick="window.print()">Print / Save PDF</button>
+</div>
+
+<!-- ══════════════════ COVER ══════════════════ -->
+<div class="cover" style="padding-top:56px;">
+  <div class="cover-bg"></div>
+  <div class="cover-grid"></div>
+  <div class="cover-inner">
+
+    <div class="cover-nav">
+      <div class="logo-lockup">
+        <img src="/lg-logo.png" alt="LetsGo" style="height:40px;width:auto;border-radius:10px;flex-shrink:0;">
+        <div class="logo-text">Lets<span>Go</span></div>
+      </div>
+      <div class="cover-tag">Business Partner Guide</div>
+    </div>
+
+    <div class="cover-hero">
+      <div class="cover-eyebrow">
+        <div class="eyebrow-line"></div>
+        <div class="eyebrow-text">The Platform That Only Charges When It Works</div>
+      </div>
+
+      <div class="cover-headline">
+        Stop Paying<br>
+        for <span class="accent-p">Maybe.</span><br>
+        Start Paying<br>
+        for <span class="accent-y">Results.</span>
+      </div>
+
+      <p class="cover-sub">
+        LetsGo is a discovery and progressive cash-back platform that sends verified customers through your door &mdash; and only charges you when they actually show up and spend money.
+      </p>
+
+      <div class="cover-stats">
+        <div class="cover-stat">
+          <div class="cover-stat-num accent-o">70%</div>
+          <div class="cover-stat-label">of first-time customers industry-wide never return &mdash; LetsGo fixes that</div>
+        </div>
+        <div class="cover-stat">
+          <div class="cover-stat-num accent-y">$6.38</div>
+          <div class="cover-stat-label">avg cost per verified visit on Basic plan</div>
+        </div>
+        <div class="cover-stat">
+          <div class="cover-stat-num accent-g">6&times;</div>
+          <div class="cover-stat-label">ways new customers discover your business</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cover-footer">
+      <div class="cover-footer-info">
+        www.useletsgo.com &nbsp;&middot;&nbsp; info@useletsgo.com<br>
+        Launching May 1st &mdash; Google Play &amp; Apple App Store
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="page-sep"></div>
+
+<!-- ══════════════════ THE PROBLEM ══════════════════ -->
+<div class="problem-section">
+  <div class="problem-inner">
+    <span class="label">Section 01 &mdash; The Problem</span>
+    <div class="h2" style="margin-bottom:48px;">Why Your Current<br><span class="accent-o">Marketing Isn't Working</span></div>
+
+    <div class="problem-top">
+      <div class="big-stat">
+        <span class="big-stat-num">70%</span>
+        <div class="big-stat-label">of first-time customers never come back after their first visit.</div>
+      </div>
+      <div class="problem-text">
+        <p>You fight hard to get a new customer through the door. You spend on ads, mailers, social posts &mdash; maybe $83 to $125 per new customer acquired through traditional marketing. And then, 7 out of 10 of them simply never return.</p>
+        <p>It's not because they didn't enjoy it. It's because there was <strong>no compelling reason to come back.</strong> No hook. No escalating reward. No game. Nothing that made your business feel different from the five others competing for the same customers.</p>
+        <p>Traditional loyalty programs (punch cards, flat-rate discounts) help a little &mdash; but they don't drive <em>discovery</em>. And Yelp, Google Ads, and social media drive <em>awareness</em> &mdash; but do nothing to bring people back after visit one.</p>
+        <p><strong>LetsGo solves both problems in a single platform.</strong></p>
+      </div>
+    </div>
+
+    <div class="problem-cards">
+      <div class="problem-card">
+        <div class="problem-card-num accent-o">$375K</div>
+        <div class="problem-card-text">estimated annual revenue lost per business location from customer churn</div>
+      </div>
+      <div class="problem-card">
+        <div class="problem-card-num accent-y">5&ndash;7&times;</div>
+        <div class="problem-card-text">more expensive to acquire a new customer than to retain an existing one</div>
+      </div>
+      <div class="problem-card">
+        <div class="problem-card-num accent-g">67%</div>
+        <div class="problem-card-text">more spent annually by repeat customers vs. first-time visitors</div>
+      </div>
+      <div class="problem-card">
+        <div class="problem-card-num accent-p">25&ndash;95%</div>
+        <div class="problem-card-text">profit increase achievable from just 5% better customer retention</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════ HOW IT WORKS ══════════════════ -->
+<div class="how-section">
+  <div class="section">
+    <span class="label">Section 02 &mdash; The Platform</span>
+    <div class="how-intro">
+      <div class="h2">6 Ways Customers<br><span class="accent-g">Find You</span></div>
+      <div class="how-intro-right">
+        <p>Your business is listed once. From there, LetsGo places it in front of users through six distinct discovery channels &mdash; all built into a single app that customers actually want to use.</p>
+        <p>Basic plan businesses appear in 3 of these channels. Premium unlocks all 6 and more.</p>
+      </div>
+    </div>
+
+    <div class="features-grid">
+
+      <div class="feature-card pink">
+        <div class="feature-screen-wrap pink-glow">
+          <img src="/Manual-screenshots%20-%2010%20inch%20tablets%20only/www.useletsgo.com_Discovery%20Page.png" alt="Discovery Feed" class="feature-screen">
+        </div>
+        <div class="feature-body">
+          <div class="feature-tag pink-tag">+ Discovery</div>
+          <div class="feature-name pink">Discovery Feed</div>
+          <div class="feature-desc">A full-screen swipe carousel &mdash; like a dating app, but for local businesses. Users scroll through places nearby, see all 7 payout tiers upfront, and save their favorites.</div>
+        </div>
+      </div>
+
+      <div class="feature-card yellow">
+        <div class="feature-screen-wrap yellow-glow">
+          <img src="/manual-screenshots/5v3v1%20screenshots/Screenshot%202026-03-09%20222211.png" alt="5v3v1 Game" class="feature-screen">
+        </div>
+        <div class="feature-body">
+          <div class="feature-tag yellow-tag">5v3v1</div>
+          <div class="feature-name yellow">5v3v1 Game</div>
+          <div class="feature-desc">Two friends narrow 5 local picks down to 3, then 1 winner. Your business gets organically surfaced every time the game is played nearby.</div>
+        </div>
+      </div>
+
+      <div class="feature-card green">
+        <div class="feature-screen-wrap green-glow">
+          <img src="/manual-screenshots/Group%20Vote%20Screen%20Shots/Screenshot%202026-03-09%20225739.png" alt="Group Vote" class="feature-screen">
+        </div>
+        <div class="feature-body">
+          <div class="feature-tag green-tag">Group Vote</div>
+          <div class="feature-name green">Group Vote</div>
+          <div class="feature-desc">Up to 16 people vote on where to go tonight. Groups using Group Vote are highly motivated to follow through &mdash; they're already committed to going out.</div>
+        </div>
+      </div>
+
+      <div class="feature-card blue">
+        <div class="feature-screen-wrap blue-glow">
+          <img src="/Manual-screenshots%20-%2010%20inch%20tablets%20only/www.useletsgo.com_datenight.png" alt="Date Night Generator" class="feature-screen">
+        </div>
+        <div class="feature-body">
+          <div class="feature-tag blue-tag">Date Night</div>
+          <div class="feature-name blue">Date Night Generator</div>
+          <div class="feature-desc">A smart algorithm pairs one restaurant with one activity for a complete date night. Couples lock in their plans &mdash; high intent, high spend.</div>
+        </div>
+      </div>
+
+      <div class="feature-card purple">
+        <div class="feature-screen-wrap purple-glow">
+          <img src="/manual-screenshots/Events%20screenshots/Screenshot%202026-03-09%20223547.png" alt="Events Calendar" class="feature-screen">
+        </div>
+        <div class="feature-body">
+          <div class="feature-tag purple-tag">Events</div>
+          <div class="feature-name purple">Events Calendar</div>
+          <div class="feature-desc">Post events and reach every user browsing what's happening nearby. Turns your schedule into marketing. Premium feature.</div>
+        </div>
+      </div>
+
+      <div class="feature-card orange">
+        <div class="feature-screen-wrap orange-glow">
+          <img src="/manual-screenshots/User%20Experience%20Screenshots/Screenshot%202026-03-09%20223646.png" alt="Experiences Feed" class="feature-screen">
+        </div>
+        <div class="feature-body">
+          <div class="feature-tag orange-tag">Experiences</div>
+          <div class="feature-name orange">Experiences Feed</div>
+          <div class="feature-desc">Real customers post real photos and videos from their visits. 79% say UGC influences decisions. Free organic marketing at scale.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="how-loop">
+      <div class="loop-step">
+        <div class="loop-num">1</div>
+        <div class="loop-title">Discover</div>
+        <div class="loop-desc">User finds your business in the feed, a game, or a date night pairing</div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num">2</div>
+        <div class="loop-title">Visit</div>
+        <div class="loop-desc">They come in, enjoy their experience, keep their receipt</div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num">3</div>
+        <div class="loop-title">Upload</div>
+        <div class="loop-desc">They snap and submit the receipt &mdash; you approve it in your dashboard</div>
+      </div>
+      <div class="loop-step">
+        <div class="loop-num">4</div>
+        <div class="loop-title">Earn &amp; Return</div>
+        <div class="loop-desc">They get cash back. Next time they earn more. The loop repeats indefinitely</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════ PLANS & PRICING ══════════════════ -->
+<div class="pricing-section">
+  <div class="section">
+    <span class="label">Section 03 &mdash; Plans &amp; Pricing</span>
+    <div class="h2" style="margin-bottom:12px;">Transparent Pricing.<br><span class="accent-y">No Surprises.</span></div>
+    <p style="color:var(--muted); font-size:14px; margin-bottom:40px;">Two costs. Every approved receipt generates a user payout (your reward to the customer) and a platform fee (LetsGo's revenue). That's it.</p>
+
+    <div class="plans-grid">
+      <div class="plan-card basic">
+        <div class="plan-badge">Basic</div>
+        <div class="plan-name">Basic Plan</div>
+        <div class="plan-price-hero">No Upfront Costs</div>
+        <div class="plan-price">Pay only when a verified customer visits. <strong>No monthly fee.</strong></div>
+
+        <ul class="plan-features">
+          <li><span class="check g">&#10003;</span> Get discovered by local users</li>
+          <li><span class="check g">&#10003;</span> Pay only for real, verified customers</li>
+          <li><span class="check g">&#10003;</span> No paying for clicks or views</li>
+          <li><span class="check g">&#10003;</span> No monthly subscription</li>
+          <li><span class="check g">&#10003;</span> Receipt approval dashboard</li>
+          <li><span class="check g">&#10003;</span> Basic analytics</li>
+          <li><span class="check g">&#10003;</span> Zero risk &mdash; if nobody visits, you pay nothing</li>
+        </ul>
+
+        <div class="plan-access-label">Feature Access</div>
+        <ul class="plan-features plan-access">
+          <li><span class="check g">&#10003;</span> Discovery Feed</li>
+          <li><span class="check g">&#10003;</span> 5v3v1 Game</li>
+          <li><span class="check g">&#10003;</span> Group Vote</li>
+        </ul>
+
+        <div class="plan-math">
+          <div class="plan-math-title">Example: 200 receipts/mo &middot; $40 avg</div>
+          <div class="plan-math-row"><span>User payouts (progressive avg)</span><span>~$485</span></div>
+          <div class="plan-math-row"><span>Platform fee (10%, max $5/receipt)</span><span>~$790</span></div>
+          <div class="plan-math-row total"><span>Total / avg per visit</span><span>~$1,275 &middot; <span class="accent-y">$6.38</span></span></div>
+        </div>
+      </div>
+
+      <div class="plan-card premium">
+        <div class="plan-badge">Premium</div>
+        <div class="plan-name accent-y">Premium Plan</div>
+        <div class="plan-price-hero accent-y">$399.99<span style="font-size:18px;font-weight:400;color:var(--muted)">/mo</span></div>
+        <div class="plan-price">Flat monthly fee. <strong>Per-receipt platform fee fully waived.</strong></div>
+
+        <ul class="plan-features">
+          <li><span class="check y">&#9733;</span> No LetsGo fee on individual receipts</li>
+          <li><span class="check y">&#9733;</span> Upload 1 video daily to Experiences</li>
+          <li><span class="check y">&#9733;</span> Up to 5 live videos at once</li>
+          <li><span class="check y">&#9733;</span> Priority placement in Discovery Feed</li>
+          <li><span class="check y">&#9733;</span> Detailed analytics dashboard</li>
+          <li><span class="check y">&#9733;</span> Advertising spotlights &amp; push campaigns</li>
+          <li><span class="check y">&#9733;</span> Full media &amp; UGC management tools</li>
+        </ul>
+
+        <div class="plan-access-label" style="color:var(--yellow);">Feature Access</div>
+        <ul class="plan-features plan-access">
+          <li><span class="check y">&#9733;</span> <strong>Everything in Basic</strong></li>
+          <li><span class="check y">&#9733;</span> Events Calendar &amp; RSVP management</li>
+          <li><span class="check y">&#9733;</span> User Experiences Feed</li>
+          <li><span class="check y">&#9733;</span> Date Night Generator</li>
+        </ul>
+
+        <div class="plan-math">
+          <div class="plan-math-title">Example: 200 receipts/mo &middot; $40 avg</div>
+          <div class="plan-math-row"><span>User payouts (progressive avg)</span><span>~$485</span></div>
+          <div class="plan-math-row"><span>Premium subscription (fee waived)</span><span>$399.99</span></div>
+          <div class="plan-math-row total"><span>Total / avg per visit</span><span>~$885 &middot; <span class="accent-g">$4.43</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payout Tiers -->
+    <div class="tiers-block">
+      <div class="tiers-header">
+        <div>
+          <span class="label">Progressive Payout Ladder</span>
+          <div class="h3">You Set the Tiers.<br>You Control the Cost.</div>
+        </div>
+        <div class="tiers-header-right">
+          Choose from Conservative, Standard, or Aggressive presets &mdash; or build your own custom tier structure. You can adjust once every 365 days. Changes apply to future receipts only.
+        </div>
+      </div>
+
+      <table class="tiers-table">
+        <thead>
+          <tr>
+            <th style="width:30%">Tier</th>
+            <th style="width:20%">Visits</th>
+            <th style="width:16%">Conservative</th>
+            <th style="width:16%">Standard</th>
+            <th style="width:18%">Aggressive</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tier-dot" style="background:#FF3B82"></span>1 &mdash; Starter</td>
+            <td style="color:var(--muted)">1&ndash;10</td>
+            <td><span class="tier-pct" style="color:#ccc">3%</span></td>
+            <td><span class="tier-pct accent-y">5%</span></td>
+            <td><span class="tier-pct accent-g">8%</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-dot" style="background:#FF6B35"></span>2 &mdash; Regular</td>
+            <td style="color:var(--muted)">11&ndash;20</td>
+            <td><span class="tier-pct" style="color:#ccc">4%</span></td>
+            <td><span class="tier-pct accent-y">7.5%</span></td>
+            <td><span class="tier-pct accent-g">10%</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-dot" style="background:#FFD600"></span>3 &mdash; Favorite</td>
+            <td style="color:var(--muted)">21&ndash;30</td>
+            <td><span class="tier-pct" style="color:#ccc">5%</span></td>
+            <td><span class="tier-pct accent-y">10%</span></td>
+            <td><span class="tier-pct accent-g">12%</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-dot" style="background:#00C896"></span>4 &mdash; VIP</td>
+            <td style="color:var(--muted)">31&ndash;40</td>
+            <td><span class="tier-pct" style="color:#ccc">6%</span></td>
+            <td><span class="tier-pct accent-y">12.5%</span></td>
+            <td><span class="tier-pct accent-g">14%</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-dot" style="background:#1A9EFF"></span>5 &mdash; Elite</td>
+            <td style="color:var(--muted)">41&ndash;50</td>
+            <td><span class="tier-pct" style="color:#ccc">7%</span></td>
+            <td><span class="tier-pct accent-y">15%</span></td>
+            <td><span class="tier-pct accent-g">16%</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-dot" style="background:#D050FF"></span>6 &mdash; Legend</td>
+            <td style="color:var(--muted)">51&ndash;60</td>
+            <td><span class="tier-pct" style="color:#ccc">8%</span></td>
+            <td><span class="tier-pct accent-y">17.5%</span></td>
+            <td><span class="tier-pct accent-g">18%</span></td>
+          </tr>
+          <tr>
+            <td><span class="tier-dot" style="background:linear-gradient(90deg,#D050FF,#FFD600)"></span>7 &mdash; Ultimate</td>
+            <td style="color:var(--muted)">61+</td>
+            <td><span class="tier-pct" style="color:#ccc">10%</span></td>
+            <td><span class="tier-pct accent-y">20%</span></td>
+            <td><span class="tier-pct accent-g">20%</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fee-note">
+      <div class="fee-note-card">
+        <div class="fee-note-title">Basic Platform Fee</div>
+        <div class="fee-note-val accent-y">10% <span style="font-size:16px;font-weight:400;color:var(--muted)">of subtotal</span></div>
+        <div class="fee-note-sub">Capped at <strong style="color:var(--white)">$5.00 per receipt.</strong> A $200 transaction costs you just $5 in platform fees &mdash; that's effectively 2.5%. The cap rewards high-ticket businesses.</div>
+      </div>
+      <div class="fee-note-card">
+        <div class="fee-note-title">Premium Platform Fee</div>
+        <div class="fee-note-val accent-g">$0 <span style="font-size:16px;font-weight:400;color:var(--muted)">per receipt</span></div>
+        <div class="fee-note-sub">The 10% per-receipt fee is fully waived on Premium. Just the flat $399.99/month subscription. At 80+ receipts/month, Premium starts paying for itself.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ══════════════════ WHY LETSGO / CLOSE ══════════════════ -->
+<div class="close-section">
+  <div class="section">
+    <span class="label">Section 04 &mdash; Why LetsGo Wins</span>
+    <div class="h2" style="margin-bottom:48px;">Nobody Else<br><span class="accent-y">Does All of This.</span></div>
+
+    <div class="advantages-grid">
+      <div class="adv-card">
+        <div class="adv-num accent-y">01</div>
+        <div class="adv-title">Progressive Rewards &mdash; No One Else Has This</div>
+        <div class="adv-desc">Every other program gives the same flat reward. LetsGo rewards increase with every visit &mdash; creating a psychological pull that makes leaving feel like a loss. This is behavioral science applied to loyalty.</div>
+      </div>
+      <div class="adv-card">
+        <div class="adv-num accent-o">02</div>
+        <div class="adv-title">Discovery + Retention in One</div>
+        <div class="adv-desc">Yelp drives discovery but not retention. Loyalty apps retain but don't find new customers. LetsGo is the only platform that handles both &mdash; new customers found through games and feeds, existing ones kept through escalating rewards.</div>
+      </div>
+      <div class="adv-card">
+        <div class="adv-num accent-g">03</div>
+        <div class="adv-title">Zero Risk &mdash; Pay Per Result</div>
+        <div class="adv-desc">No upfront ad spend. No monthly retainer. Zero cost until a real customer submits a real receipt from a real visit. If nobody comes, you pay nothing. That's a performance guarantee no other ad platform offers.</div>
+      </div>
+      <div class="adv-card">
+        <div class="adv-num accent-p">04</div>
+        <div class="adv-title">Cheaper Than Any Ad Campaign</div>
+        <div class="adv-desc">Traditional marketing spends $83&ndash;$125 to acquire a single new customer &mdash; with no guarantee they return. LetsGo delivers a verified, spending customer for as little as $6.38. That's not a better ad &mdash; that's a fundamentally better model.</div>
+      </div>
+      <div class="adv-card">
+        <div class="adv-num accent-b">05</div>
+        <div class="adv-title">One Dashboard, Total Control</div>
+        <div class="adv-desc">Receipt approval, analytics, event creation, media moderation, advertising, and billing &mdash; all in one place. You run your business. LetsGo handles the marketing infrastructure.</div>
+      </div>
+      <div class="adv-card">
+        <div class="adv-num" style="color:var(--purple)">06</div>
+        <div class="adv-title">Real Social Proof at Scale</div>
+        <div class="adv-desc">Your happiest customers become your marketers. 79% of consumers say user-generated content influences where they go. The Experiences feed turns every visit into potential organic reach &mdash; content you don't have to create or pay for.</div>
+      </div>
+    </div>
+
+    <!-- Objections -->
+    <div class="objections-block">
+      <div class="objections-title">Common Questions</div>
+
+      <div class="objection-row">
+        <div class="objection-q">"We already have a loyalty program."</div>
+        <div class="objection-a">LetsGo doesn't replace it &mdash; it <strong>finds customers first</strong>. Your existing program retains the ones you have. LetsGo brings new people through the door and gives them a reason to come back that stacks on top of what you already offer.</div>
+      </div>
+
+      <div class="objection-row">
+        <div class="objection-q">"We already use Yelp/Google Ads."</div>
+        <div class="objection-a">Those charge you for impressions and clicks &mdash; <strong>not results</strong>. LetsGo only charges when a customer actually visits and spends money. And unlike ads, LetsGo also brings them back a second, third, and tenth time.</div>
+      </div>
+
+      <div class="objection-row">
+        <div class="objection-q">"What if people just come for the rewards?"</div>
+        <div class="objection-a">They're still spending money at your business. The average reward is 5&ndash;10% &mdash; you keep 90&ndash;95% of every dollar. And the progressive system means the <strong>biggest rewards go to your most loyal customers</strong>, who would have come anyway.</div>
+      </div>
+
+      <div class="objection-row">
+        <div class="objection-q">"We can't afford another marketing tool."</div>
+        <div class="objection-a">There's nothing to afford upfront. Basic plan costs <strong>$0 until someone actually walks through your door</strong>. If it doesn't work, it costs you nothing. If it does work, it already paid for itself.</div>
+      </div>
+
+      <div class="objection-row">
+        <div class="objection-q">"How do I know the receipts are real?"</div>
+        <div class="objection-a">Every receipt is submitted with a photo and goes through <strong>your approval dashboard</strong>. You see the amount, the date, and the image. Nothing gets paid out until you approve it. Full control, zero fraud risk.</div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-block">
+      <div class="cta-top-row">
+        <div class="cta-top-left">
+          <span class="cta-eyebrow">Get Started &mdash; It's Free</span>
+          <div class="cta-headline">
+            Your Business.<br>
+            <span class="accent-y">Listed in Minutes.</span>
+          </div>
+          <p class="cta-sub">
+            No setup fee. No monthly contract on Basic. No risk.<br>
+            Sign up before April 30th and get <strong style="color:var(--yellow)">1 month of Premium free</strong> if you're among the first 15 businesses.
+          </p>
+          <div class="cta-steps">
+            <div class="cta-step">
+              <div class="cta-step-num">1</div>
+              <span>Complete the 7-step form</span>
+            </div>
+            <div class="cta-step-arrow"></div>
+            <div class="cta-step">
+              <div class="cta-step-num">2</div>
+              <span>Submit verification docs</span>
+            </div>
+            <div class="cta-step-arrow"></div>
+            <div class="cta-step">
+              <div class="cta-step-num">3</div>
+              <span>Get approved &amp; go live</span>
+            </div>
+            <div class="cta-step-arrow"></div>
+            <div class="cta-step">
+              <div class="cta-step-num">4</div>
+              <span>Customers start finding you</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cta-actions-row">
+        <!-- QR Code -->
+        <div class="cta-qr-wrap">
+          <img src="/QR%20Code%20-%20www.useletsgo.com/Business%20QR%20Codes%20-%20For%20Advertising%20Purposes.png" alt="Scan to sign up" class="cta-qr">
+          <div class="cta-qr-label">Scan to Sign Up</div>
+          <div class="cta-qr-url">useletsgo.com</div>
+        </div>
+
+        <!-- Vertical divider -->
+        <div class="cta-divider-v"></div>
+
+        <!-- Button stack -->
+        <div class="cta-btn-stack">
+          <a href="https://www.useletsgo.com/welcome" class="cta-action-btn primary">
+            <div class="cta-action-icon">&#128187;</div>
+            <div class="cta-action-text">
+              <div class="cta-action-title">Sign Up Online</div>
+              <div class="cta-action-sub">Complete the form electronically</div>
+            </div>
+            <div class="cta-action-arrow">&#8594;</div>
+          </a>
+          <a href="/partner-signup-form.html" target="_blank" class="cta-action-btn secondary">
+            <div class="cta-action-icon">&#128196;</div>
+            <div class="cta-action-text">
+              <div class="cta-action-title">Paper Sign-Up Form</div>
+              <div class="cta-action-sub">Open &amp; print to fill out by hand</div>
+            </div>
+            <div class="cta-action-arrow">&#8599;</div>
+          </a>
+          <button class="cta-action-btn tertiary" onclick="window.print()">
+            <div class="cta-action-icon">&#128196;</div>
+            <div class="cta-action-text">
+              <div class="cta-action-title">Download This Brochure</div>
+              <div class="cta-action-sub">Save as PDF to share or print</div>
+            </div>
+            <div class="cta-action-arrow">&#8595;</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="cta-note">www.useletsgo.com &middot; Launching May 1st on Google Play &amp; Apple App Store</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── STICKY ACTION BAR ── -->
+<div class="action-bar no-print">
+  <div class="action-bar-inner">
+    <div class="action-bar-left">
+      <div class="logo-lockup">
+        <img src="/lg-logo.png" alt="LetsGo" style="height:32px;width:auto;border-radius:8px;flex-shrink:0;">
+        <div class="logo-text" style="font-size:18px;">Lets<span>Go</span></div>
+      </div>
+      <div class="action-bar-tagline">Go. Play. Eat. Get paid to live your best life.</div>
+    </div>
+    <div class="action-bar-btns">
+      <button class="btn-pdf" onclick="window.print()">
+        <span class="btn-icon">&#128424;</span> Print / PDF
+      </button>
+      <a href="https://www.useletsgo.com/welcome" class="btn-signup">
+        Sign Up Free <span class="btn-arrow">&#8594;</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+
+</body>
+</html>

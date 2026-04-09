@@ -284,6 +284,53 @@
       border-top: 1px solid #e2e8f0;
     }
 
+    /* ───── Download Bar ───── */
+    .download-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      background: rgba(15,15,26,0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 12px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .download-bar-label {
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Segoe UI', 'Inter', Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: #ff6b35;
+      color: #fff;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .dl-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,53,0.3); }
+
+    @media print {
+      .download-bar { display: none !important; }
+      body { padding-top: 0 !important; }
+    }
+
     .highlight-row {
       background: #fff3eb !important;
       font-weight: 600;
@@ -323,7 +370,13 @@
     }
   </style>
 </head>
-<body>
+<body style="padding-top: 52px;">
+
+<!-- ── DOWNLOAD BAR ── -->
+<div class="download-bar">
+  <span class="download-bar-label">Signup Form</span>
+  <button class="dl-btn" onclick="window.print()">&#128424; Print / Save PDF</button>
+</div>
 
 <!-- ═══════════ PAGE 1 ═══════════ -->
 <div class="header">
