@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { leadId } = body;
+    const { leadId, recreate } = body;
 
     if (!leadId) {
       return NextResponse.json({ error: "leadId is required" }, { status: 400 });
@@ -48,12 +48,40 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if preview already exists
-    if (lead.preview_business_id) {
+    if (lead.preview_business_id && !recreate) {
       return NextResponse.json({
         businessId: lead.preview_business_id,
         previewUrl: `/preview/${lead.preview_business_id}`,
         alreadyExists: true,
       });
+    }
+
+    // If recreating, clean up the old preview
+    if (lead.preview_business_id && recreate) {
+      const oldId = lead.preview_business_id;
+
+      // Delete old media rows
+      await supabaseServer.from("business_media").delete().eq("business_id", oldId);
+      // Delete old payout tiers
+      await supabaseServer.from("business_payout_tiers").delete().eq("business_id", oldId);
+      // Delete old business record
+      await supabaseServer.from("business").delete().eq("id", oldId);
+
+      // Clean up old photos from storage
+      if (lead.google_place_id) {
+        const { data: oldFiles } = await supabaseServer.storage
+          .from("prospect-media")
+          .list(`prospects/${lead.google_place_id}`);
+        if (oldFiles && oldFiles.length > 0) {
+          const paths = oldFiles.map(f => `prospects/${lead.google_place_id}/${f.name}`);
+          await supabaseServer.storage.from("prospect-media").remove(paths);
+        }
+      }
+
+      // Clear the link
+      await supabaseServer.from("sales_leads")
+        .update({ preview_business_id: null })
+        .eq("id", leadId);
     }
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -318,7 +346,21 @@ async function fetchAndStorePhotos(
       }
 
       const photoBuffer = await photoRes.arrayBuffer();
+
+      // Skip empty or tiny responses (failed downloads show as black)
+      if (photoBuffer.byteLength < 5000) {
+        console.log(`[preview] Skipping photo ${i}: too small (${photoBuffer.byteLength} bytes)`);
+        continue;
+      }
+
       const contentType = photoRes.headers.get("content-type") || "image/jpeg";
+
+      // Skip non-image responses (HTML error pages, etc.)
+      if (!contentType.startsWith("image/")) {
+        console.log(`[preview] Skipping photo ${i}: not an image (${contentType})`);
+        continue;
+      }
+
       const ext = contentType.includes("png") ? "png" : "jpg";
 
       // Store in Supabase Storage
@@ -344,7 +386,7 @@ async function fetchAndStorePhotos(
         stored.push({
           url: urlData.publicUrl,
           focalX: 50,
-          focalY: 30,
+          focalY: 50,
         });
       }
     } catch (err) {

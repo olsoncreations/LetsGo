@@ -942,8 +942,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   // ---------- Create Preview ----------
 
-  async function handleCreatePreview() {
+  async function handleCreatePreview(recreate = false) {
     if (!selectedLead) return;
+    if (recreate && !confirm("Recreate preview? This will delete the existing one and fetch fresh photos.")) return;
     setCreatingPreview(true);
 
     try {
@@ -954,7 +955,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ leadId: selectedLead.id }),
+        body: JSON.stringify({ leadId: selectedLead.id, recreate }),
       });
 
       if (!res.ok) {
@@ -1819,14 +1820,22 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                   >
                     Copy Link
                   </button>
-                  <span style={{ fontSize: 12, color: COLORS.neonGreen }}>
-                    Preview ready
-                  </span>
+                  <button
+                    onClick={() => handleCreatePreview(true)}
+                    disabled={creatingPreview}
+                    style={{
+                      ...btnSecondary,
+                      fontSize: 11,
+                      opacity: creatingPreview ? 0.5 : 1,
+                    }}
+                  >
+                    {creatingPreview ? "Recreating..." : "Recreate"}
+                  </button>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <button
-                    onClick={handleCreatePreview}
+                    onClick={() => handleCreatePreview(false)}
                     disabled={creatingPreview}
                     style={{
                       ...btnPrimary,
