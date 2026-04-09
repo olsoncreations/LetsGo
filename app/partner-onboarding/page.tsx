@@ -1,7 +1,7 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense } from "react";
 import Script from "next/script";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import "./onboarding.css";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, DEFAULT_PRESET_BPS, type VisitThreshold } from "@/lib/platformSettings";
@@ -427,8 +427,18 @@ function planTitle(plan: Plan) {
 
 // monthlyFee and selectedAdsList moved inside component to use dynamic pricing
 
-export default function PartnerOnboardingPage() {
+export default function PartnerOnboardingWrapper() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#fafbfc" }} />}>
+      <PartnerOnboardingPage />
+    </Suspense>
+  );
+}
+
+function PartnerOnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefillBusinessId = searchParams.get("prefill");
   const [step, setStep] = useState<number>(1);
   const [data, setData] = useState<OnboardingData>(initialData());
   const [error, setError] = useState<string>("");
@@ -603,6 +613,82 @@ export default function PartnerOnboardingPage() {
     }
     setRestored(true);
   }, [authLoading]);
+
+  // Pre-fill from prospect business (when arriving from preview page)
+  useEffect(() => {
+    if (!prefillBusinessId || !restored) return;
+
+    (async () => {
+      try {
+        const { data: biz, error: bizErr } = await supabaseBrowser
+          .from("business")
+          .select(`
+            id, business_name, public_business_name,
+            contact_phone, website, street_address, city, state, zip,
+            phone_number, website_url, address_line1,
+            category_main, config,
+            mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
+            thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
+            sun_open, sun_close
+          `)
+          .eq("id", prefillBusinessId)
+          .maybeSingle();
+
+        if (bizErr || !biz) return;
+
+        const cfg = (biz.config || {}) as Record<string, unknown>;
+        const priceLevel = String(cfg.priceLevel || "$$");
+
+        // Map category_main back to businessType enum
+        const catMap: Record<string, BusinessType> = {
+          restaurant_bar: "restaurant_bar",
+          activity: "activity",
+          salon_beauty: "salon_beauty",
+          retail: "retail",
+          event_venue: "event_venue",
+          other: "other",
+        };
+        const businessType = catMap[biz.category_main || ""] || "restaurant_bar";
+
+        // Build hours from day columns
+        const dayKeys: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+        const hours: Record<DayKey, HoursDay> = {} as Record<DayKey, HoursDay>;
+        for (const day of dayKeys) {
+          const open = (biz as Record<string, unknown>)[`${day}_open`] as string | null;
+          const close = (biz as Record<string, unknown>)[`${day}_close`] as string | null;
+          if (open && close) {
+            hours[day] = {
+              enabled: true,
+              open: open.replace(/^(\d{2}:\d{2}):\d{2}$/, "$1"),
+              close: close.replace(/^(\d{2}:\d{2}):\d{2}$/, "$1"),
+            };
+          } else {
+            hours[day] = { enabled: false, open: "", close: "" };
+          }
+        }
+
+        setData((prev) => ({
+          ...prev,
+          // Step 1
+          businessName: biz.business_name || prev.businessName,
+          businessType,
+          businessTypeTag: String(cfg.businessType || biz.category_main || prev.businessTypeTag),
+          priceLevel,
+          // Step 2
+          streetAddress: biz.street_address || biz.address_line1 || prev.streetAddress,
+          city: biz.city || prev.city,
+          state: biz.state || prev.state,
+          zip: biz.zip || prev.zip,
+          businessPhone: biz.contact_phone || biz.phone_number || prev.businessPhone,
+          website: biz.website || biz.website_url || prev.website,
+          publicBusinessName: biz.public_business_name || biz.business_name || prev.publicBusinessName,
+          hours,
+        }));
+      } catch (err) {
+        console.error("Prefill error:", err);
+      }
+    })();
+  }, [prefillBusinessId, restored]);
 
   useEffect(() => {
     if (!restored) return;

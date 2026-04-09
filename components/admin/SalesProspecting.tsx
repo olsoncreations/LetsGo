@@ -38,6 +38,7 @@ interface SalesLead {
   last_contacted_at: string | null;
   search_query: string | null;
   search_location: string | null;
+  preview_business_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -358,6 +359,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [newNote, setNewNote] = useState("");
   const [notesLoading, setNotesLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [creatingPreview, setCreatingPreview] = useState(false);
 
   // ---------- Data fetching ----------
 
@@ -938,6 +940,63 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     fetchLeads();
   }
 
+  // ---------- Create Preview ----------
+
+  async function handleCreatePreview() {
+    if (!selectedLead) return;
+    setCreatingPreview(true);
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch("/api/admin/sales/prospect/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ leadId: selectedLead.id }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create preview");
+      }
+
+      const data = await res.json();
+
+      logAudit({
+        action: "create_preview",
+        tab: AUDIT_TABS.SALES,
+        subTab: "Prospecting",
+        targetType: "sales_lead",
+        targetId: selectedLead.id,
+        entityName: selectedLead.business_name,
+        details: `Preview business created: ${data.businessId} (${data.photosStored || 0} photos stored)`,
+      });
+
+      // Update local state
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === selectedLead.id
+            ? { ...l, preview_business_id: data.businessId }
+            : l
+        )
+      );
+      setSelectedLead((prev) =>
+        prev ? { ...prev, preview_business_id: data.businessId } : null
+      );
+
+      if (data.alreadyExists) {
+        alert("Preview already exists for this lead.");
+      }
+    } catch (err) {
+      console.error("Create preview error:", err);
+      alert(`Failed to create preview: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setCreatingPreview(false);
+    }
+  }
+
   // ---------- Export ----------
 
   function handleExport(format: "csv" | "xlsx") {
@@ -1244,6 +1303,25 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           </span>
         );
       },
+    },
+    {
+      key: "preview_business_id",
+      label: "Preview",
+      align: "center" as const,
+      render: (v: unknown) =>
+        v ? (
+          <a
+            href={`/preview/${String(v)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{ color: COLORS.neonGreen, fontSize: 11, fontWeight: 600, textDecoration: "none" }}
+          >
+            View
+          </a>
+        ) : (
+          <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>—</span>
+        ),
     },
     {
       key: "last_contacted_at",
@@ -1701,6 +1779,71 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 Last contacted: {formatDate(selectedLead.last_contacted_at)}
               </div>
             )}
+
+            {/* Preview */}
+            <div style={{
+              marginBottom: 24,
+              padding: 16,
+              background: selectedLead.preview_business_id
+                ? `linear-gradient(135deg, ${COLORS.neonGreen}08, ${COLORS.neonBlue}08)`
+                : COLORS.cardBg,
+              border: `1px solid ${selectedLead.preview_business_id ? COLORS.neonGreen + "30" : COLORS.cardBorder}`,
+              borderRadius: 12,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 12 }}>
+                Sales Preview
+              </div>
+              {selectedLead.preview_business_id ? (
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <a
+                    href={`/preview/${selectedLead.preview_business_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      ...btnPrimary,
+                      background: `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+                      color: "#000",
+                      textDecoration: "none",
+                      display: "inline-block",
+                    }}
+                  >
+                    View Preview
+                  </a>
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/preview/${selectedLead.preview_business_id}`;
+                      navigator.clipboard.writeText(url);
+                      alert("Preview link copied!");
+                    }}
+                    style={btnSecondary}
+                  >
+                    Copy Link
+                  </button>
+                  <span style={{ fontSize: 12, color: COLORS.neonGreen }}>
+                    Preview ready
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <button
+                    onClick={handleCreatePreview}
+                    disabled={creatingPreview}
+                    style={{
+                      ...btnPrimary,
+                      background: creatingPreview
+                        ? COLORS.cardBorder
+                        : `linear-gradient(135deg, ${COLORS.neonPink}, ${COLORS.neonOrange})`,
+                      opacity: creatingPreview ? 0.6 : 1,
+                    }}
+                  >
+                    {creatingPreview ? "Creating Preview..." : "Create Preview"}
+                  </button>
+                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                    Fetches Google photos, creates a live preview page
+                  </span>
+                </div>
+              )}
+            </div>
 
             {/* Notes */}
             <div style={{ marginBottom: 24 }}>
