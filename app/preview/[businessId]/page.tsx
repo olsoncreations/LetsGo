@@ -143,8 +143,6 @@ function PayoutLadder({ rates, levels = DEFAULT_PAYOUT_LEVELS }: { rates: number
 
 function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; payoutLevels?: { level: number; name: string; visits: string }[] }) {
   const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const dayIdx = new Date().getDay();
-  const today = dayNames[dayIdx === 0 ? 6 : dayIdx - 1];
 
   return (
     <div style={{
@@ -212,18 +210,17 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
           <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 2.5, color: COLORS.textSecondary, marginBottom: 16, fontFamily: "'DM Sans', sans-serif" }}>Business Hours</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {dayNames.map(day => {
-              const isToday = day === today;
               return (
                 <div key={day} style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                   padding: "10px 12px", borderRadius: 8,
-                  background: isToday ? `${COLORS.neonPink}10` : "transparent",
-                  border: isToday ? `1px solid ${COLORS.neonPink}20` : "1px solid transparent",
+                  background: "transparent",
+                  border: "1px solid transparent",
                 }}>
-                  <span style={{ fontSize: 13, fontWeight: isToday ? 700 : 500, color: isToday ? COLORS.neonPink : COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif" }}>
-                    {day} {isToday && <span style={{ fontSize: 9, opacity: 0.7 }}>(Today)</span>}
+                  <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif" }}>
+                    {day}
                   </span>
-                  <span style={{ fontSize: 13, fontWeight: isToday ? 700 : 500, color: isToday ? "#fff" : COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif" }}>{biz.hours[day] || "Closed"}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif" }}>{biz.hours[day] || "Closed"}</span>
                 </div>
               );
             })}
