@@ -1285,6 +1285,21 @@ export default function HomePage() {
             >
               See profile for progressive payouts · Keep your receipts
             </p>
+            <p
+              style={{
+                marginTop: 10,
+                fontSize: 10,
+                color: "rgba(255,255,255,0.18)",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}
+            >
+              <Link href="/privacy" style={{ color: "inherit", textDecoration: "none" }}>Privacy</Link>
+              <span style={{ margin: "0 8px", opacity: 0.5 }}>·</span>
+              <Link href="/terms" style={{ color: "inherit", textDecoration: "none" }}>Terms</Link>
+              <span style={{ margin: "0 8px", opacity: 0.5 }}>·</span>
+              <span>© {new Date().getFullYear()} Olson Creations LLC</span>
+            </p>
           </div>
         </div>
 
