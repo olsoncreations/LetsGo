@@ -1791,8 +1791,18 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               border: `1px solid ${selectedLead.preview_business_id ? COLORS.neonGreen + "30" : COLORS.cardBorder}`,
               borderRadius: 12,
             }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 6 }}>
                 Sales Preview
+              </div>
+              <div style={{
+                fontSize: 11, color: COLORS.neonYellow, marginBottom: 12,
+                padding: "6px 10px", borderRadius: 6,
+                background: `${COLORS.neonYellow}08`,
+                border: `1px solid ${COLORS.neonYellow}25`,
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <span>{"\u26A0\uFE0F"}</span>
+                <span>Each Create/Recreate fetches Google Places data and costs LetsGo money. Use sparingly — only for leads you plan to actually pitch.</span>
               </div>
               {selectedLead.preview_business_id ? (
                 <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
