@@ -1561,9 +1561,80 @@
       max-width: 280px;
     }
   }
+
+  /* ===== FLOATING ACTION BUTTONS ===== */
+  .manual-actions {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 9999;
+  }
+  .manual-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px rgba(255,45,146,0.3);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    backdrop-filter: blur(8px);
+  }
+  .manual-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 30px rgba(255,45,146,0.5);
+  }
+  .manual-action-btn.download {
+    background: linear-gradient(135deg, #ff2d92, #ff6b35);
+  }
+  .manual-action-btn.print {
+    background: linear-gradient(135deg, #00d4ff, #bf5fff);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px rgba(0,212,255,0.3);
+  }
+  .manual-action-btn.print:hover {
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 30px rgba(0,212,255,0.5);
+  }
+  .manual-action-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  @media (max-width: 700px) {
+    .manual-actions { top: 10px; right: 10px; }
+    .manual-action-btn { padding: 10px 14px; font-size: 0.8rem; }
+    .manual-action-btn span { display: none; }
+  }
 </style>
 </head>
 <body>
+
+<!-- ============================== -->
+<!-- FLOATING ACTION BUTTONS         -->
+<!-- ============================== -->
+<div class="manual-actions no-print">
+  <button type="button" class="manual-action-btn download" onclick="downloadManualPdf()" title="Download as PDF">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+    <span>Download PDF</span>
+  </button>
+  <button type="button" class="manual-action-btn print" onclick="window.print()" title="Print manual">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+    <span>Print</span>
+  </button>
+</div>
+
+<script>
+  function downloadManualPdf() {
+    // Browser's print dialog offers "Save as PDF" as a destination on all modern browsers.
+    // The page is already optimized via @media print styles for clean PDF output.
+    window.print();
+  }
+</script>
 
 <!-- ============================== -->
 <!-- COVER PAGE                      -->
@@ -1789,6 +1860,22 @@
     <li>Every year, on the user's anniversary, their Progressive Payout Tiers will reset to zero</li>
     <li>Only <strong>approved receipts</strong> count toward visit totals</li>
   </ul>
+
+  <h3>Protect Your Tier</h3>
+  <p>Because tiers reset annually, users who have worked their way up to higher payout levels can <strong>protect their progress</strong> by purchasing a <strong>Tier Extension</strong>. Extensions freeze the 365-day countdown for a specific business (Silver) or all businesses at once (Gold), giving users more time to keep earning at their current rate.</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4 style="color:var(--text-secondary);">Silver Extension</h4>
+      <p>Protects a <strong>single business</strong> tier. Available in 6-month or 12-month durations. Priced based on how much the user would lose if their tier reset.</p>
+    </div>
+    <div class="feature-card">
+      <h4 style="color:var(--yellow);">Gold Extension</h4>
+      <p>Protects <strong>all businesses at once</strong> with a 15% bundle discount vs. buying Silver individually. Available when a user has 2+ businesses with tiers above Starter.</p>
+    </div>
+  </div>
+
+  <p>Full details on pricing, purchase flow, and extension history are covered in <a href="#s11" style="color:var(--blue);">Section 11: User Profile &amp; Earnings</a>.</p>
 
   <h3>Example Journey</h3>
   <div class="feature-card">
@@ -2438,6 +2525,77 @@
       <span style="color:var(--text-secondary);">$15.00 at Coffee Hut &mdash; Reason: Illegible receipt</span>
     </div>
   </div>
+
+  <h3>Protect Tier (Tier Extensions)</h3>
+  <p>Users who have built up their payout tiers can purchase <strong>Tier Extensions</strong> to prevent their progress from resetting at the end of the 365-day window. Extensions are available from the <strong>Payout Levels</strong> tab on the Profile page.</p>
+
+  <h4 style="margin-top:1.5rem;">How It Appears</h4>
+  <p>Each business card in the Payout Levels tab shows:</p>
+  <ul>
+    <li><strong>Current tier</strong> with color-coded level badge, visit count, and payout percentage</li>
+    <li><strong>Countdown timer</strong> &mdash; shows days until the tier resets (orange warning when &le;30 days remain)</li>
+    <li><strong>Protect Tier button</strong> &mdash; appears for any tier above Starter (Tier 1)</li>
+    <li><strong>"Protected" badge</strong> &mdash; green badge with expiration date when an active extension is in place</li>
+  </ul>
+
+  <p>If a user has <strong>2 or more businesses</strong> with tiers worth protecting, a <strong>Gold Banner</strong> appears at the top of the list offering to protect all tiers at once with a 15% bundle discount.</p>
+
+  <h4 style="margin-top:1.5rem;">Silver vs. Gold</h4>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4 style="color:var(--text-secondary);">Silver Extension</h4>
+      <p>Protects a <strong>single business</strong> tier from resetting.</p>
+      <ul>
+        <li><strong>Silver 6</strong> &mdash; 6-month protection, priced at 60% of the rewards value the user would lose if they reset</li>
+        <li><strong>Silver 12</strong> &mdash; 12-month protection, priced at 50% of lost value (better deal)</li>
+        <li>Minimum price: $0.99</li>
+        <li>Extensions can be stacked &mdash; purchasing again extends the protection end date</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <h4 style="color:var(--yellow);">Gold Extension</h4>
+      <p>Protects <strong>every business tier</strong> the user has above Starter.</p>
+      <ul>
+        <li><strong>Gold 6</strong> &mdash; 6-month protection for all businesses</li>
+        <li><strong>Gold 12</strong> &mdash; 12-month protection for all businesses</li>
+        <li>15% discount vs. buying each Silver individually</li>
+        <li>Only available when user has 2+ businesses with tiers to protect</li>
+        <li>Savings amount displayed: "Save $X vs buying each business separately"</li>
+      </ul>
+    </div>
+  </div>
+
+  <h4 style="margin-top:1.5rem;">Purchase Flow</h4>
+  <p>When the user taps <strong>Protect Tier</strong> (Silver) or <strong>Protect All</strong> (Gold), a purchase modal opens showing 6-month and 12-month options with pricing. The modal displays how much the user would lose in future rewards if their tier resets, reinforcing the value of the extension.</p>
+
+  <p><strong>Payment methods:</strong></p>
+  <ol class="steps">
+    <li><div><strong>Balance Only</strong><br>If the user's available LetsGo balance covers the full price, they can pay entirely from their earnings with no additional fees.</div></li>
+    <li><div><strong>Balance + Card (Split)</strong><br>Uses as much balance as possible, then charges the remainder to the user's saved card. A 3.5% processing fee applies only to the card portion.</div></li>
+    <li><div><strong>Card Only</strong><br>Full charge to the user's saved payment method with a 3.5% processing fee on the total amount.</div></li>
+  </ol>
+
+  <p>Before completing a purchase, the user must scroll to and accept a <strong>legal terms checkbox</strong> at the bottom of the modal.</p>
+
+  <h4 style="margin-top:1.5rem;">Extension History</h4>
+  <p>The Profile page includes a <strong>Tier Extension History</strong> view (accessible from the History section alongside Payouts and Cashouts). Each entry shows:</p>
+  <ul>
+    <li>Product type (Silver 6, Silver 12, Gold 6, or Gold 12)</li>
+    <li>Business name (or "All Businesses" for Gold)</li>
+    <li>Protected tier level</li>
+    <li>Effective date range</li>
+    <li>Payment breakdown (balance, card, fees)</li>
+    <li>Status &mdash; <strong style="color:var(--green);">Active</strong> (green) or <strong style="color:var(--text-muted);">Expired</strong> (gray)</li>
+  </ul>
+
+  <h4 style="margin-top:1.5rem;">When Extensions Expire</h4>
+  <p>A daily background process checks for expired extensions and updates their status. When an extension expires:</p>
+  <ul>
+    <li>The "Protected" badge disappears from the tier card</li>
+    <li>The countdown timer reverts to the normal "Resets in X days" display</li>
+    <li>The user can purchase a new extension at any time to re-protect their tier</li>
+    <li>The tier itself does not reset immediately &mdash; it only resets on the user's 365-day anniversary date</li>
+  </ul>
 </div>
 
 <!-- ============================== -->
@@ -3046,7 +3204,22 @@
 
   <div class="feature-card">
     <h4>Do my visits expire?</h4>
-    <p>Yes, visit counts are based on a <strong>365-day rolling window</strong> based on the user's anniversary. Every year the visits and tiers will reset to zero.</p>
+    <p>Yes, visit counts are based on a <strong>365-day rolling window</strong> based on the user's anniversary. Every year the visits and tiers will reset to zero. However, you can purchase a <strong>Tier Extension</strong> to protect your progress (see below).</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>What is Protect Tier?</h4>
+    <p>Protect Tier lets you purchase a <strong>Tier Extension</strong> that freezes your payout level so it won't reset at your 365-day anniversary. <strong>Silver</strong> extensions protect a single business (6 or 12 months). <strong>Gold</strong> extensions protect all your businesses at once with a 15% bundle discount. Pricing is based on the value of the rewards you'd lose if your tier reset.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>How do I pay for a Tier Extension?</h4>
+    <p>You can pay using your LetsGo balance, a saved card, or a combination of both. Balance-only purchases have no fees. Card payments include a 3.5% processing fee (applied only to the card portion if splitting). Add a payment method in your Profile settings to enable card purchases.</p>
+  </div>
+
+  <div class="feature-card">
+    <h4>What happens when my Tier Extension expires?</h4>
+    <p>Your tier doesn't reset immediately &mdash; it only resets on your 365-day anniversary date. When the extension expires, you'll see the normal countdown timer again and can purchase a new extension at any time to keep your tier protected.</p>
   </div>
 
   <div class="feature-card">
@@ -3591,7 +3764,7 @@
 </div>
 
 <div class="manual-footer no-print">
-  <p><strong>To print this manual:</strong> Press <kbd>Ctrl</kbd>+<kbd>P</kbd> (or <kbd>Cmd</kbd>+<kbd>P</kbd> on Mac) and select "Save as PDF" or your printer. The manual is optimized for US Letter paper.</p>
+  <p><strong>To save or print this manual:</strong> Use the <strong>Download PDF</strong> or <strong>Print</strong> buttons in the top-right corner — or press <kbd>Ctrl</kbd>+<kbd>P</kbd> (<kbd>Cmd</kbd>+<kbd>P</kbd> on Mac) and choose "Save as PDF" or your printer. The manual is optimized for US Letter paper.</p>
 </div>
 
 </body>
