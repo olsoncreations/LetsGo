@@ -906,7 +906,7 @@ export default function SalesPage() {
       const headers = ["Field", "Value"];
       const rows = [
         ["PAYER", ""],
-        ["Payer Name", "OlsonCreations, LLC DBA LETS GO OUT"],
+        ["Payer Name", "Olson Creations LLC DBA LETS GO OUT"],
         ["", ""],
         ["RECIPIENT", ""],
         ["Recipient Name", rep.legal_name],
@@ -980,7 +980,7 @@ export default function SalesPage() {
         const sheetData = [
           ["Field", "Value"],
           ["PAYER", ""],
-          ["Payer Name", "OlsonCreations, LLC DBA LETS GO OUT"],
+          ["Payer Name", "Olson Creations LLC DBA LETS GO OUT"],
           ["", ""],
           ["RECIPIENT", ""],
           ["Recipient Name", rep.legal_name],

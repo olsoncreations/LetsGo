@@ -1,7 +1,7 @@
 # LetsGo 60-Day Launch Plan
 **Start Date**: March 6, 2026
 **Target**: Revenue-generating platform with paying businesses and active users
-**Entity**: OlsonCreations, LLC, DBA "LETS GO OUT"
+**Entity**: Olson Creations LLC, DBA "LETS GO OUT"
 **Domain**: www.useletsgo.com
 
 ---
@@ -50,7 +50,7 @@
 #### Stripe: Test → Live
 - [ ] Log into Stripe Dashboard (dashboard.stripe.com)
 - [ ] Complete Stripe account activation (if not done):
-  - Business details (OlsonCreations, LLC / DBA "LETS GO OUT")
+  - Business details (Olson Creations LLC / DBA "LETS GO OUT")
   - Business bank account for receiving payments
   - Tax ID / EIN
   - Business website (www.useletsgo.com)

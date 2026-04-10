@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 32, lineHeight: 1.7, fontSize: 14 }}>
 
           <Section title="1. Introduction">
-            <p>OlsonCreations, LLC, DBA &quot;LETS GO OUT&quot; (&quot;LetsGo,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy and the security of your personal information. This Privacy Policy explains in detail how we collect, use, disclose, store, and safeguard your information when you use our website, mobile applications, APIs, and all related services (collectively, the &quot;Services&quot;).</p>
+            <p>Olson Creations LLC, DBA &quot;LETS GO OUT&quot; (&quot;LetsGo,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is committed to protecting your privacy and the security of your personal information. This Privacy Policy explains in detail how we collect, use, disclose, store, and safeguard your information when you use our website, mobile applications, APIs, and all related services (collectively, the &quot;Services&quot;).</p>
             <p>By creating an account or using the Services, you consent to the data practices described in this Privacy Policy. If you do not agree with any part of this Privacy Policy, please do not create an account or use the Services. This Privacy Policy is incorporated by reference into our <a href="/terms" style={{ color: "#00d4ff", textDecoration: "underline" }}>Terms of Service</a>.</p>
           </Section>
 
@@ -395,7 +395,7 @@ export default function PrivacyPolicyPage() {
           <Section title="17. Contact Us">
             <p>If you have questions, concerns, or complaints about this Privacy Policy, our data practices, or your personal information, please contact us at:</p>
             <p style={{ color: "rgba(255,255,255,0.6)" }}>
-              OlsonCreations, LLC, DBA &quot;LETS GO OUT&quot;<br />
+              Olson Creations LLC, DBA &quot;LETS GO OUT&quot;<br />
               Email: privacy@letsgolive.app<br />
               General Support: support@letsgolive.app<br />
               Security Issues: security@letsgolive.app<br />

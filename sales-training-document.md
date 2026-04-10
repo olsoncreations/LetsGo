@@ -506,7 +506,7 @@ After onboarding:
 
 ### Legal Entity
 
-OlsonCreations, LLC, DBA "LETS GO OUT"
+Olson Creations LLC, DBA "LETS GO OUT"
 
 Website: www.useletsgo.com
 

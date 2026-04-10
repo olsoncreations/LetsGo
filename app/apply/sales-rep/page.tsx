@@ -378,7 +378,7 @@ export default function SalesRepApplicationPage() {
             </p>
             <ul style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.8, paddingLeft: 20, marginBottom: 10 }}>
               <li>This is a <strong style={{ color: NEON.orange }}>100% commission-based</strong> role — there is no base salary, hourly wage, or guaranteed pay</li>
-              <li>You are <strong style={{ color: "rgba(255,255,255,0.7)" }}>not</strong> a W-2 employee of OlsonCreations, LLC (DBA &quot;LETS GO OUT&quot;)</li>
+              <li>You are <strong style={{ color: "rgba(255,255,255,0.7)" }}>not</strong> a W-2 employee of Olson Creations LLC (DBA &quot;LETS GO OUT&quot;)</li>
               <li>You are responsible for your own taxes, including self-employment tax</li>
               <li>You will receive a <strong style={{ color: "rgba(255,255,255,0.7)" }}>1099-NEC</strong> form for earnings over $600/year</li>
               <li>No benefits, health insurance, or PTO are provided</li>

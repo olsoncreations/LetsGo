@@ -43,7 +43,7 @@ export default function TermsOfServicePage() {
 
           <Section title="1. Acceptance of Terms">
             <p>By creating an account, accessing, or using the LetsGo platform (&quot;Platform&quot;), including our website, mobile applications, application programming interfaces (APIs), and all related services (collectively, the &quot;Services&quot;), you (&quot;User,&quot; &quot;you,&quot; or &quot;your&quot;) agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree to these Terms in their entirety, you must not create an account or use the Services.</p>
-            <p>These Terms constitute a legally binding agreement between you and OlsonCreations, LLC, DBA &quot;LETS GO OUT,&quot; a Nebraska limited liability company (&quot;LetsGo,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). We reserve the right to update, modify, or replace any part of these Terms at any time by posting the revised Terms on the Platform. Your continued use of the Services after the posting of revised Terms constitutes your acceptance of those changes. It is your responsibility to review these Terms periodically.</p>
+            <p>These Terms constitute a legally binding agreement between you and Olson Creations LLC, DBA &quot;LETS GO OUT,&quot; a Nebraska limited liability company (&quot;LetsGo,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). We reserve the right to update, modify, or replace any part of these Terms at any time by posting the revised Terms on the Platform. Your continued use of the Services after the posting of revised Terms constitutes your acceptance of those changes. It is your responsibility to review these Terms periodically.</p>
             <p>These Terms incorporate by reference our <a href="/privacy" style={{ color: "#00d4ff", textDecoration: "underline" }}>Privacy Policy</a>, which describes how we collect, use, and share your personal information. Together, these documents form the entire agreement between you and LetsGo regarding the Services.</p>
           </Section>
 
@@ -255,9 +255,9 @@ export default function TermsOfServicePage() {
           </Section>
 
           <Section title="23. Intellectual Property">
-            <p><strong style={{ color: "#fff" }}>23.1 Platform IP.</strong> All content, features, and functionality of the Platform, including but not limited to: text, graphics, logos (including the LetsGo name and logo), icons, images, audio, video, software, code, algorithms, databases, the overall design and &quot;look-and-feel,&quot; and all related intellectual property rights, are owned by OlsonCreations, LLC or its licensors and are protected by United States and international copyright, trademark, patent, trade secret, and other intellectual property laws.</p>
+            <p><strong style={{ color: "#fff" }}>23.1 Platform IP.</strong> All content, features, and functionality of the Platform, including but not limited to: text, graphics, logos (including the LetsGo name and logo), icons, images, audio, video, software, code, algorithms, databases, the overall design and &quot;look-and-feel,&quot; and all related intellectual property rights, are owned by Olson Creations LLC or its licensors and are protected by United States and international copyright, trademark, patent, trade secret, and other intellectual property laws.</p>
             <p><strong style={{ color: "#fff" }}>23.2 Limited License.</strong> Subject to your compliance with these Terms, LetsGo grants you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use the Services for your personal, non-commercial use (or for internal business use if you have a Business Account). This license does not include the right to: copy, modify, distribute, sell, lease, or create derivative works from any part of the Platform; reverse-engineer, decompile, or disassemble the Platform; use automated systems to access the Platform; or use the Platform for any unlawful purpose.</p>
-            <p><strong style={{ color: "#fff" }}>23.3 Trademarks.</strong> &quot;LetsGo,&quot; the LetsGo logo, and all related names, logos, product and service names, designs, and slogans are trademarks of OlsonCreations, LLC. You may not use these marks without our prior written permission.</p>
+            <p><strong style={{ color: "#fff" }}>23.3 Trademarks.</strong> &quot;LetsGo,&quot; the LetsGo logo, and all related names, logos, product and service names, designs, and slogans are trademarks of Olson Creations LLC. You may not use these marks without our prior written permission.</p>
           </Section>
 
           <Section title="24. Communications and Notifications">
@@ -327,7 +327,7 @@ export default function TermsOfServicePage() {
           <Section title="37. Contact Information">
             <p>If you have questions, concerns, or complaints about these Terms, please contact us at:</p>
             <p style={{ color: "rgba(255,255,255,0.6)" }}>
-              OlsonCreations, LLC, DBA &quot;LETS GO OUT&quot;<br />
+              Olson Creations LLC, DBA &quot;LETS GO OUT&quot;<br />
               Email: legal@letsgolive.app<br />
               Support: support@letsgolive.app<br />
               Security: security@letsgolive.app<br />
