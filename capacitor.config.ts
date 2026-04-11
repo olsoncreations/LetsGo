@@ -12,6 +12,12 @@ const config: CapacitorConfig = {
     backgroundColor: '#000000',
     allowMixedContent: false,
   },
+  ios: {
+    backgroundColor: '#000000',
+    contentInset: 'automatic',
+    preferredContentMode: 'mobile',
+    scheme: 'LetsGo',
+  },
 };
 
 export default config;
