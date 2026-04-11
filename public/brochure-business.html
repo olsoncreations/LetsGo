@@ -1231,6 +1231,26 @@ body {
   .cover-stats { grid-template-columns: 1fr; }
   .tiers-header { flex-direction: column; gap: 16px; }
   .download-bar { padding: 10px 16px; gap: 10px; }
+
+  /* Tiers table — prevent header/label squishing on mobile */
+  .tiers-table { table-layout: auto; }
+  .tiers-table th,
+  .tiers-table td { padding: 10px 6px 10px 0; font-size: 12px; word-break: normal; white-space: nowrap; }
+  .tiers-table th { font-size: 9px; letter-spacing: 0.06em; }
+  .tiers-table th:first-child,
+  .tiers-table td:first-child { padding-right: 10px; white-space: normal; }
+  .tiers-table col,
+  .tiers-table th[style],
+  .tiers-table td[style*="width"] { width: auto !important; }
+  .tier-pct { font-size: 18px; }
+  .tier-dot { margin-right: 6px; }
+
+  /* Sticky action bar — keep buttons inside viewport on mobile */
+  .action-bar-inner { padding: 12px 16px; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+  .action-bar-left { gap: 10px; }
+  .action-bar-btns { gap: 8px; }
+  .btn-pdf { padding: 8px 12px; font-size: 12px; }
+  .btn-signup { padding: 8px 14px; font-size: 14px; }
 }
 </style>
 </head>
@@ -1457,7 +1477,7 @@ body {
   <div class="section">
     <span class="label">Section 03 &mdash; Plans &amp; Pricing</span>
     <div class="h2" style="margin-bottom:12px;">Transparent Pricing.<br><span class="accent-y">No Surprises.</span></div>
-    <p style="color:var(--muted); font-size:14px; margin-bottom:40px;">Two costs. Every approved receipt generates a user payout (your reward to the customer) and a platform fee (LetsGo's revenue). That's it.</p>
+    <p style="color:var(--muted); font-size:14px; margin-bottom:40px;">Two costs. Every approved receipt generates a User Progressive Payout (your reward to the customer) and a platform fee (LetsGo's revenue). That's it.</p>
 
     <div class="plans-grid">
       <div class="plan-card basic">
@@ -1485,9 +1505,10 @@ body {
 
         <div class="plan-math">
           <div class="plan-math-title">Example: 200 receipts/mo &middot; $40 avg</div>
-          <div class="plan-math-row"><span>User payouts (progressive avg)</span><span>~$485</span></div>
+          <div class="plan-math-row"><span>User Progressive Payouts (avg)</span><span>~$485</span></div>
           <div class="plan-math-row"><span>Platform fee (10%, max $5/receipt)</span><span>~$790</span></div>
-          <div class="plan-math-row total"><span>Total / avg per visit</span><span>~$1,275 &middot; <span class="accent-y">$6.38</span></span></div>
+          <div class="plan-math-row total"><span>Total</span><span>~$1,275</span></div>
+          <div class="plan-math-row total"><span>Avg per visit</span><span class="accent-y">$6.38</span></div>
         </div>
       </div>
 
@@ -1517,9 +1538,10 @@ body {
 
         <div class="plan-math">
           <div class="plan-math-title">Example: 200 receipts/mo &middot; $40 avg</div>
-          <div class="plan-math-row"><span>User payouts (progressive avg)</span><span>~$485</span></div>
+          <div class="plan-math-row"><span>User Progressive Payouts (avg)</span><span>~$485</span></div>
           <div class="plan-math-row"><span>Premium subscription (fee waived)</span><span>$399.99</span></div>
-          <div class="plan-math-row total"><span>Total / avg per visit</span><span>~$885 &middot; <span class="accent-g">$4.43</span></span></div>
+          <div class="plan-math-row total"><span>Total</span><span>~$885</span></div>
+          <div class="plan-math-row total"><span>Avg per visit</span><span class="accent-g">$4.43</span></div>
         </div>
       </div>
     </div>
