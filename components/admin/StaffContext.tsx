@@ -139,10 +139,22 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
           ? settingsRow.roles_config
           : DEFAULT_ROLES;
 
-      // 4. Match role → config → permissions (case-insensitive)
+      // 4. Match role → config → permissions. Match against id or name,
+      //    case-insensitive, so DB values like "Sales Rep" still resolve
+      //    to the "sales_rep" entry in roles_config.
       const roleLower = userRole.toLowerCase();
-      const matched = rolesConfig.find((r) => r.id.toLowerCase() === roleLower);
-      const permissions = matched?.permissions || ["view_only"];
+      const roleNormalized = roleLower.replace(/\s+/g, "_");
+      const matched = rolesConfig.find(
+        (r) =>
+          r.id.toLowerCase() === roleLower ||
+          r.id.toLowerCase() === roleNormalized ||
+          r.name.toLowerCase() === roleLower,
+      );
+      // Sane baseline: any authenticated staff member gets at least viewer-level
+      // permissions (Overview + Training) so they can land in the admin and
+      // navigate to whatever else their role allows. Prevents the silent
+      // "view_only" fallback that gave unmatched roles zero access.
+      const permissions = matched?.permissions || ["view_overview", "view_training"];
       const roleName = matched?.name || userRole || "Unknown";
 
       setValue({

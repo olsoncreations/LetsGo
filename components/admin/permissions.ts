@@ -12,8 +12,11 @@
  */
 
 // Maps each admin nav key to the view permission required to see/access it.
+// `null` means the page is accessible to every staff member.
+// Overview is intentionally open: it's the universal landing page after
+// /admin redirects, so no staff member should get hard-walled there.
 export const NAV_PERMISSIONS: Record<string, string | null> = {
-  overview: "view_overview",
+  overview: null,
   executive: "view_executive",
   analytics: "view_analytics",
   health: "view_health",
