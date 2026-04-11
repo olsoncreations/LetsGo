@@ -175,6 +175,51 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * PATCH /api/admin/staff
+ * Updates a staff member's role by user_id.
+ */
+export async function PATCH(req: NextRequest) {
+  const denied = await requireStaff(req);
+  if (denied) return denied;
+
+  try {
+    const { userId, role } = await req.json();
+
+    if (!userId || !role) {
+      return NextResponse.json({ error: "userId and role are required" }, { status: 400 });
+    }
+
+    // Prevent self-demotion (caller can't change their own role)
+    const token = req.headers.get("authorization")?.replace("Bearer ", "");
+    const { data: { user: caller } } = await supabaseServer.auth.getUser(token!);
+    if (caller && caller.id === userId) {
+      return NextResponse.json({ error: "You cannot change your own role." }, { status: 403 });
+    }
+
+    const { error } = await supabaseServer
+      .from("staff_users")
+      .update({ role })
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("staff_users update error:", error);
+      return NextResponse.json(
+        { error: error.message || "Failed to update staff role" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Staff PATCH error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * DELETE /api/admin/staff
  * Removes a staff member by user_id.
  */

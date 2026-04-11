@@ -74,24 +74,18 @@
     max-width: 100% !important;
   }
 
-  /* ---- Sales Page: Sub-tabs (horizontally scrollable) ---- */
+  /* ---- Sales Page: Sub-tabs (wrap to multiple rows so all are visible) ---- */
   .sales-tabs {
-    width: auto !important;
+    width: 100% !important;
     max-width: 100% !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex-wrap: nowrap !important;
-  }
-
-  .sales-tabs::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
   }
 
   .sales-tabs button {
     white-space: nowrap;
-    flex-shrink: 0;
-    padding: 8px 14px !important;
+    flex: 0 0 auto;
+    padding: 8px 12px !important;
     font-size: 12px !important;
   }
 
@@ -120,6 +114,15 @@
 
   .sales-overview-filters > div {
     min-width: 0;
+  }
+
+  /* Quick Filters cell holds 5 buttons — give it full width and let buttons wrap */
+  .sales-overview-filters > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .sales-overview-filters > div:first-child > div {
+    flex-wrap: wrap !important;
   }
 
   .sales-overview-filters select,

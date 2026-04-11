@@ -836,6 +836,37 @@ export default function SettingsPage() {
     }
   };
 
+  const updateStaffRole = async (userId: string, newRole: string) => {
+    if (userId === currentStaffId) {
+      alert("You cannot change your own role.");
+      return;
+    }
+    const target = staffUsers.find(s => s.user_id === userId);
+    if (!target || target.role === newRole) return;
+    const newRoleLabel = settings.roles_config.find(r => r.id === newRole)?.name || newRole;
+    const oldRoleLabel = settings.roles_config.find(r => r.id === target.role)?.name || target.role;
+    if (!confirm(`Change ${target.name}'s role from "${oldRoleLabel}" to "${newRoleLabel}"?`)) return;
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch("/api/admin/staff", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || ""}` },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update staff role");
+      }
+      // Optimistic local update so the UI reflects the change immediately
+      setStaffUsers(prev => prev.map(s => s.user_id === userId ? { ...s, role: newRole } : s));
+      logAudit({ action: "update_staff_role", tab: AUDIT_TABS.SETTINGS, subTab: "Staff Management", targetType: "staff_user", targetId: userId, fieldName: "role", oldValue: target.role, newValue: newRole, details: `Staff member "${target.name}" role changed from "${oldRoleLabel}" to "${newRoleLabel}"` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Error updating staff role:", msg, err);
+      alert(`Error updating staff role: ${msg}`);
+    }
+  };
+
   const removeStaff = async (userId: string) => {
     if (userId === currentStaffId) {
       alert("You cannot remove yourself.");
@@ -1785,14 +1816,35 @@ export default function SettingsPage() {
                         #{staff.user_id.slice(-6).toUpperCase()}
                       </div>
                     </div>
-                    <div style={{
-                      padding: "6px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
-                      background: staff.role === "admin" ? "rgba(0,212,255,0.15)" : "rgba(191,95,255,0.15)",
-                      color: staff.role === "admin" ? COLORS.neonBlue : COLORS.neonPurple,
-                      textTransform: "capitalize",
-                    }}>
-                      {staff.role}
-                    </div>
+                    {staff.user_id === currentStaffId ? (
+                      <div style={{
+                        padding: "6px 14px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                        background: staff.role === "admin" ? "rgba(0,212,255,0.15)" : "rgba(191,95,255,0.15)",
+                        color: staff.role === "admin" ? COLORS.neonBlue : COLORS.neonPurple,
+                        textTransform: "capitalize",
+                      }}>
+                        {settings.roles_config.find(r => r.id === staff.role)?.name || staff.role}
+                      </div>
+                    ) : (
+                      <select
+                        value={staff.role}
+                        onChange={(e) => updateStaffRole(staff.user_id, e.target.value)}
+                        title="Change role"
+                        style={{
+                          padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600,
+                          background: staff.role === "admin" ? "rgba(0,212,255,0.15)" : "rgba(191,95,255,0.15)",
+                          color: staff.role === "admin" ? COLORS.neonBlue : COLORS.neonPurple,
+                          border: "1px solid " + (staff.role === "admin" ? COLORS.neonBlue : COLORS.neonPurple),
+                          cursor: "pointer",
+                        }}
+                      >
+                        {settings.roles_config.map(r => (
+                          <option key={r.id} value={r.id} style={{ background: COLORS.darkBg, color: COLORS.textPrimary }}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {staff.user_id !== currentStaffId && (
                       <button
                         onClick={() => removeStaff(staff.user_id)}
