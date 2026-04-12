@@ -1705,6 +1705,22 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         ),
     },
     {
+      key: "email",
+      label: "Email",
+      render: (v: unknown) =>
+        v ? (
+          <a
+            href={`mailto:${String(v)}`}
+            style={{ color: COLORS.neonGreen, fontSize: 12, textDecoration: "none", maxWidth: 160, display: "inline-block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {String(v)}
+          </a>
+        ) : (
+          <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>—</span>
+        ),
+    },
+    {
       key: "google_rating",
       label: "Rating",
       align: "center" as const,
