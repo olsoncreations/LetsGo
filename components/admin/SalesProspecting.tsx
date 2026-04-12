@@ -489,6 +489,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [creatingPreview, setCreatingPreview] = useState(false);
 
   // ---------- Email & Outreach state ----------
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [editEmailValue, setEditEmailValue] = useState("");
   const [scrapingEmail, setScrapingEmail] = useState(false);
   const [outreachHistory, setOutreachHistory] = useState<OutreachEmail[]>([]);
   const [outreachLoading, setOutreachLoading] = useState(false);
@@ -656,6 +658,25 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   async function getAuthTokenCb(): Promise<string> {
     const { data: { session } } = await supabaseBrowser.auth.getSession();
     return session?.access_token || "";
+  }
+
+  async function handleSaveEmail(leadId: string, email: string) {
+    try {
+      const token = await getAuthTokenCb();
+      const res = await fetch("/api/admin/sales/prospect/leads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: leadId, updates: { email: email.trim() || null, email_source: email.trim() ? "manual" : null } }),
+      });
+      if (res.ok) {
+        const trimmed = email.trim() || null;
+        setSelectedLead((prev) => prev ? { ...prev, email: trimmed, email_source: trimmed ? "manual" : null } : null);
+        setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, email: trimmed, email_source: trimmed ? "manual" : null } : l));
+        setEditingEmail(false);
+      }
+    } catch (err) {
+      console.error("Save email error:", err);
+    }
   }
 
   async function handleScrapeEmail(leadId: string) {
@@ -2304,13 +2325,46 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: `1px solid ${selectedLead.email ? COLORS.neonGreen + "30" : COLORS.cardBorder}` }}>
                 <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
                   <span>Email</span>
-                  {selectedLead.email_source && (
-                    <span style={{ fontSize: 9, color: COLORS.neonBlue, fontWeight: 400, textTransform: "none" }}>
-                      {selectedLead.email_source}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {selectedLead.email_source && (
+                      <span style={{ fontSize: 9, color: COLORS.neonBlue, fontWeight: 400, textTransform: "none" }}>
+                        {selectedLead.email_source}
+                      </span>
+                    )}
+                    <span
+                      onClick={() => { setEditingEmail(!editingEmail); setEditEmailValue(selectedLead.email || ""); }}
+                      style={{ fontSize: 9, color: COLORS.neonBlue, cursor: "pointer", textTransform: "none", fontWeight: 400 }}
+                    >
+                      {editingEmail ? "cancel" : "edit"}
                     </span>
-                  )}
+                  </div>
                 </div>
-                {selectedLead.email ? (
+                {editingEmail ? (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      type="email"
+                      value={editEmailValue}
+                      onChange={(e) => setEditEmailValue(e.target.value)}
+                      placeholder="email@example.com"
+                      style={{
+                        flex: 1, padding: "6px 10px", borderRadius: 6, fontSize: 13,
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                        color: COLORS.textPrimary, outline: "none",
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveEmail(selectedLead.id, editEmailValue); }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleSaveEmail(selectedLead.id, editEmailValue)}
+                      style={{
+                        padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                        background: COLORS.neonGreen + "20", border: `1px solid ${COLORS.neonGreen}40`, color: COLORS.neonGreen,
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : selectedLead.email ? (
                   <a href={`mailto:${selectedLead.email}`} style={{ color: COLORS.neonGreen, textDecoration: "none", fontSize: 14, wordBreak: "break-all" }}>
                     {selectedLead.email}
                   </a>
