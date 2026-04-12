@@ -2462,31 +2462,6 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 </div>
               </div>
 
-              {/* Save All button */}
-              {editingContact && (
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                  <button
-                    onClick={() => setEditingContact(false)}
-                    style={{
-                      padding: "10px 20px", borderRadius: 8, fontSize: 13, cursor: "pointer",
-                      background: "transparent", border: "1px solid " + COLORS.cardBorder, color: COLORS.textSecondary,
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleSaveContact(selectedLead.id)}
-                    disabled={savingContact}
-                    style={{
-                      padding: "10px 24px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                      background: COLORS.gradient1, border: "none", color: "#fff",
-                      opacity: savingContact ? 0.6 : 1,
-                    }}
-                  >
-                    {savingContact ? "Saving..." : "Save All"}
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Status + Rep */}
@@ -2761,20 +2736,46 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               {selectedLead.search_query && <span>Search: &quot;{selectedLead.search_query}&quot;</span>}
             </div>
 
-            {/* Delete */}
-            <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 16 }}>
-              {confirmDelete ? (
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <span style={{ color: COLORS.neonRed, fontSize: 13 }}>Delete this lead permanently?</span>
-                  <button onClick={handleDeleteLead} style={{ ...btnSecondary, borderColor: COLORS.neonRed, color: COLORS.neonRed }}>
-                    Yes, Delete
+            {/* Footer: Delete + Save All */}
+            <div style={{ borderTop: "1px solid " + COLORS.cardBorder, paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                {confirmDelete ? (
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <span style={{ color: COLORS.neonRed, fontSize: 13 }}>Delete this lead permanently?</span>
+                    <button onClick={handleDeleteLead} style={{ ...btnSecondary, borderColor: COLORS.neonRed, color: COLORS.neonRed }}>
+                      Yes, Delete
+                    </button>
+                    <button onClick={() => setConfirmDelete(false)} style={btnSecondary}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(true)} style={{ ...btnSecondary, color: COLORS.textSecondary, fontSize: 12 }}>
+                    Delete Lead
                   </button>
-                  <button onClick={() => setConfirmDelete(false)} style={btnSecondary}>Cancel</button>
+                )}
+              </div>
+              {editingContact && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => setEditingContact(false)}
+                    style={{
+                      padding: "10px 20px", borderRadius: 8, fontSize: 13, cursor: "pointer",
+                      background: "transparent", border: "1px solid " + COLORS.cardBorder, color: COLORS.textSecondary,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSaveContact(selectedLead.id)}
+                    disabled={savingContact}
+                    style={{
+                      padding: "10px 24px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      background: COLORS.gradient1, border: "none", color: "#fff",
+                      opacity: savingContact ? 0.6 : 1,
+                    }}
+                  >
+                    {savingContact ? "Saving..." : "Save All"}
+                  </button>
                 </div>
-              ) : (
-                <button onClick={() => setConfirmDelete(true)} style={{ ...btnSecondary, color: COLORS.textSecondary, fontSize: 12 }}>
-                  Delete Lead
-                </button>
               )}
             </div>
           </div>
