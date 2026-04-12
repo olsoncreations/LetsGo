@@ -12,6 +12,7 @@ import {
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 import SalesProspecting from "@/components/admin/SalesProspecting";
+import OutreachTemplates from "@/components/admin/OutreachTemplates";
 
 /* ==================== TYPES ==================== */
 
@@ -1151,6 +1152,7 @@ export default function SalesPage() {
     { key: "history", label: "📜 History" },
     { key: "payouts", label: "💵 Payouts" },
     { key: "prospecting", label: "🔍 Prospecting" },
+    { key: "outreach", label: "📧 Outreach Templates" },
     { key: "applications", label: "📋 Applications" },
     { key: "1099nec", label: "📄 1099-NEC" },
   ];
@@ -4947,6 +4949,11 @@ export default function SalesPage() {
                 status: r.status,
               }))}
             />
+          )}
+
+          {/* ==================== OUTREACH TEMPLATES TAB ==================== */}
+          {salesTab === "outreach" && (
+            <OutreachTemplates />
           )}
 
           {/* ==================== APPLICATIONS TAB ==================== */}

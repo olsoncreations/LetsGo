@@ -2,9 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { resend, isResendConfigured } from "@/lib/resend";
-import { OUTREACH_TEMPLATES, type TemplateKey } from "@/lib/outreachTemplates";
-
-const FROM_EMAIL = "Chris Olson <chris.olson@useletsgo.com>";
+import { generateEmail } from "@/lib/outreachTemplates";
 
 // Verify caller is authenticated staff
 async function requireStaff(req: NextRequest): Promise<{ error: Response | null; staffName: string | null }> {
@@ -39,10 +37,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const template = body.template as TemplateKey;
+  const template = body.template as string;
 
-  if (!template || !OUTREACH_TEMPLATES[template]) {
-    return NextResponse.json({ error: "Invalid template" }, { status: 400 });
+  if (!template) {
+    return NextResponse.json({ error: "Template is required" }, { status: 400 });
   }
 
   // ── Single send ──
@@ -83,7 +81,7 @@ export async function POST(req: NextRequest) {
 
 async function sendToLead(
   leadId: string,
-  template: TemplateKey,
+  template: string,
   staffName: string,
   previewId?: string
 ): Promise<{ error?: string; status?: number; outreachId?: string }> {
@@ -132,19 +130,26 @@ async function sendToLead(
     return { error: "Failed to create outreach record" };
   }
 
-  // Generate email content with tracking
-  const tmpl = OUTREACH_TEMPLATES[template];
-  const { subject, html } = tmpl.generate(
+  // Generate email content with tracking from DB template
+  const generated = await generateEmail(
+    template,
     lead,
     outreach.id,
     lead.email,
     previewId || lead.preview_business_id || undefined
   );
 
+  if (!generated) {
+    await supabaseServer.from("outreach_emails").delete().eq("id", outreach.id);
+    return { error: "Template not found or inactive" };
+  }
+
+  const { subject, html, fromName, fromEmail } = generated;
+
   // Send via Resend
   try {
     const { data: sendResult, error: sendErr } = await resend.emails.send({
-      from: FROM_EMAIL,
+      from: `${fromName} <${fromEmail}>`,
       to: lead.email,
       subject,
       html,
