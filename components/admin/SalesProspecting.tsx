@@ -39,8 +39,22 @@ interface SalesLead {
   search_query: string | null;
   search_location: string | null;
   preview_business_id: string | null;
+  email: string | null;
+  email_source: string | null;
+  unsubscribed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface OutreachEmail {
+  id: string;
+  template: string;
+  subject: string;
+  status: string;
+  sent_at: string | null;
+  opened_at: string | null;
+  clicked_at: string | null;
+  sent_by: string | null;
 }
 
 interface LeadNote {
@@ -474,6 +488,18 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [creatingPreview, setCreatingPreview] = useState(false);
 
+  // ---------- Email & Outreach state ----------
+  const [scrapingEmail, setScrapingEmail] = useState(false);
+  const [outreachHistory, setOutreachHistory] = useState<OutreachEmail[]>([]);
+  const [outreachLoading, setOutreachLoading] = useState(false);
+  const [sendingOutreach, setSendingOutreach] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState("initial_outreach");
+  const [bulkScraping, setBulkScraping] = useState(false);
+  const [bulkScrapeProgress, setBulkScrapeProgress] = useState({ current: 0, total: 0, found: 0 });
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkSendProgress, setBulkSendProgress] = useState({ current: 0, total: 0, sent: 0 });
+  const [filterHasEmail, setFilterHasEmail] = useState("all");
+
   // ---------- Data fetching ----------
 
   const fetchLeads = useCallback(async () => {
@@ -605,6 +631,177 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ---------- Outreach handlers ----------
+
+  const fetchOutreachHistory = useCallback(async (leadId: string) => {
+    setOutreachLoading(true);
+    try {
+      const token = await getAuthTokenCb();
+      const res = await fetch(`/api/admin/sales/prospect/outreach?leadId=${leadId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOutreachHistory((data.emails || []) as OutreachEmail[]);
+      }
+    } catch (err) {
+      console.error("Error fetching outreach:", err);
+    } finally {
+      setOutreachLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function getAuthTokenCb(): Promise<string> {
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    return session?.access_token || "";
+  }
+
+  async function handleScrapeEmail(leadId: string) {
+    setScrapingEmail(true);
+    try {
+      const token = await getAuthTokenCb();
+      const res = await fetch("/api/admin/sales/prospect/scrape-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ leadId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.bestEmail) {
+          setSelectedLead((prev) =>
+            prev ? { ...prev, email: data.bestEmail, email_source: "scraped" } : null
+          );
+          setLeads((prev) =>
+            prev.map((l) => l.id === leadId ? { ...l, email: data.bestEmail, email_source: "scraped" } : l)
+          );
+        } else {
+          alert("No email found on this website.");
+        }
+      } else {
+        const data = await res.json().catch(() => ({ error: "Scrape failed" }));
+        alert(data.error || "Scrape failed");
+      }
+    } catch (err) {
+      console.error("Scrape error:", err);
+    } finally {
+      setScrapingEmail(false);
+    }
+  }
+
+  async function handleSendOutreach(leadId: string) {
+    setSendingOutreach(true);
+    try {
+      const token = await getAuthTokenCb();
+      const res = await fetch("/api/admin/sales/prospect/outreach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ leadId, template: selectedTemplate }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchOutreachHistory(leadId);
+        // Update lead status in local state
+        setLeads((prev) =>
+          prev.map((l) => l.id === leadId && l.status === "not_contacted"
+            ? { ...l, status: "contacted", last_contacted_at: new Date().toISOString() }
+            : l
+          )
+        );
+      } else {
+        alert(data.error || "Send failed");
+      }
+    } catch (err) {
+      console.error("Outreach error:", err);
+    } finally {
+      setSendingOutreach(false);
+    }
+  }
+
+  async function handleBulkScrape() {
+    const targets = filteredLeads.filter((l) => l.website && !l.email);
+    if (targets.length === 0) { alert("No leads to scrape (all have emails or no website)"); return; }
+    if (!confirm(`Scrape emails for ${targets.length} leads? This may take a few minutes.`)) return;
+
+    setBulkScraping(true);
+    setBulkScrapeProgress({ current: 0, total: targets.length, found: 0 });
+    const token = await getAuthTokenCb();
+
+    // Process in batches of 20
+    let found = 0;
+    for (let i = 0; i < targets.length; i += 20) {
+      const batch = targets.slice(i, i + 20);
+      try {
+        const res = await fetch("/api/admin/sales/prospect/scrape-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ leadIds: batch.map((l) => l.id) }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          found += data.found || 0;
+          // Update local state with found emails
+          for (const r of (data.results || [])) {
+            if (r.email) {
+              setLeads((prev) =>
+                prev.map((l) => l.id === r.leadId ? { ...l, email: r.email, email_source: "scraped" } : l)
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Bulk scrape batch error:", err);
+      }
+      setBulkScrapeProgress({ current: Math.min(i + 20, targets.length), total: targets.length, found });
+    }
+
+    setBulkScraping(false);
+    alert(`Done! Found ${found} emails out of ${targets.length} leads scraped.`);
+  }
+
+  async function handleBulkSend() {
+    const targets = filteredLeads.filter((l) => l.email && !l.unsubscribed_at);
+    if (targets.length === 0) { alert("No leads with email to send to"); return; }
+    if (!confirm(`Send "${selectedTemplate}" to ${targets.length} leads? This uses your Resend quota.`)) return;
+
+    setBulkSending(true);
+    setBulkSendProgress({ current: 0, total: targets.length, sent: 0 });
+    const token = await getAuthTokenCb();
+
+    let sent = 0;
+    for (let i = 0; i < targets.length; i += 20) {
+      const batch = targets.slice(i, i + 20);
+      try {
+        const res = await fetch("/api/admin/sales/prospect/outreach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ leadIds: batch.map((l) => l.id), template: selectedTemplate }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          sent += data.sent || 0;
+          // Update local state
+          for (const r of (data.results || [])) {
+            if (r.sent) {
+              setLeads((prev) =>
+                prev.map((l) => l.id === r.leadId && l.status === "not_contacted"
+                  ? { ...l, status: "contacted", last_contacted_at: new Date().toISOString() }
+                  : l
+                )
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Bulk send batch error:", err);
+      }
+      setBulkSendProgress({ current: Math.min(i + 20, targets.length), total: targets.length, sent });
+    }
+
+    setBulkSending(false);
+    alert(`Done! Sent ${sent} emails out of ${targets.length} leads.`);
+  }
 
   // ---------- Search handlers ----------
 
@@ -1207,6 +1404,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       if (filterHasPreview === "no" && l.preview_business_id) return false;
       if (filterOnApp === "yes" && !isLeadOnApp(l)) return false;
       if (filterOnApp === "no" && isLeadOnApp(l)) return false;
+      if (filterHasEmail === "yes" && !l.email) return false;
+      if (filterHasEmail === "no" && l.email) return false;
       if (filterContactFrom) {
         if (!l.last_contacted_at) return false;
         if (l.last_contacted_at.slice(0, 10) < filterContactFrom) return false;
@@ -1227,7 +1426,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       }
       return true;
     });
-  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp]);
+  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp, filterHasEmail]);
 
   // City options for filter (derived from leads data)
   const cityOptions = useMemo(() => {
@@ -1266,11 +1465,12 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     if (filterHasPhone !== "all") count++;
     if (filterHasPreview !== "all") count++;
     if (filterOnApp !== "all") count++;
+    if (filterHasEmail !== "all") count++;
     if (filterContactFrom) count++;
     if (filterContactTo) count++;
     if (filterSearch) count++;
     return count;
-  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterContactFrom, filterContactTo, filterSearch]);
+  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterHasEmail, filterContactFrom, filterContactTo, filterSearch]);
 
   const clearAllFilters = () => {
     setFilterStatus("all");
@@ -1283,6 +1483,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setFilterHasPhone("all");
     setFilterHasPreview("all");
     setFilterOnApp("all");
+    setFilterHasEmail("all");
     setFilterContactFrom("");
     setFilterContactTo("");
     setFilterSearch("");
@@ -1901,6 +2102,14 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             </select>
           </div>
           <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Has Email</label>
+            <select value={filterHasEmail} onChange={(e) => setFilterHasEmail(e.target.value)} style={{ ...selectStyle, minWidth: 110 }}>
+              <option value="all">Any</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div>
             <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Last Contact From</label>
             <input
               type="date"
@@ -1936,6 +2145,46 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         </div>
       </Card>
 
+      {/* Bulk Actions */}
+      <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <button
+          onClick={handleBulkScrape}
+          disabled={bulkScraping}
+          style={{
+            ...btnPrimary,
+            background: bulkScraping ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+            color: "#000",
+            opacity: bulkScraping ? 0.6 : 1,
+          }}
+        >
+          {bulkScraping
+            ? `Scraping... ${bulkScrapeProgress.current}/${bulkScrapeProgress.total} (${bulkScrapeProgress.found} found)`
+            : `Bulk Scrape Emails (${filteredLeads.filter((l) => l.website && !l.email).length} leads)`}
+        </button>
+        <select
+          value={selectedTemplate}
+          onChange={(e) => setSelectedTemplate(e.target.value)}
+          style={{ ...selectStyle, minWidth: 160 }}
+        >
+          <option value="initial_outreach">Initial Outreach</option>
+          <option value="follow_up">Follow Up</option>
+          <option value="preview_share">Preview Share</option>
+        </select>
+        <button
+          onClick={handleBulkSend}
+          disabled={bulkSending}
+          style={{
+            ...btnPrimary,
+            background: bulkSending ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonOrange}, ${COLORS.neonPink})`,
+            opacity: bulkSending ? 0.6 : 1,
+          }}
+        >
+          {bulkSending
+            ? `Sending... ${bulkSendProgress.current}/${bulkSendProgress.total} (${bulkSendProgress.sent} sent)`
+            : `Bulk Send Email (${filteredLeads.filter((l) => l.email && !l.unsubscribed_at).length} leads)`}
+        </button>
+      </div>
+
       {/* Leads Table */}
       <Card style={{ marginTop: 16 }} title={`Leads (${filteredLeads.length})`}>
         {leadsLoading ? (
@@ -1947,6 +2196,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             onRowClick={(row) => {
               setSelectedLead(row as unknown as SalesLead);
               fetchNotes(row.id as string);
+              fetchOutreachHistory(row.id as string);
             }}
           />
         )}
@@ -2014,7 +2264,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             </div>
 
             {/* Contact Info */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
               <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
                 <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Phone</div>
                 {selectedLead.phone ? (
@@ -2033,6 +2283,41 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                   </a>
                 ) : (
                   <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No website listed</span>
+                )}
+              </div>
+              <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: `1px solid ${selectedLead.email ? COLORS.neonGreen + "30" : COLORS.cardBorder}` }}>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                  <span>Email</span>
+                  {selectedLead.email_source && (
+                    <span style={{ fontSize: 9, color: COLORS.neonBlue, fontWeight: 400, textTransform: "none" }}>
+                      {selectedLead.email_source}
+                    </span>
+                  )}
+                </div>
+                {selectedLead.email ? (
+                  <a href={`mailto:${selectedLead.email}`} style={{ color: COLORS.neonGreen, textDecoration: "none", fontSize: 14, wordBreak: "break-all" }}>
+                    {selectedLead.email}
+                  </a>
+                ) : selectedLead.website ? (
+                  <button
+                    onClick={() => handleScrapeEmail(selectedLead.id)}
+                    disabled={scrapingEmail}
+                    style={{
+                      padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      background: scrapingEmail ? COLORS.cardBorder : `rgba(${COLORS.neonGreen.slice(1).match(/.{2}/g)?.map(h => parseInt(h, 16)).join(",")},0.1)`,
+                      border: `1px solid ${COLORS.neonGreen}40`,
+                      color: COLORS.neonGreen,
+                    }}
+                  >
+                    {scrapingEmail ? "Scraping..." : "Scrape Email"}
+                  </button>
+                ) : (
+                  <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No website to scrape</span>
+                )}
+                {selectedLead.unsubscribed_at && (
+                  <div style={{ fontSize: 11, color: COLORS.neonRed, marginTop: 4 }}>
+                    Unsubscribed
+                  </div>
                 )}
               </div>
               <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, gridColumn: "1 / -1" }}>
@@ -2171,6 +2456,96 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                   <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                     Fetches Google photos, creates a live preview page
                   </span>
+                </div>
+              )}
+            </div>
+
+            {/* Email Outreach */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 12 }}>Email Outreach</div>
+
+              {/* Send outreach controls */}
+              {selectedLead.email && !selectedLead.unsubscribed_at && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    style={{ ...selectStyle, minWidth: 180 }}
+                  >
+                    <option value="initial_outreach">Initial Outreach</option>
+                    <option value="follow_up">Follow Up</option>
+                    <option value="preview_share">Preview Share</option>
+                  </select>
+                  <button
+                    onClick={() => handleSendOutreach(selectedLead.id)}
+                    disabled={sendingOutreach}
+                    style={{
+                      ...btnPrimary,
+                      background: sendingOutreach ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonOrange}, ${COLORS.neonPink})`,
+                      opacity: sendingOutreach ? 0.6 : 1,
+                    }}
+                  >
+                    {sendingOutreach ? "Sending..." : "Send Email"}
+                  </button>
+                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                    to {selectedLead.email}
+                  </span>
+                </div>
+              )}
+              {!selectedLead.email && (
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, fontStyle: "italic", marginBottom: 12 }}>
+                  No email address — scrape one from the website first
+                </div>
+              )}
+              {selectedLead.unsubscribed_at && (
+                <div style={{ fontSize: 13, color: COLORS.neonRed, marginBottom: 12 }}>
+                  This business has unsubscribed from outreach emails
+                </div>
+              )}
+
+              {/* Outreach history */}
+              {outreachLoading ? (
+                <div style={{ color: COLORS.textSecondary, fontSize: 13 }}>Loading outreach history...</div>
+              ) : outreachHistory.length === 0 ? (
+                <div style={{ color: COLORS.textSecondary, fontSize: 13, fontStyle: "italic" }}>No outreach emails sent yet</div>
+              ) : (
+                <div style={{ maxHeight: 200, overflow: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {outreachHistory.map((oe) => (
+                    <div
+                      key={oe.id}
+                      style={{
+                        padding: "10px 14px",
+                        background: COLORS.cardBg,
+                        border: "1px solid " + COLORS.cardBorder,
+                        borderRadius: 8,
+                        fontSize: 13,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div>
+                        <div style={{ color: COLORS.textPrimary, fontWeight: 600 }}>{oe.subject}</div>
+                        <div style={{ color: COLORS.textSecondary, fontSize: 11, marginTop: 2 }}>
+                          {oe.template.replace(/_/g, " ")} — {oe.sent_at ? new Date(oe.sent_at).toLocaleDateString() : "pending"}
+                          {oe.sent_by && ` — by ${oe.sent_by}`}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <Badge status={oe.status} />
+                        {oe.opened_at && (
+                          <span style={{ fontSize: 10, color: COLORS.neonGreen }}>
+                            opened {new Date(oe.opened_at).toLocaleDateString()}
+                          </span>
+                        )}
+                        {oe.clicked_at && (
+                          <span style={{ fontSize: 10, color: COLORS.neonBlue }}>
+                            clicked {new Date(oe.clicked_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
