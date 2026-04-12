@@ -489,8 +489,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [creatingPreview, setCreatingPreview] = useState(false);
 
   // ---------- Email & Outreach state ----------
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [editEmailValue, setEditEmailValue] = useState("");
+  const [editingContact, setEditingContact] = useState(false);
+  const [editContactValues, setEditContactValues] = useState<{ phone: string; website: string; email: string; address: string }>({ phone: "", website: "", email: "", address: "" });
+  const [savingContact, setSavingContact] = useState(false);
   const [scrapingEmail, setScrapingEmail] = useState(false);
   const [outreachHistory, setOutreachHistory] = useState<OutreachEmail[]>([]);
   const [outreachLoading, setOutreachLoading] = useState(false);
@@ -660,22 +661,66 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     return session?.access_token || "";
   }
 
-  async function handleSaveEmail(leadId: string, email: string) {
+  function startEditingContact(lead: SalesLead) {
+    setEditingContact(true);
+    setEditContactValues({
+      phone: lead.phone || "",
+      website: lead.website || "",
+      email: lead.email || "",
+      address: lead.address || "",
+    });
+  }
+
+  async function handleSaveContact(leadId: string) {
+    setSavingContact(true);
     try {
       const token = await getAuthTokenCb();
+      const updates: Record<string, unknown> = {
+        phone: editContactValues.phone.trim() || null,
+        website: editContactValues.website.trim() || null,
+        email: editContactValues.email.trim() || null,
+        address: editContactValues.address.trim() || null,
+      };
+      // Track email source if email changed
+      const oldEmail = selectedLead?.email || "";
+      if (editContactValues.email.trim() !== oldEmail) {
+        updates.email_source = editContactValues.email.trim() ? "manual" : null;
+      }
+
       const res = await fetch("/api/admin/sales/prospect/leads", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ id: leadId, updates: { email: email.trim() || null, email_source: email.trim() ? "manual" : null } }),
+        body: JSON.stringify({ id: leadId, updates }),
       });
       if (res.ok) {
-        const trimmed = email.trim() || null;
-        setSelectedLead((prev) => prev ? { ...prev, email: trimmed, email_source: trimmed ? "manual" : null } : null);
-        setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, email: trimmed, email_source: trimmed ? "manual" : null } : l));
-        setEditingEmail(false);
+        setSelectedLead((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            phone: editContactValues.phone.trim() || null,
+            website: editContactValues.website.trim() || null,
+            email: editContactValues.email.trim() || null,
+            address: editContactValues.address.trim() || null,
+            ...(editContactValues.email.trim() !== oldEmail ? { email_source: editContactValues.email.trim() ? "manual" : null } : {}),
+          };
+        });
+        setLeads((prev) => prev.map((l) => {
+          if (l.id !== leadId) return l;
+          return {
+            ...l,
+            phone: editContactValues.phone.trim() || null,
+            website: editContactValues.website.trim() || null,
+            email: editContactValues.email.trim() || null,
+            address: editContactValues.address.trim() || null,
+            ...(editContactValues.email.trim() !== oldEmail ? { email_source: editContactValues.email.trim() ? "manual" : null } : {}),
+          };
+        }));
+        setEditingContact(false);
       }
     } catch (err) {
-      console.error("Save email error:", err);
+      console.error("Save contact error:", err);
+    } finally {
+      setSavingContact(false);
     }
   }
 
@@ -2301,101 +2346,147 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             </div>
 
             {/* Contact Info */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
-              <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Phone</div>
-                {selectedLead.phone ? (
-                  <a href={`tel:${selectedLead.phone}`} style={{ color: COLORS.neonBlue, textDecoration: "none", fontSize: 14 }}>
-                    {selectedLead.phone}
-                  </a>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>Contact Info</span>
+                {!editingContact ? (
+                  <button
+                    onClick={() => startEditingContact(selectedLead)}
+                    style={{ fontSize: 11, color: COLORS.neonBlue, cursor: "pointer", background: "none", border: "none", fontWeight: 600 }}
+                  >
+                    Edit
+                  </button>
                 ) : (
-                  <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No phone listed</span>
+                  <button
+                    onClick={() => setEditingContact(false)}
+                    style={{ fontSize: 11, color: COLORS.textSecondary, cursor: "pointer", background: "none", border: "none" }}
+                  >
+                    Cancel
+                  </button>
                 )}
               </div>
-              <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Website</div>
-                {selectedLead.website ? (
-                  <a href={selectedLead.website} target="_blank" rel="noopener noreferrer" style={{ color: COLORS.neonBlue, textDecoration: "none", fontSize: 14, wordBreak: "break-all" }}>
-                    {selectedLead.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                  </a>
-                ) : (
-                  <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No website listed</span>
-                )}
-              </div>
-              <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: `1px solid ${selectedLead.email ? COLORS.neonGreen + "30" : COLORS.cardBorder}` }}>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                  <span>Email</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {selectedLead.email_source && (
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                {/* Phone */}
+                <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
+                  <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Phone</div>
+                  {editingContact ? (
+                    <input
+                      type="tel" value={editContactValues.phone}
+                      onChange={(e) => setEditContactValues({ ...editContactValues, phone: e.target.value })}
+                      placeholder="(555) 123-4567"
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 6, fontSize: 13, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: COLORS.textPrimary, outline: "none" }}
+                    />
+                  ) : selectedLead.phone ? (
+                    <a href={`tel:${selectedLead.phone}`} style={{ color: COLORS.neonBlue, textDecoration: "none", fontSize: 14 }}>{selectedLead.phone}</a>
+                  ) : (
+                    <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No phone listed</span>
+                  )}
+                </div>
+
+                {/* Website */}
+                <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
+                  <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Website</div>
+                  {editingContact ? (
+                    <input
+                      type="url" value={editContactValues.website}
+                      onChange={(e) => setEditContactValues({ ...editContactValues, website: e.target.value })}
+                      placeholder="https://example.com"
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 6, fontSize: 13, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: COLORS.textPrimary, outline: "none" }}
+                    />
+                  ) : selectedLead.website ? (
+                    <a href={selectedLead.website} target="_blank" rel="noopener noreferrer" style={{ color: COLORS.neonBlue, textDecoration: "none", fontSize: 14, wordBreak: "break-all" }}>
+                      {selectedLead.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    </a>
+                  ) : (
+                    <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No website listed</span>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: `1px solid ${selectedLead.email ? COLORS.neonGreen + "30" : COLORS.cardBorder}` }}>
+                  <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                    <span>Email</span>
+                    {selectedLead.email_source && !editingContact && (
                       <span style={{ fontSize: 9, color: COLORS.neonBlue, fontWeight: 400, textTransform: "none" }}>
                         {selectedLead.email_source}
                       </span>
                     )}
-                    <span
-                      onClick={() => { setEditingEmail(!editingEmail); setEditEmailValue(selectedLead.email || ""); }}
-                      style={{ fontSize: 9, color: COLORS.neonBlue, cursor: "pointer", textTransform: "none", fontWeight: 400 }}
-                    >
-                      {editingEmail ? "cancel" : "edit"}
-                    </span>
                   </div>
-                </div>
-                {editingEmail ? (
-                  <div style={{ display: "flex", gap: 6 }}>
+                  {editingContact ? (
                     <input
-                      type="email"
-                      value={editEmailValue}
-                      onChange={(e) => setEditEmailValue(e.target.value)}
+                      type="email" value={editContactValues.email}
+                      onChange={(e) => setEditContactValues({ ...editContactValues, email: e.target.value })}
                       placeholder="email@example.com"
-                      style={{
-                        flex: 1, padding: "6px 10px", borderRadius: 6, fontSize: 13,
-                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                        color: COLORS.textPrimary, outline: "none",
-                      }}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleSaveEmail(selectedLead.id, editEmailValue); }}
-                      autoFocus
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 6, fontSize: 13, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: COLORS.textPrimary, outline: "none" }}
                     />
+                  ) : selectedLead.email ? (
+                    <a href={`mailto:${selectedLead.email}`} style={{ color: COLORS.neonGreen, textDecoration: "none", fontSize: 14, wordBreak: "break-all" }}>
+                      {selectedLead.email}
+                    </a>
+                  ) : selectedLead.website ? (
                     <button
-                      onClick={() => handleSaveEmail(selectedLead.id, editEmailValue)}
+                      onClick={() => handleScrapeEmail(selectedLead.id)}
+                      disabled={scrapingEmail}
                       style={{
-                        padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                        background: COLORS.neonGreen + "20", border: `1px solid ${COLORS.neonGreen}40`, color: COLORS.neonGreen,
+                        padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        background: scrapingEmail ? COLORS.cardBorder : "rgba(0,255,135,0.1)",
+                        border: `1px solid ${COLORS.neonGreen}40`, color: COLORS.neonGreen,
                       }}
                     >
-                      Save
+                      {scrapingEmail ? "Scraping..." : "Scrape Email"}
                     </button>
-                  </div>
-                ) : selectedLead.email ? (
-                  <a href={`mailto:${selectedLead.email}`} style={{ color: COLORS.neonGreen, textDecoration: "none", fontSize: 14, wordBreak: "break-all" }}>
-                    {selectedLead.email}
-                  </a>
-                ) : selectedLead.website ? (
+                  ) : (
+                    <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No website to scrape</span>
+                  )}
+                  {selectedLead.unsubscribed_at && !editingContact && (
+                    <div style={{ fontSize: 11, color: COLORS.neonRed, marginTop: 4 }}>Unsubscribed</div>
+                  )}
+                </div>
+
+                {/* Address */}
+                <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, gridColumn: "1 / -1" }}>
+                  <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Address</div>
+                  {editingContact ? (
+                    <input
+                      type="text" value={editContactValues.address}
+                      onChange={(e) => setEditContactValues({ ...editContactValues, address: e.target.value })}
+                      placeholder="123 Main St, City, State"
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 6, fontSize: 13, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: COLORS.textPrimary, outline: "none" }}
+                    />
+                  ) : (
+                    <span style={{ color: COLORS.textPrimary, fontSize: 14 }}>
+                      {selectedLead.address || "No address listed"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Save All button */}
+              {editingContact && (
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
                   <button
-                    onClick={() => handleScrapeEmail(selectedLead.id)}
-                    disabled={scrapingEmail}
+                    onClick={() => setEditingContact(false)}
                     style={{
-                      padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                      background: scrapingEmail ? COLORS.cardBorder : `rgba(${COLORS.neonGreen.slice(1).match(/.{2}/g)?.map(h => parseInt(h, 16)).join(",")},0.1)`,
-                      border: `1px solid ${COLORS.neonGreen}40`,
-                      color: COLORS.neonGreen,
+                      padding: "10px 20px", borderRadius: 8, fontSize: 13, cursor: "pointer",
+                      background: "transparent", border: "1px solid " + COLORS.cardBorder, color: COLORS.textSecondary,
                     }}
                   >
-                    {scrapingEmail ? "Scraping..." : "Scrape Email"}
+                    Cancel
                   </button>
-                ) : (
-                  <span style={{ color: COLORS.textSecondary, fontSize: 14 }}>No website to scrape</span>
-                )}
-                {selectedLead.unsubscribed_at && (
-                  <div style={{ fontSize: 11, color: COLORS.neonRed, marginTop: 4 }}>
-                    Unsubscribed
-                  </div>
-                )}
-              </div>
-              <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, gridColumn: "1 / -1" }}>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Address</div>
-                <span style={{ color: COLORS.textPrimary, fontSize: 14 }}>
-                  {selectedLead.address || "No address listed"}
-                </span>
-              </div>
+                  <button
+                    onClick={() => handleSaveContact(selectedLead.id)}
+                    disabled={savingContact}
+                    style={{
+                      padding: "10px 24px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      background: COLORS.gradient1, border: "none", color: "#fff",
+                      opacity: savingContact ? 0.6 : 1,
+                    }}
+                  >
+                    {savingContact ? "Saving..." : "Save All"}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Status + Rep */}
