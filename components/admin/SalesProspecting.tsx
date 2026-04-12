@@ -1801,7 +1801,23 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       key: "status",
       label: "Status",
       align: "center" as const,
-      render: (v: unknown) => <span style={{ whiteSpace: "nowrap" }}><Badge status={String(v)} /></span>,
+      render: (v: unknown, row: Record<string, unknown>) => {
+        const contacted = !!row.last_contacted_at;
+        return (
+          <span style={{ whiteSpace: "nowrap", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+            <Badge status={String(v)} />
+            {contacted && (
+              <span style={{
+                fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
+                background: "rgba(0,212,255,0.15)", color: COLORS.neonBlue,
+                border: "1px solid rgba(0,212,255,0.3)",
+              }}>
+                EMAILED
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: "assigned_rep_id",

@@ -26,6 +26,7 @@ const PLACEHOLDERS = [
   { key: "{{rating_line}}", desc: "Rating mention (only shows if 4.0+)" },
   { key: "{{from_name}}", desc: "Sender name" },
   { key: "{{cta_owners_manual}}", desc: "Button: See How It Works" },
+  { key: "{{cta_brochure}}", desc: "Button: View Our Business Brochure" },
   { key: "{{cta_signup}}", desc: "Button: Sign Up Now" },
   { key: "{{cta_preview}}", desc: "Button: See Your Preview Page" },
 ];
@@ -145,6 +146,7 @@ export default function OutreachTemplates() {
       .replace(/\{\{rating_line\}\}/g, '<p>With a 4.7-star rating, your customers clearly love what you do. LetsGo helps you reward them for coming back.</p>')
       .replace(/\{\{from_name\}\}/g, editForm.from_name || "Chris Olson")
       .replace(/\{\{cta_owners_manual\}\}/g, '<a href="#" style="display: inline-block; padding: 12px 28px; background: #ff6b35; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">See How It Works</a>')
+      .replace(/\{\{cta_brochure\}\}/g, '<a href="#" style="display: inline-block; padding: 12px 28px; background: #ff6b35; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">View Our Business Brochure</a>')
       .replace(/\{\{cta_signup\}\}/g, '<a href="#" style="display: inline-block; padding: 12px 28px; background: #ff6b35; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">Sign Up Now</a>')
       .replace(/\{\{cta_preview\}\}/g, '<a href="#" style="display: inline-block; padding: 12px 28px; background: #ff6b35; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;">See Your Preview Page</a>');
 
