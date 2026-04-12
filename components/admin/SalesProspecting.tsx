@@ -240,6 +240,110 @@ const inputStyle: React.CSSProperties = {
   minWidth: 220,
 };
 
+// ==================== SEARCHABLE DROPDOWN ====================
+
+function SearchableDropdown({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = "Search...",
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(() => {
+    if (!search) return options;
+    const s = search.toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(s));
+  }, [options, search]);
+
+  const selectedLabel = options.find((o) => o.value === value)?.label || placeholder;
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>{label}</label>
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setSearch(""); }}
+        style={{
+          ...selectStyle,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          cursor: "pointer", textAlign: "left", width: "100%",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 140 }}>
+          {selectedLabel}
+        </span>
+        <span style={{ fontSize: 10, opacity: 0.5 }}>{open ? "\u25B2" : "\u25BC"}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, zIndex: 50, marginTop: 4,
+          background: COLORS.cardBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8,
+          width: "100%", minWidth: 200, maxHeight: 280, display: "flex", flexDirection: "column",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+        }}>
+          <div style={{ padding: "8px 8px 4px" }}>
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={placeholder}
+              style={{
+                width: "100%", padding: "8px 10px", borderRadius: 6, fontSize: 13,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                color: COLORS.textPrimary, outline: "none",
+              }}
+            />
+          </div>
+          <div style={{ overflowY: "auto", maxHeight: 220, padding: "4px 0" }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "12px 14px", fontSize: 12, color: COLORS.textSecondary }}>No results</div>
+            ) : filtered.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false); setSearch(""); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "8px 14px", fontSize: 13, cursor: "pointer",
+                  background: o.value === value ? "rgba(0,212,255,0.15)" : "transparent",
+                  color: o.value === value ? COLORS.neonBlue : COLORS.textPrimary,
+                  border: "none", fontWeight: o.value === value ? 600 : 400,
+                }}
+                onMouseEnter={(e) => { if (o.value !== value) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                onMouseLeave={(e) => { if (o.value !== value) e.currentTarget.style.background = "transparent"; }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const btnPrimary: React.CSSProperties = {
   padding: "10px 20px",
   background: COLORS.gradient1,
@@ -345,13 +449,22 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   // ---------- Leads state ----------
   const [leads, setLeads] = useState<SalesLead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
+  const [existingBusinessNames, setExistingBusinessNames] = useState<Set<string>>(new Set());
 
   // ---------- Filter state ----------
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterRep, setFilterRep] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [filterCity, setFilterCity] = useState("all");
+  const [filterState, setFilterState] = useState("all");
   const [filterSearch, setFilterSearch] = useState("");
+  const [filterRating, setFilterRating] = useState("all");
+  const [filterHasWebsite, setFilterHasWebsite] = useState("all");
+  const [filterHasPhone, setFilterHasPhone] = useState("all");
+  const [filterHasPreview, setFilterHasPreview] = useState("all");
+  const [filterContactFrom, setFilterContactFrom] = useState("");
+  const [filterContactTo, setFilterContactTo] = useState("");
+  const [filterOnApp, setFilterOnApp] = useState("all");
 
   // ---------- Modal state ----------
   const [selectedLead, setSelectedLead] = useState<SalesLead | null>(null);
@@ -386,6 +499,29 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  // Fetch existing business names to flag leads already on the app
+  // Excludes preview businesses (id starts with "preview-")
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabaseBrowser
+          .from("business")
+          .select("id, business_name, public_business_name");
+        if (data) {
+          const names = new Set<string>();
+          data.forEach((b: { id: string; business_name?: string; public_business_name?: string }) => {
+            if (b.id.startsWith("preview-")) return;
+            if (b.business_name) names.add(b.business_name.trim().toLowerCase());
+            if (b.public_business_name) names.add(b.public_business_name.trim().toLowerCase());
+          });
+          setExistingBusinessNames(names);
+        }
+      } catch (err) {
+        console.error("Error fetching existing businesses:", err);
+      }
+    })();
+  }, []);
 
   // Fetch current staff role via server-side API (bypasses RLS)
   useEffect(() => {
@@ -1042,6 +1178,14 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     });
   }
 
+  // ---------- On-app check ----------
+
+  const isLeadOnApp = useCallback((lead: SalesLead): boolean => {
+    if (existingBusinessNames.size === 0) return false;
+    const name = lead.business_name.trim().toLowerCase();
+    return existingBusinessNames.has(name);
+  }, [existingBusinessNames]);
+
   // ---------- Filtered data ----------
 
   const filteredLeads = useMemo(() => {
@@ -1050,18 +1194,40 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       if (filterRep !== "all" && (l.assigned_rep_id || "unassigned") !== filterRep) return false;
       if (filterType !== "all" && l.business_type !== filterType) return false;
       if (filterCity !== "all" && (l.city || "") !== filterCity) return false;
+      if (filterState !== "all" && (l.state || "") !== filterState) return false;
+      if (filterRating !== "all") {
+        const minRating = parseFloat(filterRating);
+        if (!l.google_rating || l.google_rating < minRating) return false;
+      }
+      if (filterHasWebsite === "yes" && !l.website) return false;
+      if (filterHasWebsite === "no" && l.website) return false;
+      if (filterHasPhone === "yes" && !l.phone) return false;
+      if (filterHasPhone === "no" && l.phone) return false;
+      if (filterHasPreview === "yes" && !l.preview_business_id) return false;
+      if (filterHasPreview === "no" && l.preview_business_id) return false;
+      if (filterOnApp === "yes" && !isLeadOnApp(l)) return false;
+      if (filterOnApp === "no" && isLeadOnApp(l)) return false;
+      if (filterContactFrom) {
+        if (!l.last_contacted_at) return false;
+        if (l.last_contacted_at.slice(0, 10) < filterContactFrom) return false;
+      }
+      if (filterContactTo) {
+        if (!l.last_contacted_at) return false;
+        if (l.last_contacted_at.slice(0, 10) > filterContactTo) return false;
+      }
       if (filterSearch) {
         const s = filterSearch.toLowerCase();
         const match =
           l.business_name.toLowerCase().includes(s) ||
           (l.address || "").toLowerCase().includes(s) ||
           (l.city || "").toLowerCase().includes(s) ||
-          (l.phone || "").includes(s);
+          (l.phone || "").includes(s) ||
+          (l.website || "").toLowerCase().includes(s);
         if (!match) return false;
       }
       return true;
     });
-  }, [leads, filterStatus, filterRep, filterType, filterCity, filterSearch]);
+  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp]);
 
   // City options for filter (derived from leads data)
   const cityOptions = useMemo(() => {
@@ -1074,6 +1240,53 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       .sort((a, b) => b[1] - a[1])
       .map(([city, count]) => ({ value: city, label: `${city} (${count})` }));
   }, [leads]);
+
+  // State options for filter (derived from leads data)
+  const stateOptions = useMemo(() => {
+    const states = new Map<string, number>();
+    leads.forEach((l) => {
+      const st = l.state || "Unknown";
+      states.set(st, (states.get(st) || 0) + 1);
+    });
+    return Array.from(states.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([st, count]) => ({ value: st, label: `${st} (${count})` }));
+  }, [leads]);
+
+  // Active filter count (for clear-all button)
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filterStatus !== "all") count++;
+    if (filterRep !== "all") count++;
+    if (filterType !== "all") count++;
+    if (filterCity !== "all") count++;
+    if (filterState !== "all") count++;
+    if (filterRating !== "all") count++;
+    if (filterHasWebsite !== "all") count++;
+    if (filterHasPhone !== "all") count++;
+    if (filterHasPreview !== "all") count++;
+    if (filterOnApp !== "all") count++;
+    if (filterContactFrom) count++;
+    if (filterContactTo) count++;
+    if (filterSearch) count++;
+    return count;
+  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterContactFrom, filterContactTo, filterSearch]);
+
+  const clearAllFilters = () => {
+    setFilterStatus("all");
+    setFilterRep("all");
+    setFilterType("all");
+    setFilterCity("all");
+    setFilterState("all");
+    setFilterRating("all");
+    setFilterHasWebsite("all");
+    setFilterHasPhone("all");
+    setFilterHasPreview("all");
+    setFilterOnApp("all");
+    setFilterContactFrom("");
+    setFilterContactTo("");
+    setFilterSearch("");
+  };
 
   // Stats
   const stats = useMemo(() => {
@@ -1211,9 +1424,23 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     {
       key: "business_name",
       label: "Business",
-      render: (v: unknown) => (
-        <span style={{ fontWeight: 600, color: COLORS.textPrimary }}>{String(v)}</span>
-      ),
+      render: (v: unknown, row: Record<string, unknown>) => {
+        const onApp = isLeadOnApp(row as unknown as SalesLead);
+        return (
+          <span style={{ fontWeight: 600, color: COLORS.textPrimary, display: "flex", alignItems: "center", gap: 6 }}>
+            {String(v)}
+            {onApp && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                background: "rgba(57,255,20,0.15)", color: COLORS.neonGreen,
+                border: `1px solid rgba(57,255,20,0.3)`, whiteSpace: "nowrap",
+              }}>
+                ON APP
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: "business_type",
@@ -1571,6 +1798,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
       {/* Filters + Export */}
       <Card>
+        {/* Row 1: Primary filters */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
           <div>
             <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Status</label>
@@ -1591,36 +1819,119 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               ))}
             </select>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Type</label>
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={selectStyle}>
-              {typeOptions.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>City</label>
-            <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} style={selectStyle}>
-              <option value="all">All Cities</option>
-              {cityOptions.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
+          <SearchableDropdown
+            label="Type"
+            value={filterType}
+            onChange={setFilterType}
+            options={typeOptions}
+            placeholder="Search types..."
+          />
+          <SearchableDropdown
+            label="City"
+            value={filterCity}
+            onChange={setFilterCity}
+            options={[{ value: "all", label: "All Cities" }, ...cityOptions]}
+            placeholder="Search cities..."
+          />
+          <SearchableDropdown
+            label="State"
+            value={filterState}
+            onChange={setFilterState}
+            options={[{ value: "all", label: "All States" }, ...stateOptions]}
+            placeholder="Search states..."
+          />
           <div>
             <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Search</label>
             <input
               type="text"
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
-              placeholder="Name, address, phone..."
+              placeholder="Name, address, phone, website..."
               style={inputStyle}
             />
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button onClick={() => handleExport("csv")} style={btnSecondary}>CSV</button>
             <button onClick={() => handleExport("xlsx")} style={btnSecondary}>XLSX</button>
+          </div>
+        </div>
+
+        {/* Row 2: Secondary filters */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.cardBorder}` }}>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Min Rating</label>
+            <select value={filterRating} onChange={(e) => setFilterRating(e.target.value)} style={{ ...selectStyle, minWidth: 110 }}>
+              <option value="all">Any Rating</option>
+              <option value="3.0">3.0+</option>
+              <option value="3.5">3.5+</option>
+              <option value="4.0">4.0+</option>
+              <option value="4.5">4.5+</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Has Website</label>
+            <select value={filterHasWebsite} onChange={(e) => setFilterHasWebsite(e.target.value)} style={{ ...selectStyle, minWidth: 110 }}>
+              <option value="all">Any</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Has Phone</label>
+            <select value={filterHasPhone} onChange={(e) => setFilterHasPhone(e.target.value)} style={{ ...selectStyle, minWidth: 110 }}>
+              <option value="all">Any</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Has Preview</label>
+            <select value={filterHasPreview} onChange={(e) => setFilterHasPreview(e.target.value)} style={{ ...selectStyle, minWidth: 110 }}>
+              <option value="all">Any</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>On App</label>
+            <select value={filterOnApp} onChange={(e) => setFilterOnApp(e.target.value)} style={{ ...selectStyle, minWidth: 110 }}>
+              <option value="all">Any</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Last Contact From</label>
+            <input
+              type="date"
+              value={filterContactFrom}
+              onChange={(e) => setFilterContactFrom(e.target.value)}
+              style={{ ...selectStyle, minWidth: 140, colorScheme: "dark" }}
+            />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Last Contact To</label>
+            <input
+              type="date"
+              value={filterContactTo}
+              onChange={(e) => setFilterContactTo(e.target.value)}
+              style={{ ...selectStyle, minWidth: 140, colorScheme: "dark" }}
+            />
+          </div>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearAllFilters}
+              style={{
+                padding: "10px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: "rgba(255,45,120,0.1)", border: `1px solid rgba(255,45,120,0.3)`,
+                color: COLORS.neonPink, cursor: "pointer",
+              }}
+            >
+              Clear All Filters ({activeFilterCount})
+            </button>
+          )}
+          <div style={{ marginLeft: "auto", fontSize: 12, color: COLORS.textSecondary, alignSelf: "center" }}>
+            Showing <strong style={{ color: COLORS.textPrimary }}>{filteredLeads.length}</strong> of {leads.length} leads
           </div>
         </div>
       </Card>
