@@ -33,10 +33,8 @@ CREATE INDEX IF NOT EXISTS idx_outreach_emails_status ON outreach_emails (status
 CREATE INDEX IF NOT EXISTS idx_outreach_emails_resend_id ON outreach_emails (resend_id) WHERE resend_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_outreach_emails_email_to ON outreach_emails (email_to);
 
--- Prevent sending same template to same lead within 30 days
-CREATE UNIQUE INDEX IF NOT EXISTS uq_outreach_emails_dedup
-  ON outreach_emails (lead_id, template)
-  WHERE status NOT IN ('bounced', 'unsubscribed') AND sent_at > now() - interval '30 days';
+-- Duplicate prevention is handled in application code (outreach API checks
+-- for existing sends of same template within 30 days before sending)
 
 -- RLS (admin-only via supabaseServer, but enable for safety)
 ALTER TABLE outreach_emails ENABLE ROW LEVEL SECURITY;
