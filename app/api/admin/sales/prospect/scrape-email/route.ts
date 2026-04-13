@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
   if (body.leadId) {
     const { data: lead, error } = await supabaseServer
       .from("sales_leads")
-      .select("id, website, email")
+      .select("id, website, email, scrape_attempts")
       .eq("id", body.leadId)
       .maybeSingle();
 
@@ -178,13 +178,18 @@ export async function POST(req: NextRequest) {
 
     const { emails, bestEmail } = await scrapeEmailFromUrl(lead.website);
 
-    // Update lead with found email
+    // Update lead: increment attempts, set email if found
+    const updates: Record<string, unknown> = {
+      scrape_attempts: (lead.scrape_attempts || 0) + 1,
+    };
     if (bestEmail) {
-      await supabaseServer
-        .from("sales_leads")
-        .update({ email: bestEmail, email_source: "scraped" })
-        .eq("id", lead.id);
+      updates.email = bestEmail;
+      updates.email_source = "scraped";
     }
+    await supabaseServer
+      .from("sales_leads")
+      .update(updates)
+      .eq("id", lead.id);
 
     return NextResponse.json({ leadId: lead.id, emails, bestEmail });
   }
@@ -195,7 +200,7 @@ export async function POST(req: NextRequest) {
 
     const { data: leads, error } = await supabaseServer
       .from("sales_leads")
-      .select("id, website, email")
+      .select("id, website, email, scrape_attempts")
       .in("id", leadIds);
 
     if (error) {
@@ -213,19 +218,33 @@ export async function POST(req: NextRequest) {
         results.push({ leadId: lead.id, email: lead.email, error: "Already has email" });
         continue;
       }
+      if ((lead.scrape_attempts || 0) >= 5) {
+        results.push({ leadId: lead.id, email: null, error: "Max attempts reached" });
+        continue;
+      }
 
       try {
         const { bestEmail } = await scrapeEmailFromUrl(lead.website);
 
+        const updates: Record<string, unknown> = {
+          scrape_attempts: (lead.scrape_attempts || 0) + 1,
+        };
         if (bestEmail) {
-          await supabaseServer
-            .from("sales_leads")
-            .update({ email: bestEmail, email_source: "scraped" })
-            .eq("id", lead.id);
+          updates.email = bestEmail;
+          updates.email_source = "scraped";
         }
+        await supabaseServer
+          .from("sales_leads")
+          .update(updates)
+          .eq("id", lead.id);
 
         results.push({ leadId: lead.id, email: bestEmail });
       } catch {
+        // Still increment attempts on failure
+        await supabaseServer
+          .from("sales_leads")
+          .update({ scrape_attempts: (lead.scrape_attempts || 0) + 1 })
+          .eq("id", lead.id);
         results.push({ leadId: lead.id, email: null, error: "Scrape failed" });
       }
 

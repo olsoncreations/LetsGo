@@ -42,6 +42,7 @@ interface SalesLead {
   email: string | null;
   email_source: string | null;
   unsubscribed_at: string | null;
+  scrape_attempts: number;
   created_at: string;
   updated_at: string;
 }
@@ -779,8 +780,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   }
 
   async function handleBulkScrape() {
-    const targets = filteredLeads.filter((l) => l.website && !l.email);
-    if (targets.length === 0) { alert("No leads to scrape (all have emails or no website)"); return; }
+    const targets = filteredLeads.filter((l) => l.website && !l.email && (l.scrape_attempts || 0) < 5);
+    if (targets.length === 0) { alert("No leads to scrape (all have emails, no website, or max attempts reached)"); return; }
     if (!confirm(`Scrape emails for ${targets.length} leads? This may take a few minutes.`)) return;
 
     setBulkScraping(true);
@@ -2250,7 +2251,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         >
           {bulkScraping
             ? `Scraping... ${bulkScrapeProgress.current}/${bulkScrapeProgress.total} (${bulkScrapeProgress.found} found)`
-            : `Bulk Scrape Emails (${filteredLeads.filter((l) => l.website && !l.email).length} leads)`}
+            : `Bulk Scrape Emails (${filteredLeads.filter((l) => l.website && !l.email && (l.scrape_attempts || 0) < 5).length} leads)`}
         </button>
         <select
           value={selectedTemplate}
