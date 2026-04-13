@@ -73,11 +73,11 @@ function renderTemplate(
     .replace(/\{\{from_name\}\}/g, fromName)
     .replace(/\{\{cta_owners_manual\}\}/g, trackLink(outreachId, `${BASE_URL}/owners-manual.html`, "See How It Works"))
     .replace(/\{\{cta_brochure\}\}/g, trackLink(outreachId, `${BASE_URL}/brochure-business.html`, "View Our Business Brochure"))
-    .replace(/\{\{cta_signup\}\}/g, trackLink(outreachId, `${BASE_URL}/partner-onboarding`, "Sign Up Now"))
+    .replace(/\{\{cta_signup\}\}/g, trackLink(outreachId, `${BASE_URL}/welcome`, "Sign Up Now"))
     .replace(/\{\{cta_preview\}\}/g, trackLink(outreachId, previewUrl, "See Your Preview Page"))
     .replace(/\{\{owner_manual_link\}\}/g, `${BASE_URL}/owners-manual.html`)
     .replace(/\{\{brochure_link\}\}/g, `${BASE_URL}/brochure-business.html`)
-    .replace(/\{\{signup_link\}\}/g, `${BASE_URL}/partner-onboarding`)
+    .replace(/\{\{signup_link\}\}/g, `${BASE_URL}/welcome`)
     .replace(/\{\{preview_link\}\}/g, previewUrl);
 }
 
