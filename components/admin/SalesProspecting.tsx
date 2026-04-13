@@ -490,7 +490,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   // ---------- Email & Outreach state ----------
   const [editingContact, setEditingContact] = useState(false);
-  const [editContactValues, setEditContactValues] = useState<{ phone: string; website: string; email: string; address: string }>({ phone: "", website: "", email: "", address: "" });
+  const [editContactValues, setEditContactValues] = useState<{ phone: string; website: string; email: string; address: string; business_name: string; business_type: string }>({ phone: "", website: "", email: "", address: "", business_name: "", business_type: "" });
   const [savingContact, setSavingContact] = useState(false);
   const [scrapingEmail, setScrapingEmail] = useState(false);
   const [outreachHistory, setOutreachHistory] = useState<OutreachEmail[]>([]);
@@ -668,6 +668,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       website: lead.website || "",
       email: lead.email || "",
       address: lead.address || "",
+      business_name: lead.business_name || "",
+      business_type: lead.business_type || "",
     });
   }
 
@@ -676,6 +678,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     try {
       const token = await getAuthTokenCb();
       const updates: Record<string, unknown> = {
+        business_name: editContactValues.business_name.trim() || null,
+        business_type: editContactValues.business_type.trim() || null,
         phone: editContactValues.phone.trim() || null,
         website: editContactValues.website.trim() || null,
         email: editContactValues.email.trim() || null,
@@ -693,28 +697,17 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         body: JSON.stringify({ id: leadId, updates }),
       });
       if (res.ok) {
-        setSelectedLead((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            phone: editContactValues.phone.trim() || null,
-            website: editContactValues.website.trim() || null,
-            email: editContactValues.email.trim() || null,
-            address: editContactValues.address.trim() || null,
-            ...(editContactValues.email.trim() !== oldEmail ? { email_source: editContactValues.email.trim() ? "manual" : null } : {}),
-          };
-        });
-        setLeads((prev) => prev.map((l) => {
-          if (l.id !== leadId) return l;
-          return {
-            ...l,
-            phone: editContactValues.phone.trim() || null,
-            website: editContactValues.website.trim() || null,
-            email: editContactValues.email.trim() || null,
-            address: editContactValues.address.trim() || null,
-            ...(editContactValues.email.trim() !== oldEmail ? { email_source: editContactValues.email.trim() ? "manual" : null } : {}),
-          };
-        }));
+        const updatedFields = {
+          business_name: editContactValues.business_name.trim() || "",
+          business_type: editContactValues.business_type.trim() || null,
+          phone: editContactValues.phone.trim() || null,
+          website: editContactValues.website.trim() || null,
+          email: editContactValues.email.trim() || null,
+          address: editContactValues.address.trim() || null,
+          ...(editContactValues.email.trim() !== oldEmail ? { email_source: editContactValues.email.trim() ? "manual" : null } : {}),
+        };
+        setSelectedLead((prev) => prev ? { ...prev, ...updatedFields } : null);
+        setLeads((prev) => prev.map((l) => l.id !== leadId ? l : { ...l, ...updatedFields }));
         setEditingContact(false);
       }
     } catch (err) {
@@ -2383,6 +2376,34 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                {/* Business Name & Type (only in edit mode) */}
+                {editingContact && (
+                  <>
+                    <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder, gridColumn: "1 / 3" }}>
+                      <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Business Name</div>
+                      <input
+                        type="text" value={editContactValues.business_name}
+                        onChange={(e) => setEditContactValues({ ...editContactValues, business_name: e.target.value })}
+                        placeholder="Business name"
+                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, fontSize: 13, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: COLORS.textPrimary, outline: "none" }}
+                      />
+                    </div>
+                    <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
+                      <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Business Type</div>
+                      <select
+                        value={editContactValues.business_type}
+                        onChange={(e) => setEditContactValues({ ...editContactValues, business_type: e.target.value })}
+                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, fontSize: 13, background: COLORS.cardBg, border: "1px solid rgba(255,255,255,0.1)", color: COLORS.textPrimary, outline: "none" }}
+                      >
+                        <option value="">Select type...</option>
+                        {typeOptions.filter(o => o.value !== "all").map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
                 {/* Phone */}
                 <div style={{ padding: 16, background: COLORS.cardBg, borderRadius: 10, border: "1px solid " + COLORS.cardBorder }}>
                   <div style={{ fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Phone</div>
