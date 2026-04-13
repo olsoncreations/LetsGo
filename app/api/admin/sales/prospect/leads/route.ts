@@ -47,7 +47,52 @@ export async function GET(req: NextRequest) {
       hasMore = rows.length === PAGE_SIZE;
     }
 
-    return NextResponse.json({ leads: allLeads, totalCount: allLeads.length });
+    // Fetch outreach summary per lead (latest status per lead)
+    const { data: outreachData } = await supabaseServer
+      .from("outreach_emails")
+      .select("lead_id, status, sent_at, opened_at, clicked_at")
+      .order("created_at", { ascending: false });
+
+    // Build lookup: lead_id -> best outreach status
+    const outreachMap = new Map<string, { outreach_status: string; outreach_sent_at: string | null; outreach_opened_at: string | null; outreach_clicked_at: string | null; outreach_count: number }>();
+    if (outreachData) {
+      for (const oe of outreachData) {
+        const existing = outreachMap.get(oe.lead_id);
+        if (!existing) {
+          outreachMap.set(oe.lead_id, {
+            outreach_status: oe.status,
+            outreach_sent_at: oe.sent_at,
+            outreach_opened_at: oe.opened_at,
+            outreach_clicked_at: oe.clicked_at,
+            outreach_count: 1,
+          });
+        } else {
+          existing.outreach_count++;
+          // Keep the highest status: clicked > opened > sent
+          const rank: Record<string, number> = { pending: 0, sent: 1, opened: 2, clicked: 3, bounced: -1, replied: 4, unsubscribed: -2 };
+          if ((rank[oe.status] || 0) > (rank[existing.outreach_status] || 0)) {
+            existing.outreach_status = oe.status;
+            existing.outreach_opened_at = oe.opened_at || existing.outreach_opened_at;
+            existing.outreach_clicked_at = oe.clicked_at || existing.outreach_clicked_at;
+          }
+        }
+      }
+    }
+
+    // Attach outreach data to leads
+    const enrichedLeads = allLeads.map((lead) => {
+      const outreach = outreachMap.get(lead.id as string);
+      return {
+        ...lead,
+        outreach_status: outreach?.outreach_status || null,
+        outreach_sent_at: outreach?.outreach_sent_at || null,
+        outreach_opened_at: outreach?.outreach_opened_at || null,
+        outreach_clicked_at: outreach?.outreach_clicked_at || null,
+        outreach_count: outreach?.outreach_count || 0,
+      };
+    });
+
+    return NextResponse.json({ leads: enrichedLeads, totalCount: enrichedLeads.length });
   } catch (err) {
     console.error("Leads API error:", err);
     return NextResponse.json(

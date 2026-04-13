@@ -43,6 +43,11 @@ interface SalesLead {
   email_source: string | null;
   unsubscribed_at: string | null;
   scrape_attempts: number;
+  outreach_status: string | null;
+  outreach_sent_at: string | null;
+  outreach_opened_at: string | null;
+  outreach_clicked_at: string | null;
+  outreach_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -503,6 +508,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkSendProgress, setBulkSendProgress] = useState({ current: 0, total: 0, sent: 0 });
   const [filterHasEmail, setFilterHasEmail] = useState("all");
+  const [filterOutreach, setFilterOutreach] = useState("all");
 
   // ---------- Data fetching ----------
 
@@ -1466,6 +1472,11 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       if (filterOnApp === "no" && isLeadOnApp(l)) return false;
       if (filterHasEmail === "yes" && !l.email) return false;
       if (filterHasEmail === "no" && l.email) return false;
+      if (filterOutreach === "not_sent" && l.outreach_count > 0) return false;
+      if (filterOutreach === "sent" && l.outreach_status !== "sent") return false;
+      if (filterOutreach === "opened" && l.outreach_status !== "opened") return false;
+      if (filterOutreach === "clicked" && l.outreach_status !== "clicked") return false;
+      if (filterOutreach === "any_sent" && l.outreach_count === 0) return false;
       if (filterContactFrom) {
         if (!l.last_contacted_at) return false;
         if (l.last_contacted_at.slice(0, 10) < filterContactFrom) return false;
@@ -1486,7 +1497,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       }
       return true;
     });
-  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp, filterHasEmail]);
+  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp, filterHasEmail, filterOutreach]);
 
   // City options for filter (derived from leads data)
   const cityOptions = useMemo(() => {
@@ -1526,11 +1537,12 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     if (filterHasPreview !== "all") count++;
     if (filterOnApp !== "all") count++;
     if (filterHasEmail !== "all") count++;
+    if (filterOutreach !== "all") count++;
     if (filterContactFrom) count++;
     if (filterContactTo) count++;
     if (filterSearch) count++;
     return count;
-  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterHasEmail, filterContactFrom, filterContactTo, filterSearch]);
+  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterHasEmail, filterOutreach, filterContactFrom, filterContactTo, filterSearch]);
 
   const clearAllFilters = () => {
     setFilterStatus("all");
@@ -1544,6 +1556,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setFilterHasPreview("all");
     setFilterOnApp("all");
     setFilterHasEmail("all");
+    setFilterOutreach("all");
     setFilterContactFrom("");
     setFilterContactTo("");
     setFilterSearch("");
@@ -1558,7 +1571,13 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     ).length;
     const signedUp = leads.filter((l) => l.status === "signed_up").length;
     const convRate = total > 0 ? ((signedUp / total) * 100).toFixed(1) : "0.0";
-    return { total, notContacted, inPipeline, signedUp, convRate };
+    const withEmail = leads.filter((l) => l.email).length;
+    const emailsSent = leads.filter((l) => l.outreach_count > 0).length;
+    const emailsOpened = leads.filter((l) => l.outreach_status === "opened" || l.outreach_status === "clicked" || l.outreach_status === "replied").length;
+    const emailsClicked = leads.filter((l) => l.outreach_status === "clicked" || l.outreach_status === "replied").length;
+    const openRate = emailsSent > 0 ? ((emailsOpened / emailsSent) * 100).toFixed(1) : "0.0";
+    const clickRate = emailsSent > 0 ? ((emailsClicked / emailsSent) * 100).toFixed(1) : "0.0";
+    return { total, notContacted, inPipeline, signedUp, convRate, withEmail, emailsSent, emailsOpened, emailsClicked, openRate, clickRate };
   }, [leads]);
 
   // Breakdown stats: by type and by city
@@ -1826,6 +1845,40 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       },
     },
     {
+      key: "outreach_status",
+      label: "Outreach",
+      align: "center" as const,
+      render: (v: unknown, row: Record<string, unknown>) => {
+        if (!v) return <span style={{ color: COLORS.textSecondary, fontSize: 11 }}>—</span>;
+        const status = String(v);
+        const colors: Record<string, string> = {
+          sent: COLORS.neonYellow,
+          opened: COLORS.neonGreen,
+          clicked: COLORS.neonBlue,
+          replied: COLORS.neonPurple,
+          bounced: COLORS.neonRed,
+          unsubscribed: COLORS.textSecondary,
+        };
+        const color = colors[status] || COLORS.textSecondary;
+        return (
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3,
+              background: `${color}20`, color, border: `1px solid ${color}40`,
+              textTransform: "uppercase",
+            }}>
+              {status}
+            </span>
+            {(row.outreach_count as number) > 1 && (
+              <span style={{ fontSize: 9, color: COLORS.textSecondary }}>
+                ×{String(row.outreach_count)}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
       key: "preview_business_id",
       label: "Preview",
       align: "center" as const,
@@ -2021,6 +2074,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         <StatCard label="In Pipeline" value={String(stats.inPipeline)} />
         <StatCard label="Signed Up" value={String(stats.signedUp)} />
         <StatCard label="Conversion" value={`${stats.convRate}%`} />
+        <StatCard label="Has Email" value={String(stats.withEmail)} />
+        <StatCard label="Emails Sent" value={String(stats.emailsSent)} />
+        <StatCard label="Opens" value={`${stats.emailsOpened} (${stats.openRate}%)`} />
+        <StatCard label="Clicks" value={`${stats.emailsClicked} (${stats.clickRate}%)`} />
       </div>
 
       {/* Breakdown stats — collapsible */}
@@ -2199,6 +2256,17 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               <option value="all">Any</option>
               <option value="yes">Yes</option>
               <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Outreach</label>
+            <select value={filterOutreach} onChange={(e) => setFilterOutreach(e.target.value)} style={{ ...selectStyle, minWidth: 120 }}>
+              <option value="all">Any</option>
+              <option value="not_sent">Not Sent</option>
+              <option value="any_sent">Sent (any)</option>
+              <option value="sent">Sent (not opened)</option>
+              <option value="opened">Opened</option>
+              <option value="clicked">Clicked</option>
             </select>
           </div>
           <div>
