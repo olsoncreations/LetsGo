@@ -265,7 +265,7 @@ export default function PrivacyPolicyPage() {
               <li><strong>Regular Security Reviews:</strong> We conduct periodic reviews of our security practices and infrastructure</li>
               <li><strong>Service Role Separation:</strong> Server-side operations use isolated service credentials with elevated privileges; client-side operations use restricted credentials that enforce access policies</li>
             </ul>
-            <p>However, no method of electronic transmission or storage is 100% secure. While we strive to use commercially reasonable means to protect your personal information, we cannot guarantee absolute security. You are responsible for maintaining the security of your account credentials and for any activity under your account. If you believe your account has been compromised, contact us immediately at security@letsgolive.app.</p>
+            <p>However, no method of electronic transmission or storage is 100% secure. While we strive to use commercially reasonable means to protect your personal information, we cannot guarantee absolute security. You are responsible for maintaining the security of your account credentials and for any activity under your account. If you believe your account has been compromised, contact us immediately at security@useletsgo.com.</p>
           </Section>
 
           {/* ════════════════════════════════════════════════
@@ -293,19 +293,19 @@ export default function PrivacyPolicyPage() {
               ════════════════════════════════════════════════ */}
 
           <Section title="8. Your Rights and Choices">
-            <p><strong style={{ color: "#fff" }}>8.1 Access and Correction.</strong> You can access and update most of your personal information directly through your profile settings in the app. If you need to access or correct information that is not editable through the app, contact us at privacy@letsgolive.app.</p>
+            <p><strong style={{ color: "#fff" }}>8.1 Access and Correction.</strong> You can access and update most of your personal information directly through your profile settings in the app. If you need to access or correct information that is not editable through the app, contact us at privacy@useletsgo.com.</p>
 
-            <p><strong style={{ color: "#fff" }}>8.2 Account Deletion.</strong> You may request the deletion of your account by contacting us at support@letsgolive.app. Upon receiving your request, we will: delete or anonymize your account data within thirty (30) days; retain receipt, Payout, and tax records as required by law (minimum 7 years); delete your User-Generated Content from the Platform (though cached copies may persist temporarily); and remove your data from active databases (backup copies may be retained per our backup retention schedule). Please note that account deletion is permanent and cannot be reversed.</p>
+            <p><strong style={{ color: "#fff" }}>8.2 Account Deletion.</strong> You may request the deletion of your account by contacting us at support@useletsgo.com. Upon receiving your request, we will: delete or anonymize your account data within thirty (30) days; retain receipt, Payout, and tax records as required by law (minimum 7 years); delete your User-Generated Content from the Platform (though cached copies may persist temporarily); and remove your data from active databases (backup copies may be retained per our backup retention schedule). Please note that account deletion is permanent and cannot be reversed.</p>
 
-            <p><strong style={{ color: "#fff" }}>8.3 Data Portability.</strong> You may request a copy of your personal data in a commonly used, machine-readable format by contacting us at privacy@letsgolive.app. We will provide the data within thirty (30) days of your request.</p>
+            <p><strong style={{ color: "#fff" }}>8.3 Data Portability.</strong> You may request a copy of your personal data in a commonly used, machine-readable format by contacting us at privacy@useletsgo.com. We will provide the data within thirty (30) days of your request.</p>
 
-            <p><strong style={{ color: "#fff" }}>8.4 Marketing Communications.</strong> You may opt out of marketing and promotional emails at any time by: clicking the &quot;unsubscribe&quot; link at the bottom of any marketing email; adjusting your email notification preferences in the app; or contacting us at privacy@letsgolive.app. Opting out of marketing communications does NOT affect transactional communications (receipt notifications, Payout alerts, security notices), which are required for the operation of the Services.</p>
+            <p><strong style={{ color: "#fff" }}>8.4 Marketing Communications.</strong> You may opt out of marketing and promotional emails at any time by: clicking the &quot;unsubscribe&quot; link at the bottom of any marketing email; adjusting your email notification preferences in the app; or contacting us at privacy@useletsgo.com. Opting out of marketing communications does NOT affect transactional communications (receipt notifications, Payout alerts, security notices), which are required for the operation of the Services.</p>
 
             <p><strong style={{ color: "#fff" }}>8.5 Push Notifications.</strong> You can disable push notifications at any time through: your device&apos;s system settings; your browser&apos;s notification settings; or the in-app notification preferences panel.</p>
 
             <p><strong style={{ color: "#fff" }}>8.6 Cookies and Local Storage.</strong> You can control cookies and local storage through your browser settings. Note that clearing local storage will log you out of the app (our session is stored under the &quot;letsgo-auth&quot; key). Disabling cookies or local storage may impair the functionality of the Services.</p>
 
-            <p><strong style={{ color: "#fff" }}>8.7 Contact Data.</strong> Contact data imported via the Contact Picker is processed at the time of import and stored only as invitation records. You can request deletion of your invitation records by contacting privacy@letsgolive.app.</p>
+            <p><strong style={{ color: "#fff" }}>8.7 Contact Data.</strong> Contact data imported via the Contact Picker is processed at the time of import and stored only as invitation records. You can request deletion of your invitation records by contacting privacy@useletsgo.com.</p>
           </Section>
 
           {/* ════════════════════════════════════════════════
@@ -322,7 +322,7 @@ export default function PrivacyPolicyPage() {
               <li><strong>Right to Limit Use of Sensitive Personal Information:</strong> We only use sensitive personal information (such as SSN) for the specific purposes described in this Privacy Policy (tax compliance). We do not use it for profiling or advertising</li>
               <li><strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising your CCPA/CPRA rights. You will not receive different pricing, service quality, or access to features based on exercising these rights</li>
             </ul>
-            <p><strong style={{ color: "#fff" }}>How to Exercise Your Rights:</strong> To submit a CCPA/CPRA request, email us at privacy@letsgolive.app with the subject line &quot;CCPA Request.&quot; We will verify your identity before processing your request. You may also designate an authorized agent to submit requests on your behalf. We will respond to verified requests within forty-five (45) days, with the possibility of a forty-five (45) day extension if reasonably necessary (we will notify you of any extension).</p>
+            <p><strong style={{ color: "#fff" }}>How to Exercise Your Rights:</strong> To submit a CCPA/CPRA request, email us at privacy@useletsgo.com with the subject line &quot;CCPA Request.&quot; We will verify your identity before processing your request. You may also designate an authorized agent to submit requests on your behalf. We will respond to verified requests within forty-five (45) days, with the possibility of a forty-five (45) day extension if reasonably necessary (we will notify you of any extension).</p>
             <p><strong style={{ color: "#fff" }}>Categories of Personal Information Collected (last 12 months):</strong></p>
             <ul style={{ paddingLeft: 20, margin: "8px 0" }}>
               <li>Identifiers (name, email, phone, username, IP address)</li>
@@ -342,8 +342,8 @@ export default function PrivacyPolicyPage() {
               ════════════════════════════════════════════════ */}
 
           <Section title="10. Other State Privacy Rights">
-            <p>Residents of Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), Utah (UCPA), and other states with comprehensive privacy laws may have similar rights to those described in Section 9, including the right to access, correct, delete, and port personal data, and the right to opt out of targeted advertising (which we do not engage in). To exercise these rights, contact us at privacy@letsgolive.app. We will verify your identity and respond within the timeframe required by your state&apos;s law.</p>
-            <p>If you are not satisfied with our response to your privacy request, you may have the right to appeal our decision. To submit an appeal, email us at privacy@letsgolive.app with the subject line &quot;Privacy Appeal.&quot;</p>
+            <p>Residents of Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), Utah (UCPA), and other states with comprehensive privacy laws may have similar rights to those described in Section 9, including the right to access, correct, delete, and port personal data, and the right to opt out of targeted advertising (which we do not engage in). To exercise these rights, contact us at privacy@useletsgo.com. We will verify your identity and respond within the timeframe required by your state&apos;s law.</p>
+            <p>If you are not satisfied with our response to your privacy request, you may have the right to appeal our decision. To submit an appeal, email us at privacy@useletsgo.com with the subject line &quot;Privacy Appeal.&quot;</p>
           </Section>
 
           {/* ════════════════════════════════════════════════
@@ -352,7 +352,7 @@ export default function PrivacyPolicyPage() {
 
           <Section title="11. Children&apos;s Privacy">
             <p>The Services are not directed to and are not intended for individuals under the age of eighteen (18). We do not knowingly collect, use, or disclose personal information from anyone under 18 years of age. If we learn or have reason to believe that we have collected information from a child under 18, we will promptly take steps to delete that information and terminate the associated account.</p>
-            <p>If you are a parent or guardian and believe that your child has provided us with personal information without your consent, please contact us immediately at privacy@letsgolive.app so that we can take appropriate action.</p>
+            <p>If you are a parent or guardian and believe that your child has provided us with personal information without your consent, please contact us immediately at privacy@useletsgo.com so that we can take appropriate action.</p>
           </Section>
 
           {/* ════════════════════════════════════════════════
@@ -405,10 +405,10 @@ export default function PrivacyPolicyPage() {
             <p>If you have questions, concerns, or complaints about this Privacy Policy, our data practices, or your personal information, please contact us at:</p>
             <p style={{ color: "rgba(255,255,255,0.6)" }}>
               Olson Creations LLC, DBA &quot;LETS GO OUT&quot;<br />
-              Email: privacy@letsgolive.app<br />
-              General Support: support@letsgolive.app<br />
-              Security Issues: security@letsgolive.app<br />
-              Legal Inquiries: legal@letsgolive.app<br />
+              Email: privacy@useletsgo.com<br />
+              General Support: support@useletsgo.com<br />
+              Security Issues: security@useletsgo.com<br />
+              Legal Inquiries: legal@useletsgo.com<br />
               Omaha, Nebraska, United States
             </p>
             <p>We will respond to privacy inquiries within thirty (30) days. For CCPA/CPRA and state privacy law requests, we will respond within the timeframe required by applicable law.</p>
