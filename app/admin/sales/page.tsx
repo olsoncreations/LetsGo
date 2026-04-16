@@ -12,6 +12,7 @@ import {
 } from "@/components/admin/components";
 import { logAudit, AUDIT_TABS } from "@/lib/auditLog";
 import SalesProspecting from "@/components/admin/SalesProspecting";
+import SalesAppointments from "@/components/admin/SalesAppointments";
 import OutreachTemplates from "@/components/admin/OutreachTemplates";
 
 /* ==================== TYPES ==================== */
@@ -1152,6 +1153,7 @@ export default function SalesPage() {
     { key: "history", label: "📜 History" },
     { key: "payouts", label: "💵 Payouts" },
     { key: "prospecting", label: "🔍 Prospecting" },
+    { key: "appointments", label: "📅 Appointments" },
     { key: "outreach", label: "📧 Outreach Templates" },
     { key: "applications", label: "📋 Applications" },
     { key: "1099nec", label: "📄 1099-NEC" },
@@ -4947,6 +4949,16 @@ export default function SalesPage() {
                 name: r.name,
                 zone_id: r.zone_id,
                 status: r.status,
+              }))}
+            />
+          )}
+
+          {/* ==================== APPOINTMENTS TAB ==================== */}
+          {salesTab === "appointments" && (
+            <SalesAppointments
+              salesReps={salesReps.filter(r => r.status === "active").map(r => ({
+                id: r.id,
+                name: r.name,
               }))}
             />
           )}

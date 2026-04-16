@@ -71,6 +71,18 @@ interface LeadNote {
   created_at: string;
 }
 
+interface SalesAppointment {
+  id: string;
+  lead_id: string;
+  assigned_rep_id: string | null;
+  scheduled_at: string;
+  duration_min: number;
+  location: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+}
+
 interface GooglePlaceResult {
   google_place_id: string;
   business_name: string;
@@ -512,6 +524,13 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
   const [reclassifyProgress, setReclassifyProgress] = useState({ done: 0, total: 0, errors: 0 });
+
+  // ---------- Appointment state ----------
+  const [leadAppointment, setLeadAppointment] = useState<SalesAppointment | null>(null);
+  const [apptLoading, setApptLoading] = useState(false);
+  const [apptFormOpen, setApptFormOpen] = useState(false);
+  const [apptSaving, setApptSaving] = useState(false);
+  const [apptForm, setApptForm] = useState({ date: "", time: "", duration_min: 30, rep_id: "", location: "", notes: "" });
 
   // ---------- Data fetching ----------
 
@@ -1511,6 +1530,127 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setSelectedLead(null);
     setConfirmDelete(false);
     fetchLeads();
+  }
+
+  // ---------- Appointments ----------
+
+  async function fetchLeadAppointment(leadId: string) {
+    setApptLoading(true);
+    try {
+      const token = await getAuthToken();
+      const res = await fetch(`/api/admin/sales/appointments?lead_id=${leadId}&status=scheduled`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLeadAppointment(data?.[0] || null);
+      }
+    } catch (err) {
+      console.error("Error fetching appointment:", err);
+    } finally {
+      setApptLoading(false);
+    }
+  }
+
+  async function handleSaveAppointment() {
+    if (!selectedLead || !apptForm.date || !apptForm.time) return;
+    setApptSaving(true);
+    try {
+      const token = await getAuthToken();
+      const scheduledAt = new Date(`${apptForm.date}T${apptForm.time}:00`).toISOString();
+      const isEdit = !!leadAppointment;
+      const url = isEdit
+        ? `/api/admin/sales/appointments/${leadAppointment.id}`
+        : "/api/admin/sales/appointments";
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          lead_id: selectedLead.id,
+          scheduled_at: scheduledAt,
+          duration_min: apptForm.duration_min,
+          assigned_rep_id: apptForm.rep_id || null,
+          location: apptForm.location || selectedLead.address || "",
+          notes: apptForm.notes || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        alert("Error saving appointment: " + err);
+        return;
+      }
+      const saved = await res.json();
+      setLeadAppointment(saved);
+      setApptFormOpen(false);
+      logAudit({
+        action: isEdit ? "update_sales_appointment" : "create_sales_appointment",
+        tab: AUDIT_TABS.SALES ?? "Sales",
+        subTab: "Appointments",
+        targetType: "sales_appointment",
+        targetId: saved.id,
+        entityName: selectedLead.business_name,
+      });
+    } catch (err) {
+      console.error("Error saving appointment:", err);
+      alert("Error saving appointment");
+    } finally {
+      setApptSaving(false);
+    }
+  }
+
+  async function handleCancelAppointment() {
+    if (!leadAppointment) return;
+    if (!confirm("Cancel this appointment?")) return;
+    try {
+      const token = await getAuthToken();
+      await fetch(`/api/admin/sales/appointments/${leadAppointment.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setLeadAppointment(null);
+      setApptFormOpen(false);
+    } catch (err) {
+      console.error("Error cancelling appointment:", err);
+    }
+  }
+
+  async function handleCompleteAppointment(status: "completed" | "no_show") {
+    if (!leadAppointment) return;
+    try {
+      const token = await getAuthToken();
+      const res = await fetch(`/api/admin/sales/appointments/${leadAppointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) setLeadAppointment(null);
+    } catch (err) {
+      console.error("Error updating appointment:", err);
+    }
+  }
+
+  function openApptForm(existing?: SalesAppointment) {
+    if (existing) {
+      const dt = new Date(existing.scheduled_at);
+      setApptForm({
+        date: dt.toISOString().slice(0, 10),
+        time: dt.toTimeString().slice(0, 5),
+        duration_min: existing.duration_min,
+        rep_id: existing.assigned_rep_id || "",
+        location: existing.location || "",
+        notes: existing.notes || "",
+      });
+    } else {
+      setApptForm({
+        date: "",
+        time: "",
+        duration_min: 30,
+        rep_id: selectedLead?.assigned_rep_id || "",
+        location: selectedLead?.address || "",
+        notes: "",
+      });
+    }
+    setApptFormOpen(true);
   }
 
   // ---------- Create Preview ----------
@@ -2566,6 +2706,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               setSelectedLead(row as unknown as SalesLead);
               fetchNotes(row.id as string);
               fetchOutreachHistory(row.id as string);
+              fetchLeadAppointment(row.id as string);
             }}
           />
         )}
@@ -2587,7 +2728,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             alignItems: "center",
             padding: 20,
           }}
-          onClick={() => { setSelectedLead(null); setConfirmDelete(false); }}
+          onClick={() => { setSelectedLead(null); setConfirmDelete(false); setLeadAppointment(null); setApptFormOpen(false); }}
         >
           <div
             style={{
@@ -2625,7 +2766,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 </div>
               </div>
               <button
-                onClick={() => { setSelectedLead(null); setConfirmDelete(false); }}
+                onClick={() => { setSelectedLead(null); setConfirmDelete(false); setLeadAppointment(null); setApptFormOpen(false); }}
                 style={{ background: "none", border: "none", color: COLORS.textSecondary, cursor: "pointer", fontSize: 20 }}
               >
                 ✕
@@ -2827,6 +2968,115 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 Last contacted: {formatDate(selectedLead.last_contacted_at)}
               </div>
             )}
+
+            {/* Appointment */}
+            <div style={{
+              marginBottom: 24,
+              padding: 16,
+              background: leadAppointment
+                ? `linear-gradient(135deg, ${COLORS.neonBlue}08, ${COLORS.neonPurple}08)`
+                : COLORS.cardBg,
+              border: `1px solid ${leadAppointment ? COLORS.neonBlue + "30" : COLORS.cardBorder}`,
+              borderRadius: 12,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 10 }}>
+                Appointment
+              </div>
+
+              {apptLoading ? (
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Loading...</div>
+              ) : apptFormOpen ? (
+                /* Appointment form */
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Date</label>
+                      <input type="date" value={apptForm.date} onChange={(e) => setApptForm((p) => ({ ...p, date: e.target.value }))} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Time</label>
+                      <input type="time" value={apptForm.time} onChange={(e) => setApptForm((p) => ({ ...p, time: e.target.value }))} style={inputStyle} />
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Duration</label>
+                      <select value={apptForm.duration_min} onChange={(e) => setApptForm((p) => ({ ...p, duration_min: Number(e.target.value) }))} style={selectStyle}>
+                        <option value={15}>15 min</option>
+                        <option value={30}>30 min</option>
+                        <option value={45}>45 min</option>
+                        <option value={60}>1 hour</option>
+                        <option value={90}>1.5 hours</option>
+                        <option value={120}>2 hours</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Assigned Rep</label>
+                      <select value={apptForm.rep_id} onChange={(e) => setApptForm((p) => ({ ...p, rep_id: e.target.value }))} style={selectStyle}>
+                        <option value="">Unassigned</option>
+                        {salesReps.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Location</label>
+                    <input type="text" value={apptForm.location} onChange={(e) => setApptForm((p) => ({ ...p, location: e.target.value }))} placeholder="Business address" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Notes</label>
+                    <input type="text" value={apptForm.notes} onChange={(e) => setApptForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Optional notes" style={inputStyle} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button onClick={handleSaveAppointment} disabled={apptSaving || !apptForm.date || !apptForm.time} style={{ ...btnPrimary, background: apptSaving ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonPurple})`, opacity: (apptSaving || !apptForm.date || !apptForm.time) ? 0.5 : 1 }}>
+                      {apptSaving ? "Saving..." : leadAppointment ? "Update Appointment" : "Schedule Appointment"}
+                    </button>
+                    <button onClick={() => setApptFormOpen(false)} style={btnSecondary}>Cancel</button>
+                  </div>
+                </div>
+              ) : leadAppointment ? (
+                /* Existing appointment display */
+                <div>
+                  <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.neonBlue }}>
+                      {new Date(leadAppointment.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      {" at "}
+                      {new Date(leadAppointment.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </div>
+                    <span style={{ fontSize: 12, color: COLORS.textSecondary, background: COLORS.cardBg, padding: "2px 8px", borderRadius: 6 }}>
+                      {leadAppointment.duration_min} min
+                    </span>
+                  </div>
+                  {leadAppointment.assigned_rep_id && (
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 }}>
+                      Rep: {salesReps.find((r) => r.id === leadAppointment.assigned_rep_id)?.name || "Unknown"}
+                    </div>
+                  )}
+                  {leadAppointment.location && (
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 }}>
+                      {leadAppointment.location}
+                    </div>
+                  )}
+                  {leadAppointment.notes && (
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary, fontStyle: "italic", marginBottom: 8 }}>
+                      {leadAppointment.notes}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={() => openApptForm(leadAppointment)} style={btnSecondary}>Edit</button>
+                    <button onClick={() => handleCompleteAppointment("completed")} style={{ ...btnSecondary, color: COLORS.neonGreen, borderColor: COLORS.neonGreen + "50" }}>Mark Complete</button>
+                    <button onClick={() => handleCompleteAppointment("no_show")} style={{ ...btnSecondary, color: COLORS.neonOrange, borderColor: COLORS.neonOrange + "50" }}>No Show</button>
+                    <button onClick={handleCancelAppointment} style={{ ...btnSecondary, color: COLORS.neonRed, borderColor: COLORS.neonRed + "50" }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                /* No appointment */
+                <button onClick={() => openApptForm()} style={{ ...btnPrimary, background: `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonPurple})` }}>
+                  Schedule Appointment
+                </button>
+              )}
+            </div>
 
             {/* Preview */}
             <div style={{
