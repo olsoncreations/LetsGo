@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { mapBusinessType } from "@/lib/googleBusinessType";
 
 // Verify caller is authenticated staff
 async function requireStaff(req: NextRequest): Promise<Response | null> {
@@ -50,62 +51,6 @@ const PRICE_LEVEL_MAP: Record<string, number> = {
   PRICE_LEVEL_EXPENSIVE: 3,
   PRICE_LEVEL_VERY_EXPENSIVE: 4,
 };
-
-// Maps Google Places types to display categories
-function mapBusinessType(googleTypes: string[]): string {
-  for (const t of googleTypes) {
-    // Restaurants (any type ending in _restaurant or specific food types)
-    if (t.endsWith("_restaurant") || t === "restaurant" || t === "food" || t === "diner"
-      || t === "steak_house" || t === "food_court") return "Restaurant";
-    // Cafes & Coffee
-    if (t === "cafe" || t === "coffee_shop" || t === "coffee_stand" || t === "tea_house"
-      || t === "coffee_roastery") return "Coffee";
-    // Bakeries & Desserts
-    if (t === "bakery" || t === "pastry_shop" || t === "donut_shop" || t === "dessert_shop"
-      || t === "cake_shop" || t === "candy_store" || t === "confectionery"
-      || t === "chocolate_shop") return "Bakery";
-    if (t === "ice_cream_shop") return "Ice Cream";
-    if (t === "juice_shop") return "Juice Bar";
-    // Bars & Nightlife
-    if (t === "bar" || t === "bar_and_grill" || t === "cocktail_bar" || t === "sports_bar"
-      || t === "beer_garden" || t === "hookah_bar" || t === "gastropub") return "Bar";
-    if (t === "brewery" || t === "brewpub") return "Brewery";
-    if (t === "pub" || t === "irish_pub") return "Pub";
-    if (t === "lounge_bar") return "Lounge";
-    if (t === "night_club") return "Nightclub";
-    if (t === "wine_bar" || t === "winery") return "Winery";
-    // Delis
-    if (t === "deli" || t === "sandwich_shop" || t === "snack_bar") return "Deli";
-    if (t === "meal_delivery" || t === "meal_takeaway") return "Food Truck";
-    // Entertainment
-    if (t === "bowling_alley") return "Bowling";
-    if (t === "movie_theater") return "Theater";
-    if (t === "comedy_club") return "Comedy Club";
-    if (t === "karaoke") return "Karaoke";
-    if (t === "miniature_golf_course") return "Mini Golf";
-    if (t === "escape_room") return "Escape Room";
-    if (t === "video_arcade") return "Arcade";
-    if (t === "amusement_center" || t === "amusement_park" || t === "casino"
-      || t === "go_karting_venue" || t === "paintball_center" || t === "concert_hall"
-      || t === "live_music_venue" || t === "banquet_hall" || t === "event_venue"
-      || t === "wedding_venue") return "Entertainment";
-    // Arts
-    if (t === "art_gallery") return "Art Gallery";
-    if (t === "museum") return "Museum";
-    // Beauty & Wellness
-    if (t === "beauty_salon" || t === "hair_salon" || t === "barber_shop"
-      || t === "nail_salon" || t === "tanning_studio") return "Salon/Beauty";
-    if (t === "spa" || t === "massage_spa" || t === "massage") return "Spa";
-    if (t === "yoga_studio") return "Yoga Studio";
-    // Fitness
-    if (t === "gym" || t === "fitness_center") return "Gym";
-    // Activities
-    if (t === "tourist_attraction" || t === "aquarium" || t === "zoo"
-      || t === "swimming_pool" || t === "sports_club" || t === "stadium"
-      || t === "park") return "Activity";
-  }
-  return "Activity";
-}
 
 /**
  * Geocode a location string to lat/lng using Google Geocoding API.

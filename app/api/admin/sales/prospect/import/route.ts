@@ -24,6 +24,7 @@ interface LeadRow {
   google_place_id: string;
   business_name: string;
   business_type: string | null;
+  google_types?: string[] | null;
   phone: string | null;
   address: string | null;
   city: string | null;

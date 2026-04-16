@@ -509,6 +509,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [bulkSendProgress, setBulkSendProgress] = useState({ current: 0, total: 0, sent: 0 });
   const [filterHasEmail, setFilterHasEmail] = useState("all");
   const [filterOutreach, setFilterOutreach] = useState("all");
+  const [cleanupRunning, setCleanupRunning] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
+  const [reclassifyProgress, setReclassifyProgress] = useState({ done: 0, total: 0, errors: 0 });
 
   // ---------- Data fetching ----------
 
@@ -869,6 +872,173 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     alert(`Done! Sent ${sent} emails out of ${targets.length} leads.`);
   }
 
+  // ---------- Cleanup / Reclassify handlers ----------
+
+  async function handleCleanupJunk() {
+    setCleanupRunning(true);
+    try {
+      const token = await getAuthTokenCb();
+
+      // Preview first
+      const previewRes = await fetch("/api/admin/sales/cleanup-junk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      if (!previewRes.ok) {
+        const err = await previewRes.json().catch(() => ({}));
+        alert(`Preview failed: ${err.error || previewRes.status}`);
+        return;
+      }
+      const preview = await previewRes.json();
+      const sampleLines = (preview.sampleNames || [])
+        .slice(0, 10)
+        .map((s: { business_name: string; city: string; state: string }) => `  • ${s.business_name} (${s.city}, ${s.state})`)
+        .join("\n");
+
+      const msg = `Flag ${preview.matchCount} leads as "Excluded"?\n\n` +
+        `Keywords matched: ${preview.keywordCount}\n\n` +
+        `Sample matches:\n${sampleLines}\n\n` +
+        `This is non-destructive — rows stay in the DB but drop out of outreach.`;
+
+      if (!confirm(msg)) return;
+
+      // Execute
+      const execRes = await fetch("/api/admin/sales/cleanup-junk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      if (!execRes.ok) {
+        const err = await execRes.json().catch(() => ({}));
+        alert(`Cleanup failed: ${err.error || execRes.status}`);
+        return;
+      }
+      const result = await execRes.json();
+      alert(`Flagged ${result.updated} leads as Excluded.`);
+      fetchLeads();
+    } catch (err) {
+      console.error("Cleanup error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setCleanupRunning(false);
+    }
+  }
+
+  async function handleReclassify() {
+    // Rough cost estimate: Places Essentials ~$5/1k
+    const estLeads = leads.filter((l) => l.business_type !== "Excluded").length;
+    const estCost = (estLeads / 1000 * 5).toFixed(2);
+    if (!confirm(
+      `Re-fetch business type from Google Places for up to ${estLeads} unverified leads.\n\n` +
+      `Estimated cost: ~$${estCost} (Places Essentials SKU, types field only).\n\n` +
+      `Safety: stops automatically if first batch has >30% errors.\n` +
+      `Runs in batches of 100. You can close this tab and re-run later — it's resumable.`
+    )) return;
+
+    setReclassifying(true);
+    setReclassifyProgress({ done: 0, total: estLeads, errors: 0 });
+
+    const MAX_ITERATIONS = 200;
+    const ERROR_RATE_THRESHOLD = 0.5;
+    const MIN_BATCH_FOR_BREAKER = 20;
+    const RATE_LIMIT_PAUSE_MS = 65_000;
+
+    const has429 = (arr: Array<{ status: number }> | undefined) => !!(arr || []).some((e) => e.status === 429);
+    const allSameStatus = (arr: Array<{ status: number }> | undefined, s: number) =>
+      !!arr && arr.length > 0 && arr.every((e) => e.status === s);
+
+    try {
+      let done = 0;
+      let errors = 0;
+      let totalRemaining = estLeads;
+      let iterations = 0;
+      let rateLimitPauses = 0;
+
+      while (iterations < MAX_ITERATIONS) {
+        iterations++;
+        // Refresh token every batch so hour-long runs don't die on expired auth
+        const token = await getAuthTokenCb();
+
+        const res = await fetch("/api/admin/sales/reclassify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ batchSize: 100 }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(`Reclassify batch failed: ${err.error || res.status}`);
+          break;
+        }
+        const data = await res.json();
+        done += data.processed || 0;
+        errors += data.errors || 0;
+        totalRemaining = data.remaining ?? 0;
+        setReclassifyProgress({
+          done,
+          total: done + totalRemaining,
+          errors,
+        });
+
+        // Done if server has nothing more to process
+        if (data.done || data.processed === 0) break;
+
+        // Circuit breaker: bail only on meaningful batches that mostly failed with NON-429 errors
+        if (
+          iterations === 1 &&
+          data.processed >= MIN_BATCH_FOR_BREAKER &&
+          (data.errors / data.processed) > ERROR_RATE_THRESHOLD &&
+          !has429(data.sampleErrors)
+        ) {
+          const samples = (data.sampleErrors || [])
+            .map((e: { status: number; body: string }) => `  HTTP ${e.status}: ${e.body || "(no body)"}`)
+            .join("\n");
+          alert(
+            `STOPPED: First batch had ${data.errors}/${data.processed} failures (${Math.round(data.errors / data.processed * 100)}%).\n\n` +
+            `Google's response:\n${samples || "(no samples)"}`
+          );
+          break;
+        }
+
+        // All-errors batch: handle gracefully based on the error type
+        if (data.processed > 0 && data.errors === data.processed) {
+          // 429 → quota wall. Pause for the per-minute window to reset, then continue.
+          if (has429(data.sampleErrors) && rateLimitPauses < 20) {
+            rateLimitPauses++;
+            await new Promise((r) => setTimeout(r, RATE_LIMIT_PAUSE_MS));
+            continue;
+          }
+          // 404 cluster → dead IDs, now marked server-side as verified. Keep going.
+          if (allSameStatus(data.sampleErrors, 404)) {
+            continue;
+          }
+          // Anything else → stop and show what happened
+          const samples = (data.sampleErrors || [])
+            .map((e: { status: number; body: string }) => `  HTTP ${e.status}: ${e.body || "(no body)"}`)
+            .join("\n");
+          alert(
+            `Stopped: batch ${iterations} was entirely errors (${data.errors}/${data.processed}).\n\n` +
+            `Google's response:\n${samples || "(no samples)"}\n\n` +
+            `Successful so far: ${done - errors} leads reclassified.`
+          );
+          break;
+        }
+      }
+
+      if (iterations >= MAX_ITERATIONS) {
+        alert(`Reached iteration cap (${MAX_ITERATIONS} batches). Processed ${done}, errors ${errors}. Re-click to continue if needed.`);
+      } else {
+        alert(`Reclassify complete. Processed: ${done}, errors: ${errors}.`);
+      }
+      fetchLeads();
+    } catch (err) {
+      console.error("Reclassify error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setReclassifying(false);
+    }
+  }
+
   // ---------- Search handlers ----------
 
   async function getAuthToken(): Promise<string> {
@@ -933,7 +1103,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     return {
       google_place_id: place.google_place_id,
       business_name: place.business_name,
-      business_type: searchType !== "all" ? searchType : place.business_type,
+      business_type: place.business_type,
+      google_types: place.google_types || [],
       phone: place.phone || null,
       address: place.address || null,
       city: place.city || null,
@@ -1113,11 +1284,14 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           const places = searchData.places || [];
 
           if (places.length > 0) {
-            // Use the Google type's category as the business_type for our DB
+            // Trust the server's per-business type detection (via mapBusinessType on Google's types[] array).
+            // Do NOT override with the search category — Google Text Search is fuzzy and returns non-matching
+            // businesses (e.g. fire departments show up in "Restaurant" searches).
             const rows = places.map((place: GooglePlaceResult) => ({
               google_place_id: place.google_place_id,
               business_name: place.business_name,
-              business_type: gType.category,
+              business_type: place.business_type,
+              google_types: place.google_types || [],
               phone: place.phone || null,
               address: place.address || null,
               city: place.city || null,
@@ -1503,13 +1677,14 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const cityOptions = useMemo(() => {
     const cities = new Map<string, number>();
     leads.forEach((l) => {
+      if (filterState !== "all" && (l.state || "") !== filterState) return;
       const city = l.city || "Unknown";
       cities.set(city, (cities.get(city) || 0) + 1);
     });
     return Array.from(cities.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([city, count]) => ({ value: city, label: `${city} (${count})` }));
-  }, [leads]);
+  }, [leads, filterState]);
 
   // State options for filter (derived from leads data)
   const stateOptions = useMemo(() => {
@@ -1522,6 +1697,13 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([st, count]) => ({ value: st, label: `${st} (${count})` }));
   }, [leads]);
+
+  // Reset city filter when the selected state no longer contains the chosen city
+  useEffect(() => {
+    if (filterCity === "all") return;
+    const stillValid = cityOptions.some((o) => o.value === filterCity);
+    if (!stillValid) setFilterCity("all");
+  }, [filterState, cityOptions, filterCity]);
 
   // Active filter count (for clear-all button)
   const activeFilterCount = useMemo(() => {
@@ -2342,6 +2524,33 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           {bulkSending
             ? `Sending... ${bulkSendProgress.current}/${bulkSendProgress.total} (${bulkSendProgress.sent} sent)`
             : `Bulk Send Email (${filteredLeads.filter((l) => l.email && !l.unsubscribed_at).length} leads)`}
+        </button>
+        <button
+          onClick={handleCleanupJunk}
+          disabled={cleanupRunning || reclassifying}
+          style={{
+            ...btnPrimary,
+            background: cleanupRunning ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonYellow}, ${COLORS.neonOrange})`,
+            color: "#000",
+            opacity: cleanupRunning ? 0.6 : 1,
+          }}
+          title="Scan lead names for obvious non-targets (fire departments, churches, medical, etc.) and flag as Excluded"
+        >
+          {cleanupRunning ? "Scanning..." : "Flag Junk Leads"}
+        </button>
+        <button
+          onClick={handleReclassify}
+          disabled={reclassifying || cleanupRunning}
+          style={{
+            ...btnPrimary,
+            background: reclassifying ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonPurple})`,
+            opacity: reclassifying ? 0.6 : 1,
+          }}
+          title="Re-fetch each lead's business type from Google Places API (costs ~$5 per 1000 leads)"
+        >
+          {reclassifying
+            ? `Reclassifying... ${reclassifyProgress.done}/${reclassifyProgress.total}${reclassifyProgress.errors ? ` (${reclassifyProgress.errors} err)` : ""}`
+            : "Reclassify Types"}
         </button>
       </div>
 
