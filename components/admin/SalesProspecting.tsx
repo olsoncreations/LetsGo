@@ -885,6 +885,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         console.error("Bulk send batch error:", err);
       }
       setBulkSendProgress({ current: Math.min(i + 20, targets.length), total: targets.length, sent });
+      // Throttle: 1s between batches to stay under Resend's 10/sec rate limit
+      if (i + 20 < targets.length) await new Promise((r) => setTimeout(r, 1000));
     }
 
     setBulkSending(false);
