@@ -437,9 +437,12 @@ function BusinessesPage() {
   async function fetchBusinesses() {
     setLoading(true);
     try {
+      // Sales previews live only in the Sales tab — they're stored in the `business`
+      // table with id `preview-<slug>-<timestamp>`, so exclude them from the admin list.
       const { data, error } = await supabaseBrowser
         .from("business")
         .select("*")
+        .not("id", "like", "preview-%")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
