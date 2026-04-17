@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabaseServer
     .from("sales_appointments")
-    .select("*, sales_leads(id, business_name, address, phone, email, city, state)")
+    .select("*, sales_leads(id, business_name, address, phone, email, city, state, preview_business_id)")
     .order("scheduled_at", { ascending: true });
 
   if (repId) query = query.eq("assigned_rep_id", repId);
