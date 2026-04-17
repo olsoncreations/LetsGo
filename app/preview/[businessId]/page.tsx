@@ -185,7 +185,7 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
           {[
             { icon: "\uD83D\uDCCD", label: "Address", value: biz.address, action: "Get Directions", href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz.address)}` },
             { icon: "\uD83D\uDCDE", label: "Phone", value: biz.phone, action: "Call", href: `tel:${biz.phone.replace(/[^+\d]/g, "")}` },
-            { icon: "\uD83C\uDF10", label: "Website", value: biz.website, action: "Visit", href: biz.website.startsWith("http") ? biz.website : `https://${biz.website}` },
+            { icon: "\uD83C\uDF10", label: "Website", value: (() => { try { return new URL(biz.website.startsWith("http") ? biz.website : `https://${biz.website}`).hostname.replace(/^www\./, ""); } catch { return biz.website; } })(), action: "Visit", href: biz.website.startsWith("http") ? biz.website : `https://${biz.website}` },
           ].filter(item => item.value).map((item, i, arr) => (
             <div key={i} style={{
               display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 0",
