@@ -104,6 +104,7 @@ async function sendToLead(
     .eq("lead_id", leadId)
     .eq("template", template)
     .neq("status", "bounced")
+    .neq("status", "pending")
     .neq("status", "unsubscribed")
     .gte("sent_at", thirtyDaysAgo)
     .maybeSingle();
@@ -148,8 +149,10 @@ async function sendToLead(
 
   // Send via Resend
   try {
+    const replyTo = process.env.OUTREACH_REPLY_TO || "olsoncreationsllc@gmail.com";
     const { data: sendResult, error: sendErr } = await resend.emails.send({
       from: `${fromName} <${fromEmail}>`,
+      replyTo,
       to: lead.email,
       subject,
       html,
