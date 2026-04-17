@@ -48,10 +48,22 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch outreach summary per lead (latest status per lead)
-    const { data: outreachData } = await supabaseServer
-      .from("outreach_emails")
-      .select("lead_id, status, sent_at, opened_at, clicked_at")
-      .order("created_at", { ascending: false });
+    // Paginate to get all rows (Supabase caps at 1000 per request)
+    let allOutreach: { lead_id: string; status: string; sent_at: string | null; opened_at: string | null; clicked_at: string | null }[] = [];
+    let outFrom = 0;
+    let outHasMore = true;
+    while (outHasMore) {
+      const { data: outBatch } = await supabaseServer
+        .from("outreach_emails")
+        .select("lead_id, status, sent_at, opened_at, clicked_at")
+        .order("created_at", { ascending: false })
+        .range(outFrom, outFrom + PAGE_SIZE - 1);
+      const rows = outBatch || [];
+      allOutreach = allOutreach.concat(rows);
+      outFrom += PAGE_SIZE;
+      outHasMore = rows.length === PAGE_SIZE;
+    }
+    const outreachData = allOutreach;
 
     // Build lookup: lead_id -> best outreach status
     const outreachMap = new Map<string, { outreach_status: string; outreach_sent_at: string | null; outreach_opened_at: string | null; outreach_clicked_at: string | null; outreach_count: number }>();
