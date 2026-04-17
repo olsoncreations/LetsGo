@@ -536,7 +536,7 @@ function StartOnboardingButton({ businessId }: { businessId: string }) {
       zIndex: 200, display: "flex", gap: 12,
     }}>
       <a
-        href={`/partner-onboarding?prefill=${businessId}`}
+        href="/welcome"
         style={{
           padding: "14px 28px", borderRadius: 50,
           background: `linear-gradient(135deg, ${COLORS.neonPink}, ${COLORS.neonOrange})`,
