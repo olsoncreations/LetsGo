@@ -285,7 +285,7 @@ export default function SalesAppointments({ salesReps }: SalesAppointmentsProps)
         key={a.id}
         style={{
           display: "grid",
-          gridTemplateColumns: "1.5fr 1.2fr 0.8fr 0.8fr 0.7fr 0.6fr 1.2fr",
+          gridTemplateColumns: "1.5fr 1.2fr 0.8fr 0.8fr 0.5fr 0.7fr 0.6fr 1.2fr",
           gap: 12,
           padding: "14px 16px",
           borderBottom: "1px solid " + COLORS.cardBorder,
@@ -320,27 +320,29 @@ export default function SalesAppointments({ salesReps }: SalesAppointmentsProps)
           ) : (
             <span style={{ fontSize: 12, color: COLORS.textSecondary }}>—</span>
           )}
-          {biz?.preview_business_id && (
-            <div style={{ marginTop: 4 }}>
-              <a
-                href={`/preview/${biz.preview_business_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "inline-block",
-                  padding: "2px 8px",
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: `${COLORS.neonPurple}20`,
-                  color: COLORS.neonPurple,
-                  textDecoration: "none",
-                  border: `1px solid ${COLORS.neonPurple}40`,
-                }}
-              >
-                Preview
-              </a>
-            </div>
+        </div>
+        <div>
+          {biz?.preview_business_id ? (
+            <a
+              href={`/preview/${biz.preview_business_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                padding: "2px 8px",
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                background: `${COLORS.neonPurple}20`,
+                color: COLORS.neonPurple,
+                textDecoration: "none",
+                border: `1px solid ${COLORS.neonPurple}40`,
+              }}
+            >
+              Preview
+            </a>
+          ) : (
+            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>—</span>
           )}
         </div>
         <div>
@@ -442,7 +444,7 @@ export default function SalesAppointments({ salesReps }: SalesAppointmentsProps)
           {/* Header */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: "1.5fr 1.2fr 0.8fr 0.8fr 0.7fr 0.6fr 1.2fr",
+            gridTemplateColumns: "1.5fr 1.2fr 0.8fr 0.8fr 0.5fr 0.7fr 0.6fr 1.2fr",
             gap: 12,
             padding: "10px 16px",
             borderBottom: "2px solid " + COLORS.cardBorder,
@@ -454,7 +456,8 @@ export default function SalesAppointments({ salesReps }: SalesAppointmentsProps)
             <div>Business</div>
             <div>Date / Time</div>
             <div>Rep</div>
-            <div>Phone / Preview</div>
+            <div>Phone</div>
+            <div>Preview</div>
             <div>Status</div>
             <div>Notes</div>
             <div style={{ textAlign: "right" }}>Actions</div>
