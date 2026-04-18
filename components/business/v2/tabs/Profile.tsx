@@ -11,7 +11,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import type { BusinessTabProps } from "@/components/business/v2/BusinessProfileV2";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchTagsByCategory, getVisibleCategories, type TagCategory } from "@/lib/availableTags";
-import { AlertCircle, Settings, Clock, User, Mail, Tag, X, CheckCircle } from "lucide-react";
+import { AlertCircle, Settings, Clock, User, Mail, Tag, X, CheckCircle, Users, Trash2, UserPlus, Shield } from "lucide-react";
 import { useIsMobile } from "@/lib/useIsMobile";
 
 // ============================================================================
@@ -20,6 +20,14 @@ import { useIsMobile } from "@/lib/useIsMobile";
 type HoursDay = { open: string; close: string };
 type DayKey = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 type BusinessHours = Record<DayKey, HoursDay>;
+
+type TeamMember = {
+  user_id: string;
+  role: "owner" | "manager" | "staff";
+  created_at: string;
+  email: string;
+  full_name: string | null;
+};
 
 type ProfileSnapshot = {
   businessId: string;
@@ -211,11 +219,25 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   const [selectedBusinessType, setSelectedBusinessType] = useState("restaurant_bar");
   const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
 
-  // Password change state
+  // Password change state (inline per-member)
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
+  const [showPasswordFor, setShowPasswordFor] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Team management state
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamLoading, setTeamLoading] = useState(true);
+  const [callerRole, setCallerRole] = useState<string>("staff");
+  const [addEmail, setAddEmail] = useState("");
+  const [addRole, setAddRole] = useState<"manager" | "staff">("staff");
+  const [teamError, setTeamError] = useState<string | null>(null);
+  const [teamSuccess, setTeamSuccess] = useState<string | null>(null);
+  const [teamActionLoading, setTeamActionLoading] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   // Store loaded data until form is ready to receive it
   const [loadedData, setLoadedData] = useState<LoadedData>(null);
@@ -240,8 +262,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   const repTitleRef = useRef<HTMLInputElement>(null);
   const repEmailRef = useRef<HTMLInputElement>(null);
   const repPhoneRef = useRef<HTMLInputElement>(null);
-  const loginEmailRef = useRef<HTMLInputElement>(null);
-  const loginPhoneRef = useRef<HTMLInputElement>(null);
 
   // Track if we've applied loaded data to refs
   const hydratedBusinessIdRef = useRef<string | null>(null);
@@ -269,8 +289,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     if (repTitleRef.current) repTitleRef.current.value = fields.repTitle ?? "";
     if (repEmailRef.current) repEmailRef.current.value = fields.repEmail ?? "";
     if (repPhoneRef.current) repPhoneRef.current.value = formatPhone(fields.repPhone ?? "");
-    if (loginEmailRef.current) loginEmailRef.current.value = fields.loginEmail ?? "";
-    if (loginPhoneRef.current) loginPhoneRef.current.value = formatPhone(fields.loginPhone ?? "");
   }, []);
 
   // ============================================================================
@@ -312,8 +330,8 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
         repTitle: repTitleRef.current?.value ?? "",
         repEmail: repEmailRef.current?.value ?? "",
         repPhone: repPhoneRef.current?.value ?? "",
-        loginEmail: loginEmailRef.current?.value ?? "",
-        loginPhone: loginPhoneRef.current?.value ?? "",
+        loginEmail: "",
+        loginPhone: "",
       },
       hours,
       tags,
@@ -532,6 +550,10 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   // ============================================================================
   async function handleChangePassword() {
     setPasswordMsg(null);
+    if (!currentPassword) {
+      setPasswordMsg("Error: Current password is required.");
+      return;
+    }
     if (newPassword.length < 6) {
       setPasswordMsg("Error: Password must be at least 6 characters.");
       return;
@@ -542,11 +564,28 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     }
     setPasswordSaving(true);
     try {
+      // Verify current password by re-authenticating
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const userEmail = session?.user?.email;
+      if (!userEmail) throw new Error("No session found");
+
+      const { error: signInError } = await supabaseBrowser.auth.signInWithPassword({
+        email: userEmail,
+        password: currentPassword,
+      });
+      if (signInError) {
+        setPasswordMsg("Error: Current password is incorrect.");
+        setPasswordSaving(false);
+        return;
+      }
+
       const { error } = await supabaseBrowser.auth.updateUser({ password: newPassword });
       if (error) throw error;
       setPasswordMsg("Password updated successfully.");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setShowPasswordFor(null);
     } catch (e: unknown) {
       setPasswordMsg(`Error: ${normalizeErr(e)}`);
     } finally {
@@ -653,6 +692,127 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   }, [tagInput, tagInputFocused, tags, visibleCategories]);
 
   const hasSuggestions = groupedSuggestions.some(g => g.tags.length > 0);
+
+  // ============================================================================
+  // Team Members
+  // ============================================================================
+  const fetchTeam = useCallback(async () => {
+    setTeamLoading(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) return;
+      setCurrentUserId(session.user?.id ?? null);
+      const res = await fetch(`/api/businesses/${businessId}/team`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTeamMembers(data.members ?? []);
+        setCallerRole(data.caller_role ?? "staff");
+      }
+    } catch {
+      // silent — non-critical
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    fetchTeam();
+  }, [fetchTeam]);
+
+  const handleAddMember = async () => {
+    if (!addEmail.trim()) return;
+    setTeamActionLoading(true);
+    setTeamError(null);
+    setTeamSuccess(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/businesses/${businessId}/team`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: addEmail.trim(), role: addRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTeamError(data.error || "Failed to add member.");
+        return;
+      }
+      setTeamSuccess(`${addEmail.trim()} added as ${addRole}.`);
+      setAddEmail("");
+      setAddRole("staff");
+      fetchTeam();
+    } catch {
+      setTeamError("Something went wrong. Please try again.");
+    } finally {
+      setTeamActionLoading(false);
+    }
+  };
+
+  const handleChangeRole = async (userId: string, newRole: "manager" | "staff") => {
+    setTeamActionLoading(true);
+    setTeamError(null);
+    setTeamSuccess(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/businesses/${businessId}/team`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id: userId, role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTeamError(data.error || "Failed to update role.");
+        return;
+      }
+      setTeamSuccess("Role updated.");
+      fetchTeam();
+    } catch {
+      setTeamError("Something went wrong. Please try again.");
+    } finally {
+      setTeamActionLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    setTeamActionLoading(true);
+    setTeamError(null);
+    setTeamSuccess(null);
+    setConfirmRemoveId(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/businesses/${businessId}/team`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTeamError(data.error || "Failed to remove member.");
+        return;
+      }
+      setTeamSuccess("Team member removed.");
+      fetchTeam();
+    } catch {
+      setTeamError("Something went wrong. Please try again.");
+    } finally {
+      setTeamActionLoading(false);
+    }
+  };
+
+  const isOwner = callerRole === "owner" || callerRole === "admin";
 
   // ============================================================================
   // Styles
@@ -1146,100 +1306,377 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
             </div>
           </div>
 
-          {/* Login Credentials Card */}
+          {/* Team Members Card */}
           <div style={cardStyle}>
             <div style={cardTitleStyle}>
-              <Mail size={20} style={{ color: colors.warning }} />
-              Business User Login Information
+              <Users size={20} style={{ color: colors.accent }} />
+              Team Members
             </div>
 
-            <div style={{ display: "grid", gap: "1.5rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1.5rem" }}>
-                <div>
-                  <label style={labelStyle}>Login Email</label>
-                  <input
-                    ref={loginEmailRef}
-                    defaultValue=""
-                    readOnly
-                    style={{
-                      ...inputStyle,
-                      opacity: 0.6,
-                      cursor: "not-allowed",
-                      background: "rgba(255,255,255,0.02)",
-                    }}
-                  />
-                  <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.45)" }}>
-                    To change your login email, please contact LetsGo customer service.
-                  </div>
-                </div>
-                <div>
-                  <label style={labelStyle}>Phone Number</label>
-                  <input
-                    ref={loginPhoneRef}
-                    defaultValue=""
-                    placeholder="(555) 123-4567"
-                    style={inputStyle}
-                    onChange={() => handlePhoneChange(loginPhoneRef)}
-                  />
-                </div>
-              </div>
-
-              {/* Password Change */}
-              <div>
-                <label style={labelStyle}>Change Password</label>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr auto", gap: "1rem", alignItems: "end" }}>
-                  <div>
-                    <input
-                      type="password"
-                      placeholder="New password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="password"
-                      placeholder="Confirm new password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    disabled={passwordSaving || !newPassword}
-                    style={{
-                      padding: "0.75rem 1.5rem",
-                      background: `${colors.warning}20`,
-                      border: `1px solid ${colors.warning}`,
-                      borderRadius: "8px",
-                      color: colors.warning,
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      cursor: passwordSaving || !newPassword ? "not-allowed" : "pointer",
-                      opacity: passwordSaving || !newPassword ? 0.5 : 1,
-                      whiteSpace: "nowrap",
-                    }}
-                    onClick={handleChangePassword}
-                  >
-                    {passwordSaving ? "Saving…" : "Update Password"}
-                  </button>
-                </div>
-                {passwordMsg && (
+            {teamLoading ? (
+              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.875rem" }}>Loading team...</div>
+            ) : (
+              <div style={{ display: "grid", gap: "1rem" }}>
+                {/* Error / Success messages */}
+                {teamError && (
                   <div style={{
-                    marginTop: "0.5rem",
-                    fontSize: "0.8rem",
-                    color: passwordMsg.startsWith("Error") ? colors.danger : colors.success,
+                    padding: "0.75rem 1rem",
+                    background: "rgba(239, 68, 68, 0.1)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    borderRadius: "8px",
+                    color: "#fca5a5",
+                    fontSize: "0.875rem",
                   }}>
-                    {passwordMsg}
+                    {teamError}
                   </div>
                 )}
-                <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.45)" }}>
-                  Password must be at least 6 characters.
-                </div>
+                {teamSuccess && (
+                  <div style={{
+                    padding: "0.75rem 1rem",
+                    background: "rgba(16, 185, 129, 0.1)",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    borderRadius: "8px",
+                    color: "#6ee7b7",
+                    fontSize: "0.875rem",
+                  }}>
+                    {teamSuccess}
+                  </div>
+                )}
+
+                {/* Member list */}
+                {teamMembers.length === 0 ? (
+                  <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.875rem" }}>
+                    No team members found.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: "0.75rem" }}>
+                    {teamMembers.map((m) => {
+                      const isMe = m.user_id === currentUserId;
+                      const pwOpen = showPasswordFor === m.user_id;
+                      return (
+                        <div
+                          key={m.user_id}
+                          style={{
+                            background: "rgba(255, 255, 255, 0.02)",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255, 255, 255, 0.06)",
+                          }}
+                        >
+                          {/* Main row */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: isMobile ? "flex-start" : "center",
+                              flexDirection: isMobile ? "column" : "row",
+                              gap: isMobile ? "0.5rem" : "1rem",
+                              padding: "0.875rem 1rem",
+                            }}
+                          >
+                            {/* Name & Email */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "white", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                {m.full_name || m.email}
+                                {isMe && (
+                                  <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.35)", fontWeight: 400 }}>(you)</span>
+                                )}
+                              </div>
+                              {m.full_name && (
+                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>
+                                  {m.email}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Role badge / selector */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              {m.role === "owner" ? (
+                                <span style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  padding: "0.25rem 0.75rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  background: `${colors.accent}22`,
+                                  color: colors.accent,
+                                  border: `1px solid ${colors.accent}44`,
+                                }}>
+                                  <Shield size={12} /> Owner
+                                </span>
+                              ) : isOwner ? (
+                                <select
+                                  value={m.role}
+                                  onChange={(e) => handleChangeRole(m.user_id, e.target.value as "manager" | "staff")}
+                                  disabled={teamActionLoading}
+                                  style={{
+                                    ...selectStyle,
+                                    width: "auto",
+                                    padding: "0.25rem 0.5rem",
+                                    fontSize: "0.75rem",
+                                  }}
+                                >
+                                  <option value="manager" style={optionStyle}>Manager</option>
+                                  <option value="staff" style={optionStyle}>Staff</option>
+                                </select>
+                              ) : (
+                                <span style={{
+                                  padding: "0.25rem 0.75rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  background: m.role === "manager"
+                                    ? `${colors.primary}22`
+                                    : `${colors.secondary}22`,
+                                  color: m.role === "manager" ? colors.primary : colors.secondary,
+                                  border: `1px solid ${m.role === "manager" ? colors.primary : colors.secondary}44`,
+                                }}>
+                                  {m.role.charAt(0).toUpperCase() + m.role.slice(1)}
+                                </span>
+                              )}
+
+                              {/* Date added */}
+                              <span style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>
+                                {m.created_at ? new Date(m.created_at).toLocaleDateString() : ""}
+                              </span>
+
+                              {/* Change password toggle (only for current user) */}
+                              {isMe && (
+                                <button
+                                  onClick={() => {
+                                    setShowPasswordFor(pwOpen ? null : m.user_id);
+                                    setCurrentPassword("");
+                                    setNewPassword("");
+                                    setConfirmPassword("");
+                                    setPasswordMsg(null);
+                                  }}
+                                  title="Change password"
+                                  style={{
+                                    padding: "0.25rem 0.5rem",
+                                    borderRadius: "6px",
+                                    border: `1px solid ${pwOpen ? colors.warning : "rgba(255,255,255,0.15)"}`,
+                                    background: pwOpen ? `${colors.warning}15` : "transparent",
+                                    color: pwOpen ? colors.warning : "rgba(255,255,255,0.4)",
+                                    fontSize: "0.7rem",
+                                    cursor: "pointer",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {pwOpen ? "Cancel" : "Password"}
+                                </button>
+                              )}
+
+                              {/* Remove button */}
+                              {isOwner && m.role !== "owner" && (
+                                <>
+                                  {confirmRemoveId === m.user_id ? (
+                                    <div style={{ display: "flex", gap: "0.25rem" }}>
+                                      <button
+                                        onClick={() => handleRemoveMember(m.user_id)}
+                                        disabled={teamActionLoading}
+                                        style={{
+                                          padding: "0.25rem 0.5rem",
+                                          borderRadius: "6px",
+                                          border: "none",
+                                          background: colors.danger,
+                                          color: "white",
+                                          fontSize: "0.7rem",
+                                          fontWeight: 600,
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        Confirm
+                                      </button>
+                                      <button
+                                        onClick={() => setConfirmRemoveId(null)}
+                                        style={{
+                                          padding: "0.25rem 0.5rem",
+                                          borderRadius: "6px",
+                                          border: "1px solid rgba(255,255,255,0.15)",
+                                          background: "transparent",
+                                          color: "rgba(255,255,255,0.6)",
+                                          fontSize: "0.7rem",
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setConfirmRemoveId(m.user_id)}
+                                      title="Remove member"
+                                      style={{
+                                        padding: "0.25rem",
+                                        borderRadius: "6px",
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "rgba(255,255,255,0.3)",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Inline password change (expands below row) */}
+                          {isMe && pwOpen && (
+                            <div style={{
+                              padding: "0.75rem 1rem 1rem",
+                              borderTop: "1px solid rgba(255,255,255,0.06)",
+                            }}>
+                              <div style={{
+                                display: "grid",
+                                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto",
+                                gap: "0.75rem",
+                                alignItems: "end",
+                              }}>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize: "0.75rem", marginBottom: "0.25rem" }}>Current Password</label>
+                                  <input
+                                    type="password"
+                                    placeholder="Current"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    style={{ ...inputStyle, padding: "0.625rem 0.75rem", fontSize: "0.8rem" }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize: "0.75rem", marginBottom: "0.25rem" }}>New Password</label>
+                                  <input
+                                    type="password"
+                                    placeholder="New (min 6 chars)"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    style={{ ...inputStyle, padding: "0.625rem 0.75rem", fontSize: "0.8rem" }}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ ...labelStyle, fontSize: "0.75rem", marginBottom: "0.25rem" }}>Confirm New</label>
+                                  <input
+                                    type="password"
+                                    placeholder="Repeat new"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    style={{ ...inputStyle, padding: "0.625rem 0.75rem", fontSize: "0.8rem" }}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={passwordSaving || !currentPassword || !newPassword}
+                                  onClick={handleChangePassword}
+                                  style={{
+                                    padding: "0.625rem 1rem",
+                                    borderRadius: "8px",
+                                    border: "none",
+                                    background: passwordSaving || !currentPassword || !newPassword ? "rgba(255,255,255,0.1)" : colors.warning,
+                                    color: passwordSaving || !currentPassword || !newPassword ? "rgba(255,255,255,0.4)" : "#000",
+                                    fontWeight: 700,
+                                    fontSize: "0.8rem",
+                                    cursor: passwordSaving || !currentPassword || !newPassword ? "not-allowed" : "pointer",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {passwordSaving ? "Saving..." : "Update"}
+                                </button>
+                              </div>
+                              {passwordMsg && (
+                                <div style={{
+                                  marginTop: "0.5rem",
+                                  fontSize: "0.75rem",
+                                  color: passwordMsg.startsWith("Error") ? colors.danger : colors.success,
+                                }}>
+                                  {passwordMsg}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Add Member Form (owners only) */}
+                {isOwner && (
+                  <div style={{
+                    marginTop: "0.5rem",
+                    padding: "1rem",
+                    background: "rgba(255, 255, 255, 0.02)",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.06)",
+                  }}>
+                    <div style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: "0.75rem", color: "rgba(255,255,255,0.8)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <UserPlus size={16} /> Add Team Member
+                    </div>
+                    <div style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      gap: "0.75rem",
+                      alignItems: isMobile ? "stretch" : "flex-end",
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={labelStyle}>Email Address</label>
+                        <input
+                          type="email"
+                          value={addEmail}
+                          onChange={(e) => { setAddEmail(e.target.value); setTeamError(null); setTeamSuccess(null); }}
+                          placeholder="team@example.com"
+                          style={inputStyle}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleAddMember(); }}
+                        />
+                      </div>
+                      <div style={{ width: isMobile ? "100%" : "140px" }}>
+                        <label style={labelStyle}>Role</label>
+                        <select
+                          value={addRole}
+                          onChange={(e) => setAddRole(e.target.value as "manager" | "staff")}
+                          style={selectStyle}
+                        >
+                          <option value="staff" style={optionStyle}>Staff</option>
+                          <option value="manager" style={optionStyle}>Manager</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleAddMember}
+                        disabled={teamActionLoading || !addEmail.trim()}
+                        style={{
+                          padding: "0.875rem 1.5rem",
+                          borderRadius: "8px",
+                          border: "none",
+                          background: teamActionLoading || !addEmail.trim() ? "rgba(255,255,255,0.1)" : colors.accent,
+                          color: "white",
+                          fontWeight: 700,
+                          fontSize: "0.875rem",
+                          cursor: teamActionLoading || !addEmail.trim() ? "not-allowed" : "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {teamActionLoading ? "Adding..." : "Add Member"}
+                      </button>
+                    </div>
+                    <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
+                      The person must already have a LetsGo account.
+                    </div>
+                  </div>
+                )}
+
+                {/* Solo owner empty state */}
+                {teamMembers.length === 1 && teamMembers[0].role === "owner" && isOwner && (
+                  <div style={{
+                    fontSize: "0.8rem",
+                    color: "rgba(255,255,255,0.4)",
+                    fontStyle: "italic",
+                  }}>
+                    You&apos;re the only team member. Add others to give them access to this dashboard.
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
 
           {/* Account Actions Card */}

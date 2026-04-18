@@ -190,6 +190,21 @@ function BusinessesPage() {
     avgReceiptCents: number;
   } | null>(null);
 
+  // Team management state
+  const [adminTeamMembers, setAdminTeamMembers] = useState<{
+    user_id: string;
+    role: string;
+    created_at: string;
+    email: string;
+    full_name: string | null;
+  }[]>([]);
+  const [adminTeamLoading, setAdminTeamLoading] = useState(false);
+  const [addTeamEmail, setAddTeamEmail] = useState("");
+  const [addTeamRole, setAddTeamRole] = useState<"manager" | "staff">("staff");
+  const [adminTeamError, setAdminTeamError] = useState<string | null>(null);
+  const [adminTeamSuccess, setAdminTeamSuccess] = useState<string | null>(null);
+  const [adminTeamActionLoading, setAdminTeamActionLoading] = useState(false);
+
   const selected = businesses.find((b) => b.id === selectedId) || null;
 
   // DB-driven tag categories for dropdowns
@@ -323,7 +338,160 @@ function BusinessesPage() {
       })
       .catch((err) => console.error("[admin-businesses] Media load warning:", err));
     });
+    // Fetch team members
+    setAdminTeamLoading(true);
+    setAdminTeamError(null);
+    setAdminTeamSuccess(null);
+    supabaseBrowser.auth.getSession().then(({ data: { session } }) => {
+      fetch(`/api/businesses/${selectedId}/team`, {
+        headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+      })
+        .then((res) => res.json())
+        .then((data) => setAdminTeamMembers(data.members ?? []))
+        .catch(() => setAdminTeamMembers([]))
+        .finally(() => setAdminTeamLoading(false));
+    });
   }, [selectedId]);
+
+  // Team management helpers
+  const fetchAdminTeam = async () => {
+    if (!selectedId) return;
+    setAdminTeamLoading(true);
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    try {
+      const res = await fetch(`/api/businesses/${selectedId}/team`, {
+        headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+      });
+      const data = await res.json();
+      setAdminTeamMembers(data.members ?? []);
+    } catch {
+      setAdminTeamMembers([]);
+    } finally {
+      setAdminTeamLoading(false);
+    }
+  };
+
+  const handleAdminAddTeamMember = async () => {
+    if (!selectedId || !addTeamEmail.trim()) return;
+    setAdminTeamActionLoading(true);
+    setAdminTeamError(null);
+    setAdminTeamSuccess(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const res = await fetch(`/api/businesses/${selectedId}/team`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session?.access_token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: addTeamEmail.trim(), role: addTeamRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminTeamError(data.error || "Failed to add member.");
+        return;
+      }
+      setAdminTeamSuccess(`${addTeamEmail.trim()} added as ${addTeamRole}.`);
+      setAddTeamEmail("");
+      setAddTeamRole("staff");
+      logAudit({
+        action: "add_team_member",
+        tab: AUDIT_TABS.BUSINESSES,
+        targetType: "business_user",
+        targetId: selectedId,
+        entityName: selected?.business_name || selectedId,
+        details: `Added ${addTeamEmail.trim()} as ${addTeamRole}`,
+      });
+      fetchAdminTeam();
+    } catch {
+      setAdminTeamError("Something went wrong.");
+    } finally {
+      setAdminTeamActionLoading(false);
+    }
+  };
+
+  const handleAdminChangeRole = async (userId: string, newRole: string, memberEmail: string) => {
+    if (!selectedId) return;
+    setAdminTeamActionLoading(true);
+    setAdminTeamError(null);
+    setAdminTeamSuccess(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const currentMember = adminTeamMembers.find((m) => m.user_id === userId);
+      const oldRole = currentMember?.role || "unknown";
+
+      const res = await fetch(`/api/businesses/${selectedId}/team`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session?.access_token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id: userId, role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminTeamError(data.error || "Failed to update role.");
+        return;
+      }
+      setAdminTeamSuccess(newRole === "owner" ? "Ownership transferred." : "Role updated.");
+      logAudit({
+        action: newRole === "owner" ? "transfer_ownership" : "change_team_role",
+        tab: AUDIT_TABS.BUSINESSES,
+        targetType: "business_user",
+        targetId: selectedId,
+        entityName: selected?.business_name || selectedId,
+        fieldName: "role",
+        oldValue: oldRole,
+        newValue: newRole,
+        details: memberEmail,
+      });
+      fetchAdminTeam();
+    } catch {
+      setAdminTeamError("Something went wrong.");
+    } finally {
+      setAdminTeamActionLoading(false);
+    }
+  };
+
+  const handleAdminRemoveMember = async (userId: string, memberEmail: string) => {
+    if (!selectedId) return;
+    setAdminTeamActionLoading(true);
+    setAdminTeamError(null);
+    setAdminTeamSuccess(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const currentMember = adminTeamMembers.find((m) => m.user_id === userId);
+      const role = currentMember?.role || "unknown";
+
+      const res = await fetch(`/api/businesses/${selectedId}/team`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session?.access_token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminTeamError(data.error || "Failed to remove member.");
+        return;
+      }
+      setAdminTeamSuccess("Team member removed.");
+      logAudit({
+        action: "remove_team_member",
+        tab: AUDIT_TABS.BUSINESSES,
+        targetType: "business_user",
+        targetId: selectedId,
+        entityName: selected?.business_name || selectedId,
+        details: `Removed ${memberEmail} (${role})`,
+      });
+      fetchAdminTeam();
+    } catch {
+      setAdminTeamError("Something went wrong.");
+    } finally {
+      setAdminTeamActionLoading(false);
+    }
+  };
 
   // Helper to get the current value (edited or original)
   const getValue = (field: keyof Business) => {
@@ -1275,6 +1443,219 @@ function BusinessesPage() {
                     <EditField label="Login Email" value={getValue("login_email") as string} editable={isEditing} onChange={(v) => updateField("login_email", v)} />
                     <PhoneField label="Login Phone" value={getValue("login_phone") as string} editable={isEditing} onChange={(v) => updateField("login_phone", v)} />
                   </div>
+                </Card>
+
+                {/* Team Members */}
+                <SectionTitle icon="👥">Team Members</SectionTitle>
+                <Card style={{ marginBottom: 24 }}>
+                  {adminTeamLoading ? (
+                    <div style={{ color: COLORS.textSecondary, fontSize: 14 }}>Loading team...</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 12 }}>
+                      {/* Error / Success */}
+                      {adminTeamError && (
+                        <div style={{
+                          padding: "8px 12px",
+                          background: "rgba(255, 49, 49, 0.1)",
+                          border: `1px solid ${COLORS.neonRed}44`,
+                          borderRadius: 8,
+                          color: COLORS.neonRed,
+                          fontSize: 13,
+                        }}>
+                          {adminTeamError}
+                        </div>
+                      )}
+                      {adminTeamSuccess && (
+                        <div style={{
+                          padding: "8px 12px",
+                          background: "rgba(57, 255, 20, 0.1)",
+                          border: `1px solid ${COLORS.neonGreen}44`,
+                          borderRadius: 8,
+                          color: COLORS.neonGreen,
+                          fontSize: 13,
+                        }}>
+                          {adminTeamSuccess}
+                        </div>
+                      )}
+
+                      {/* Member list */}
+                      {adminTeamMembers.length === 0 ? (
+                        <div style={{ color: COLORS.textSecondary, fontSize: 13 }}>No team members found.</div>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ borderBottom: `1px solid ${COLORS.cardBorder}` }}>
+                              <th style={{ textAlign: "left", padding: "8px 4px", color: COLORS.textSecondary, fontWeight: 600 }}>Email</th>
+                              <th style={{ textAlign: "left", padding: "8px 4px", color: COLORS.textSecondary, fontWeight: 600 }}>Name</th>
+                              <th style={{ textAlign: "left", padding: "8px 4px", color: COLORS.textSecondary, fontWeight: 600 }}>Role</th>
+                              <th style={{ textAlign: "left", padding: "8px 4px", color: COLORS.textSecondary, fontWeight: 600 }}>Added</th>
+                              <th style={{ textAlign: "right", padding: "8px 4px", color: COLORS.textSecondary, fontWeight: 600 }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adminTeamMembers.map((m) => (
+                              <tr key={m.user_id} style={{ borderBottom: `1px solid ${COLORS.cardBorder}44` }}>
+                                <td style={{ padding: "10px 4px", color: COLORS.textPrimary }}>{m.email}</td>
+                                <td style={{ padding: "10px 4px", color: COLORS.textSecondary }}>{m.full_name || "—"}</td>
+                                <td style={{ padding: "10px 4px" }}>
+                                  {isEditing ? (
+                                    <select
+                                      value={m.role}
+                                      onChange={(e) => {
+                                        const newRole = e.target.value;
+                                        if (newRole === "owner" && m.role !== "owner") {
+                                          setConfirmModal({
+                                            title: "Transfer Ownership",
+                                            message: `This will make ${m.email} the new owner of ${selected?.business_name || "this business"}. The current owner will be downgraded to Manager. This action is typically only done when a business is sold.`,
+                                            type: "danger",
+                                            confirmText: "Transfer Ownership",
+                                            requireText: selected?.business_name || undefined,
+                                            onConfirm: () => handleAdminChangeRole(m.user_id, "owner", m.email),
+                                          });
+                                        } else if (m.role === "owner" && newRole !== "owner") {
+                                          setConfirmModal({
+                                            title: "Demote Owner",
+                                            message: `This will demote ${m.email} from Owner to ${newRole.charAt(0).toUpperCase() + newRole.slice(1)} for ${selected?.business_name || "this business"}. The business will need a new owner assigned.`,
+                                            type: "danger",
+                                            confirmText: "Demote Owner",
+                                            onConfirm: () => handleAdminChangeRole(m.user_id, newRole, m.email),
+                                          });
+                                        } else {
+                                          handleAdminChangeRole(m.user_id, newRole, m.email);
+                                        }
+                                      }}
+                                      disabled={adminTeamActionLoading}
+                                      style={{
+                                        padding: "4px 8px",
+                                        background: COLORS.cardBg,
+                                        border: `1px solid ${COLORS.cardBorder}`,
+                                        borderRadius: 6,
+                                        color: COLORS.textPrimary,
+                                        fontSize: 12,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      <option value="staff">Staff</option>
+                                      <option value="manager">Manager</option>
+                                      <option value="owner">{m.role === "owner" ? "Owner" : "Owner (Transfer)"}</option>
+                                    </select>
+                                  ) : (
+                                    <Badge status={m.role} />
+                                  )}
+                                </td>
+                                <td style={{ padding: "10px 4px", color: COLORS.textSecondary, fontSize: 12 }}>
+                                  {m.created_at ? new Date(m.created_at).toLocaleDateString() : "—"}
+                                </td>
+                                <td style={{ padding: "10px 4px", textAlign: "right" }}>
+                                  {isEditing && m.role !== "owner" && (
+                                    <button
+                                      onClick={() => {
+                                        setConfirmModal({
+                                          title: "Remove Team Member",
+                                          message: `Remove ${m.email} (${m.role}) from ${selected?.business_name || "this business"}? They will lose access to the business dashboard.`,
+                                          type: "warning",
+                                          confirmText: "Remove",
+                                          onConfirm: () => handleAdminRemoveMember(m.user_id, m.email),
+                                        });
+                                      }}
+                                      disabled={adminTeamActionLoading}
+                                      style={{
+                                        padding: "4px 10px",
+                                        borderRadius: 6,
+                                        border: `1px solid ${COLORS.neonRed}44`,
+                                        background: "transparent",
+                                        color: COLORS.neonRed,
+                                        fontSize: 12,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* Add Member (edit mode only) */}
+                      {isEditing && (
+                        <div style={{
+                          marginTop: 8,
+                          padding: 12,
+                          background: `${COLORS.cardBg}88`,
+                          borderRadius: 8,
+                          border: `1px solid ${COLORS.cardBorder}`,
+                        }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.textPrimary }}>
+                            Add Team Member
+                          </div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>Email</label>
+                              <input
+                                type="email"
+                                value={addTeamEmail}
+                                onChange={(e) => { setAddTeamEmail(e.target.value); setAdminTeamError(null); setAdminTeamSuccess(null); }}
+                                placeholder="user@example.com"
+                                style={{
+                                  width: "100%",
+                                  padding: "8px 12px",
+                                  background: COLORS.darkBg,
+                                  border: `1px solid ${COLORS.cardBorder}`,
+                                  borderRadius: 6,
+                                  color: COLORS.textPrimary,
+                                  fontSize: 13,
+                                }}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleAdminAddTeamMember(); }}
+                              />
+                            </div>
+                            <div style={{ width: 120 }}>
+                              <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>Role</label>
+                              <select
+                                value={addTeamRole}
+                                onChange={(e) => setAddTeamRole(e.target.value as "manager" | "staff")}
+                                style={{
+                                  width: "100%",
+                                  padding: "8px 12px",
+                                  background: COLORS.darkBg,
+                                  border: `1px solid ${COLORS.cardBorder}`,
+                                  borderRadius: 6,
+                                  color: COLORS.textPrimary,
+                                  fontSize: 13,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <option value="staff">Staff</option>
+                                <option value="manager">Manager</option>
+                              </select>
+                            </div>
+                            <button
+                              onClick={handleAdminAddTeamMember}
+                              disabled={adminTeamActionLoading || !addTeamEmail.trim()}
+                              style={{
+                                padding: "8px 16px",
+                                borderRadius: 6,
+                                border: "none",
+                                background: adminTeamActionLoading || !addTeamEmail.trim() ? COLORS.cardBorder : COLORS.neonBlue,
+                                color: adminTeamActionLoading || !addTeamEmail.trim() ? COLORS.textSecondary : "#000",
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor: adminTeamActionLoading || !addTeamEmail.trim() ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {adminTeamActionLoading ? "Adding..." : "Add"}
+                            </button>
+                          </div>
+                          <div style={{ marginTop: 6, fontSize: 11, color: COLORS.textSecondary }}>
+                            User must have an existing LetsGo account.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </Card>
 
                 {/* Plan & Payout */}
