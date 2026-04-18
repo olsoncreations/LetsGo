@@ -136,6 +136,8 @@ const ReceiptUploadModal = ({open,onClose,token,userId,onSuccess}:{open:boolean;
   const [errMsg,setErrMsg]=useState("");
   const [confirmStep,setConfirmStep]=useState(false);
   const [showSubtotalHelp,setShowSubtotalHelp]=useState(false);
+  const [duplicateWarning,setDuplicateWarning]=useState<{message:string;matchingReceipts:{id:string;amount:number;date:string;submittedAt:string;status:string}[]}|null>(null);
+  const [uploadedPhotoPath,setUploadedPhotoPath]=useState<string|null>(null);
   const fileRef=useRef<HTMLInputElement>(null);
   const debounceRef=useRef<ReturnType<typeof setTimeout>|null>(null);
 
@@ -157,24 +159,35 @@ const ReceiptUploadModal = ({open,onClose,token,userId,onSuccess}:{open:boolean;
     setConfirmStep(true);
   };
 
-  const handleSubmit = async () => {
+  const submitReceipt = async (confirmDuplicate = false) => {
     if(!token||!userId||!selectedBiz||!subtotal)return;
     const amt=parseFloat(subtotal);
     setSubmitting(true);setErrMsg("");
     try{
-      let photoPath:string|null=null;
-      if(file){
+      // Upload photo only once (reuse path if already uploaded)
+      let photoPath = uploadedPhotoPath;
+      if(file && !photoPath){
         const safeName=file.name.replace(/[^\w.\-]+/g,"_");
         const uid=(typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function")?crypto.randomUUID():Date.now().toString();
         photoPath=`${userId}/receipts/${uid}-${safeName}`;
         const{error:storageErr}=await supabaseBrowser.storage.from("receipts").upload(photoPath,file,{upsert:false});
         if(storageErr){console.error("[receipt] Storage upload error:",storageErr);photoPath=null;}
+        else{setUploadedPhotoPath(photoPath);}
       }
       const res=await fetch("/api/receipts",{
         method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-        body:JSON.stringify({businessId:selectedBiz.id,userId,receiptTotalCents:Math.round(amt*100),visitDate:new Date().toISOString().split("T")[0],photoUrl:photoPath}),
+        body:JSON.stringify({businessId:selectedBiz.id,userId,receiptTotalCents:Math.round(amt*100),visitDate:new Date().toISOString().split("T")[0],photoUrl:photoPath,confirmDuplicate}),
       });
       const data=await res.json();
+
+      // Handle duplicate warning — show warning step instead of submitting
+      if(res.status===409 && data.duplicate){
+        setDuplicateWarning({message:data.message,matchingReceipts:data.matchingReceipts||[]});
+        setConfirmStep(false);
+        setSubmitting(false);
+        return;
+      }
+
       if(!res.ok)throw new Error(data.error||"Submit failed");
       let signedPhotoUrl:string|null=null;
       if(photoPath){
@@ -182,22 +195,51 @@ const ReceiptUploadModal = ({open,onClose,token,userId,onSuccess}:{open:boolean;
         signedPhotoUrl=signedData?.signedUrl||null;
       }
       onSuccess({id:data.receiptId||"new",business:selectedBiz.name,businessId:selectedBiz.id,date:formatDate(new Date().toISOString().split("T")[0]),rawDate:new Date().toISOString().split("T")[0],amount:amt,cashback:centsToDollars(data.payoutCents||0),status:"pending",level:data.tier?.tier_index||1,visitNum:data.visitsThisWindow||1,photoUrl:signedPhotoUrl});
-      onClose();setBizSearch("");setSelectedBiz(null);setSubtotal("");setFile(null);setConfirmStep(false);
-    }catch(e){setErrMsg(e instanceof Error?e.message:"Submit failed");setConfirmStep(false);}finally{setSubmitting(false);}
+      onClose();setBizSearch("");setSelectedBiz(null);setSubtotal("");setFile(null);setConfirmStep(false);setDuplicateWarning(null);setUploadedPhotoPath(null);
+    }catch(e){setErrMsg(e instanceof Error?e.message:"Submit failed");setConfirmStep(false);setDuplicateWarning(null);}finally{setSubmitting(false);}
   };
 
-  const handleClose = () => { onClose(); setConfirmStep(false); setErrMsg(""); };
+  const handleSubmit = async () => { submitReceipt(false); };
+  const handleSubmitDuplicate = async () => { setDuplicateWarning(null); submitReceipt(true); };
+
+  const handleClose = () => { onClose(); setConfirmStep(false); setErrMsg(""); setDuplicateWarning(null); setUploadedPhotoPath(null); };
 
   if(!open)return null;
   return(
     <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.85)",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease"}} onClick={handleClose}>
       <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:480,borderRadius:6,background:"#0C0C14",border:`1px solid rgba(${NEON.greenRGB},0.2)`,boxShadow:`0 0 60px rgba(${NEON.greenRGB},0.08)`,padding:28}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-          <NeonTag neon={NEON.green}>{confirmStep?"Confirm Receipt":"Upload Receipt"}</NeonTag>
+          <NeonTag neon={duplicateWarning?NEON.yellow:NEON.green}>{duplicateWarning?"Possible Duplicate":confirmStep?"Confirm Receipt":"Upload Receipt"}</NeonTag>
           <div onClick={handleClose} style={{cursor:"pointer",width:28,height:28,borderRadius:3,border:"1px solid rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.35)",fontSize:14}}>{"\u2715"}</div>
         </div>
 
-        {confirmStep ? (
+        {duplicateWarning ? (
+          <div style={{animation:"fadeIn 0.2s ease"}}>
+            <div style={{padding:"14px 16px",borderRadius:4,background:`rgba(${NEON.yellowRGB},0.08)`,border:`1px solid rgba(${NEON.yellowRGB},0.25)`,marginBottom:16}}>
+              <div style={{fontSize:12,fontWeight:700,color:NEON.yellow,marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:16}}>&#9888;</span> Possible Duplicate Receipt
+              </div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",lineHeight:1.5}}>{duplicateWarning.message}</div>
+            </div>
+            <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:8}}>Similar recent receipts</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16,maxHeight:180,overflowY:"auto"}}>
+              {duplicateWarning.matchingReceipts.map((r,i)=>(
+                <div key={r.id||i} style={{padding:"10px 14px",borderRadius:4,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",fontWeight:600}}>${(r.amount/100).toFixed(2)}</div>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:2}}>Visited {r.date} &middot; {r.status}</div>
+                  </div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.25)"}}>{new Date(r.submittedAt).toLocaleDateString()}</div>
+                </div>
+              ))}
+            </div>
+            {errMsg&&<div style={{fontSize:11,color:NEON.pink,marginBottom:12}}>{errMsg}</div>}
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={handleClose} style={{flex:1,padding:"12px 20px",borderRadius:3,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:"rgba(255,255,255,0.35)",fontSize:11,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancel</button>
+              <button onClick={handleSubmitDuplicate} disabled={submitting} style={{flex:1,padding:"12px 20px",borderRadius:3,border:`1px solid rgba(${NEON.yellowRGB},0.5)`,background:`rgba(${NEON.yellowRGB},0.12)`,color:NEON.yellow,fontSize:11,fontWeight:700,letterSpacing:"0.15em",textTransform:"uppercase",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textShadow:`0 0 8px ${NEON.yellow}60`,opacity:submitting?0.5:1}}>{submitting?"Submitting...":"Submit Anyway"}</button>
+            </div>
+          </div>
+        ) : confirmStep ? (
           <div style={{animation:"fadeIn 0.2s ease"}}>
             <div style={{fontSize:11,fontWeight:600,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:16}}>Please review your receipt details</div>
             <div style={{padding:"18px 20px",borderRadius:4,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",marginBottom:16}}>

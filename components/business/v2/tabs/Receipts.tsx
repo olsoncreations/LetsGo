@@ -185,6 +185,9 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
   const [editAutoApprovalEnabled, setEditAutoApprovalEnabled] = useState(false);
   const [editAutoApprovalMax, setEditAutoApprovalMax] = useState(50);
 
+  // Duplicate-flagged receipt IDs (from fraud_alerts)
+  const [duplicateReceiptIds, setDuplicateReceiptIds] = useState<Set<string>>(new Set());
+
   // Monthly statement
   const [statementMonth, setStatementMonth] = useState(() => {
     const now = new Date();
@@ -276,6 +279,22 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
       }));
 
       setReceipts(mappedReceipts);
+
+      // Load duplicate fraud alerts for this business's receipts
+      const receiptIds = mappedReceipts.map((r) => r.id);
+      if (receiptIds.length > 0) {
+        const { data: fraudAlerts } = await supabaseBrowser
+          .from("fraud_alerts")
+          .select("receipt_id")
+          .eq("business_id", businessId)
+          .eq("alert_type", "duplicate_receipt")
+          .in("receipt_id", receiptIds);
+        if (fraudAlerts && fraudAlerts.length > 0) {
+          setDuplicateReceiptIds(new Set(fraudAlerts.map((a: { receipt_id: string }) => a.receipt_id)));
+        } else {
+          setDuplicateReceiptIds(new Set());
+        }
+      }
 
       // Load payout tiers from table first, fall back to config.payoutBps
       // Also fetch the business's change counter and platform visit thresholds
@@ -1216,8 +1235,29 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
 
                   {/* Receipt Details */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: "1rem", fontFamily: '"Space Mono", monospace', marginBottom: "0.35rem" }}>
-                      {r.visibleId}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                      <span style={{ fontWeight: 700, fontSize: "1rem", fontFamily: '"Space Mono", monospace' }}>
+                        {r.visibleId}
+                      </span>
+                      {duplicateReceiptIds.has(r.id) && (
+                        <span
+                          style={{
+                            padding: "0.15rem 0.5rem",
+                            background: `${colors.warning}20`,
+                            color: colors.warning,
+                            borderRadius: "4px",
+                            fontSize: "0.65rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.25rem",
+                          }}
+                        >
+                          <AlertCircle size={10} /> Possible Duplicate
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.8)", marginBottom: "0.25rem" }}>
                       Customer: <strong>{r.userIdShort}</strong>
@@ -1713,7 +1753,16 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
 
                   return (
                     <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                      <td style={{ padding: "0.75rem", fontFamily: '"Space Mono", monospace', fontSize: "0.8rem" }}>{r.visibleId}</td>
+                      <td style={{ padding: "0.75rem", fontFamily: '"Space Mono", monospace', fontSize: "0.8rem" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                          {r.visibleId}
+                          {duplicateReceiptIds.has(r.id) && (
+                            <span title="Possible duplicate receipt" style={{ color: colors.warning, display: "inline-flex" }}>
+                              <AlertCircle size={12} />
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem" }}>{r.userIdShort}</td>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "rgba(255,255,255,0.6)" }}>{timeAgo(r.createdAt)}</td>
                       <td style={{ padding: "0.75rem", textAlign: "right", fontFamily: '"Space Mono", monospace', fontWeight: 700 }}>
@@ -1872,6 +1921,31 @@ export default function Receipts({ businessId, isPremium }: BusinessTabProps) {
                   marginBottom: "1rem",
                 }}
               />
+            )}
+
+            {duplicateReceiptIds.has(viewingReceipt.id) && (
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  background: `${colors.warning}15`,
+                  border: `1px solid ${colors.warning}40`,
+                  borderRadius: "8px",
+                  marginBottom: "1rem",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.5rem",
+                }}
+              >
+                <AlertCircle size={16} style={{ color: colors.warning, flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: colors.warning, marginBottom: "0.2rem" }}>
+                    Possible Duplicate
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.4 }}>
+                    A similar receipt from this customer was submitted recently. Please review carefully before approving.
+                  </div>
+                </div>
+              </div>
             )}
 
             <div style={{ display: "grid", gap: "0.5rem", fontSize: "0.875rem" }}>

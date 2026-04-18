@@ -21,6 +21,8 @@ const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 // Max age for visit dates (90 days)
 const MAX_VISIT_AGE_DAYS = 90;
+// Duplicate detection window (21 days / 3 weeks)
+const DUPLICATE_WINDOW_DAYS = 21;
 
 function pickTier(tiers: TierRow[], visitCount: number): TierRow | null {
   // pick the highest tier that matches the visitCount
@@ -55,14 +57,15 @@ async function runFraudChecks(receiptId: string, userId: string, businessId: str
       details: Record<string, unknown>;
     }> = [];
 
-    // CHECK 1: Duplicate receipt — same user + business, amount within 10%, within 24h
+    // CHECK 1: Duplicate receipt — same user + business, amount within 10%, within 3 weeks
+    const threeWeeksAgo = new Date(Date.now() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { data: recentSameBiz } = await supabase
       .from("receipts")
       .select("id, receipt_total_cents")
       .eq("user_id", userId)
       .eq("business_id", businessId)
       .neq("id", receiptId)
-      .gte("created_at", twentyFourHoursAgo);
+      .gte("created_at", threeWeeksAgo);
 
     if (recentSameBiz && recentSameBiz.length > 0) {
       const amountThreshold = receiptTotalCents * 0.1;
@@ -74,7 +77,7 @@ async function runFraudChecks(receiptId: string, userId: string, businessId: str
           alert_type: "duplicate_receipt",
           severity: "high",
           details: {
-            description: `Possible duplicate: ${duplicates.length} receipt(s) from same business with similar amount in last 24h`,
+            description: `Possible duplicate: ${duplicates.length} receipt(s) from same business with similar amount in last 3 weeks`,
             receipt_total_cents: receiptTotalCents,
             matching_receipt_ids: duplicates.map(d => d.id),
           },
@@ -241,6 +244,44 @@ export async function POST(req: NextRequest): Promise<Response> {
         { status: 403 }
       );
     }
+
+    // Duplicate receipt detection — check for similar receipts within 3 weeks
+    const confirmDuplicate = body.confirmDuplicate === true;
+    const dupCutoff = new Date(now.getTime() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentReceipts } = await supabase
+      .from("receipts")
+      .select("id, receipt_total_cents, visit_date, created_at, status")
+      .eq("user_id", userId)
+      .eq("business_id", businessId)
+      .gte("created_at", dupCutoff)
+      .order("created_at", { ascending: false });
+
+    if (recentReceipts && recentReceipts.length > 0 && !confirmDuplicate) {
+      const amountThreshold = receiptTotalCents * 0.1;
+      const duplicates = recentReceipts.filter(
+        (r) => Math.abs(r.receipt_total_cents - receiptTotalCents) <= amountThreshold
+      );
+      if (duplicates.length > 0) {
+        return NextResponse.json(
+          {
+            duplicate: true,
+            message: "This looks like a receipt you already submitted. Please confirm if this is a new receipt.",
+            matchingReceipts: duplicates.map((d) => ({
+              id: d.id,
+              amount: d.receipt_total_cents,
+              date: d.visit_date,
+              submittedAt: d.created_at,
+              status: d.status,
+            })),
+          },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Track whether user confirmed a duplicate warning
+    const isDuplicateConfirmed = confirmDuplicate && recentReceipts && recentReceipts.length > 0 &&
+      recentReceipts.some((r) => Math.abs(r.receipt_total_cents - receiptTotalCents) <= receiptTotalCents * 0.1);
 
     // 1) Look up user's account creation date for anniversary window
     const { data: profile, error: profileError } = await supabase
@@ -510,19 +551,23 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
 
       const amountStr = `$${(receiptTotalCents / 100).toFixed(2)}`;
+      const dupWarning = isDuplicateConfirmed
+        ? " ⚠️ This may be a duplicate — a similar receipt was submitted recently."
+        : "";
 
       for (const owner of bizOwners) {
         notify({
           userId: owner.user_id as string,
           type: NOTIFICATION_TYPES.RECEIPT_SUBMITTED,
-          title: "New Receipt",
-          body: `${userName} submitted a ${amountStr} receipt at ${bizName}. Review it in your dashboard.`,
+          title: isDuplicateConfirmed ? "New Receipt — Possible Duplicate" : "New Receipt",
+          body: `${userName} submitted a ${amountStr} receipt at ${bizName}. Review it in your dashboard.${dupWarning}`,
           metadata: {
             receiptId: inserted?.id,
             businessId,
             businessName: bizName,
             userName,
             amountCents: receiptTotalCents,
+            isDuplicate: isDuplicateConfirmed || false,
             href: "/businessprofile-v2",
           },
         });
@@ -539,6 +584,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         receiptTotalCents,
         payoutCents,
         promotionsApplied: appliedPromoIds.length,
+        isDuplicate: isDuplicateConfirmed || false,
       },
       { status: 200 }
     );
