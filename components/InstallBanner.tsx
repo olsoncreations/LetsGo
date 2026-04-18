@@ -11,6 +11,9 @@ import { Download, X, Share } from "lucide-react";
 // - Dismissible with localStorage persistence
 // ═══════════════════════════════════════════════════
 
+// Set to false to re-enable the PWA install banner (e.g. after Play Store launch)
+const HIDE_INSTALL_BANNER = true;
+
 const DISMISS_KEY = "letsgo-install-dismissed";
 const DISMISS_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -106,7 +109,7 @@ export default function InstallBanner() {
     }
   }, [deferredPrompt]);
 
-  if (dismissed || isStandalone()) return null;
+  if (HIDE_INSTALL_BANNER || dismissed || isStandalone()) return null;
 
   // iOS instructions overlay
   if (showIOSGuide) {
