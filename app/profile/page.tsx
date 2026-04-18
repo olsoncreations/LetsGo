@@ -594,7 +594,7 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
   },[open,token,activeTab,profile?.id]);
 
   const handleSaveProfile=async()=>{if(!token)return;if(!formData.first_name.trim()){setSaveMsg("First name is required");return;}if(!formData.last_name.trim()){setSaveMsg("Last name is required");return;}if(!formData.username.trim()){setSaveMsg("Username is required");return;}if(!formData.email.trim()){setSaveMsg("Email is required");return;}if(!formData.zip_code.trim()||!/^\d{5}$/.test(formData.zip_code.trim())){setSaveMsg("Zip code is required (5 digits)");return;}if(formData.phone.trim()&&formData.phone.replace(/\D/g,"").length!==10){setSaveMsg("Phone must be a valid 10-digit number");return;}setSaving(true);setSaveMsg("");try{const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({first_name:formData.first_name,last_name:formData.last_name,username:formData.username,zip_code:formData.zip_code.trim(),bio:formData.bio,phone:formData.phone})});const data=await res.json();if(!res.ok){setSaveMsg(data.error||"Save failed");return;}onProfileSaved(data.profile);setSaveMsg("Saved!");setTimeout(()=>setSaveMsg(""),2000);}catch{setSaveMsg("Network error");}finally{setSaving(false);}};
-  const handleAvatarUpload=async(file:File)=>{if(!token||!profile)return;const ext=file.name.split(".").pop()||"jpg";const path=`${profile.id}/avatar-${Date.now()}.${ext}`;const{error:upErr}=await supabaseBrowser.storage.from("avatars").upload(path,file,{upsert:true});if(upErr){setSaveMsg("Upload failed");return;}const{data:{publicUrl}}=supabaseBrowser.storage.from("avatars").getPublicUrl(path);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({avatar_url:publicUrl})});if(res.ok){const d=await res.json();onAvatarChange(publicUrl);onProfileSaved(d.profile);}};
+  const handleAvatarUpload=async(file:File)=>{if(!token||!profile)return;const fd=new FormData();fd.append("file",file);try{const res=await fetch("/api/users/avatar",{method:"POST",headers:{Authorization:`Bearer ${token}`},body:fd});const data=await res.json();if(!res.ok){setSaveMsg(data.error||"Upload failed");return;}onAvatarChange(data.publicUrl);onProfileSaved({...profile,avatar_url:data.publicUrl});}catch{setSaveMsg("Network error");}};
   const handleConnectPayout=async()=>{if(!token||!payoutIdentifier.trim())return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:"venmo",payout_identifier:payoutIdentifier.trim()})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);}setSaving(false);};
   const handleDisconnectPayout=async()=>{if(!token)return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({payout_method:"",payout_identifier:""})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);setPayoutIdentifier("");}setSaving(false);};
   const handleSaveNotifs=async()=>{if(!token)return;setSaving(true);const res=await fetch("/api/users/profile",{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({preferences:notifPrefs})});if(res.ok){const d=await res.json();onProfileSaved(d.profile);setSaveMsg("Saved!");setTimeout(()=>setSaveMsg(""),2000);}setSaving(false);};
@@ -1618,22 +1618,23 @@ export default function LetsGoProfile() {
   // ─── Avatar upload from hero ───
   const handleHeroAvatarUpload = useCallback(async (file: File) => {
     if (!token || !profile) return;
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${profile.id}/avatar-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabaseBrowser.storage.from("avatars").upload(path, file, { upsert: true });
-    if (upErr) return;
-    const { data: { publicUrl } } = supabaseBrowser.storage.from("avatars").getPublicUrl(path);
-    const res = await fetch("/api/users/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ avatar_url: publicUrl }),
-    });
-    if (res.ok) {
-      const d = await res.json();
-      setAvatarUrl(publicUrl);
-      setProfile(d.profile);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/users/avatar", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || "Avatar upload failed"); return; }
+      setAvatarUrl(data.publicUrl);
+      setProfile((prev: ProfileData | null) => prev ? { ...prev, avatar_url: data.publicUrl } : prev);
+      showToast("Avatar updated!");
+    } catch {
+      showToast("Network error — avatar upload failed");
     }
-  }, [token, profile]);
+  }, [token, profile, showToast]);
 
   // ─── Cash out after successful modal ───
   const handleCashOutDone = useCallback(() => {
