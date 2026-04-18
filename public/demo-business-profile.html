@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LetsGo — Business Dashboard Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #14b8a6; --secondary: #f97316; --accent: #06b6d4;
+  --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --purple: #a855f7;
+  --bg-start: #0f172a; --bg-mid: #1e293b; --bg-end: #0a0f1a;
+  --glass: rgba(255,255,255,0.03); --glass-border: rgba(255,255,255,0.08);
+  --text-primary: #fff; --text-70: rgba(255,255,255,0.7);
+  --text-50: rgba(255,255,255,0.5); --text-35: rgba(255,255,255,0.35);
+}
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-mid) 50%, var(--bg-end) 100%);
+  font-family: 'Poppins', sans-serif; color: var(--text-primary); line-height: 1.5;
+}
+.mono { font-family: 'Space Mono', monospace; }
+
+/* ═══ DOWNLOAD BAR ═══ */
+.download-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  padding: 10px 24px; display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 4px 20px rgba(20,184,166,0.3);
+}
+.download-bar span { font-weight: 700; font-size: 0.85rem; }
+.download-bar button {
+  background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+  color: white; padding: 6px 18px; border-radius: 8px; font-weight: 700;
+  cursor: pointer; font-size: 0.8rem; font-family: 'Poppins', sans-serif;
+}
+
+/* ═══ HEADER ═══ */
+.header {
+  background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 1.25rem 3rem; position: sticky; top: 42px; z-index: 100;
+}
+.header-inner { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; max-width: 1600px; margin: 0 auto; }
+.header-left { display: flex; align-items: center; gap: 1rem; }
+.header-logo {
+  width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 30px rgba(20,184,166,0.18); overflow: hidden;
+  background: rgba(20,184,166,0.15); font-weight: 900; font-size: 1.1rem; color: var(--primary);
+}
+.header-logo img { width: 100%; height: 100%; object-fit: contain; }
+.header-title {
+  font-size: 1.35rem; font-weight: 800;
+  background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.header-sub { font-size: 0.85rem; color: var(--text-50); }
+.header-right { display: flex; align-items: center; gap: 0.75rem; }
+
+/* Buttons */
+.btn-ghost {
+  padding: 0.65rem 1rem; border-radius: 10px; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.95);
+  font-weight: 900; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.85rem; font-family: 'Poppins', sans-serif;
+}
+.btn-grad {
+  padding: 0.65rem 1.15rem; border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: 1px solid rgba(20,184,166,0.45); color: white; font-weight: 950; cursor: pointer;
+  display: flex; align-items: center; gap: 0.55rem;
+  box-shadow: 0 14px 34px rgba(20,184,166,0.22); font-size: 0.85rem; font-family: 'Poppins', sans-serif;
+}
+.plan-badge {
+  padding: 0.5rem 0.75rem; border-radius: 10px;
+  background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.35);
+  font-weight: 900; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+}
+
+/* ═══ MAIN ═══ */
+.main { padding: 2rem 3rem; max-width: 1600px; margin: 0 auto; }
+
+/* ═══ TAB BAR ═══ */
+.tab-bar {
+  display: flex; gap: 0.5rem; margin-bottom: 2rem;
+  background: rgba(255,255,255,0.02); padding: 0.5rem;
+  border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.tab-btn {
+  flex: 1; padding: 0.875rem 1rem; background: transparent; border: none;
+  color: white; border-radius: 8px; font-size: 0.8rem; font-weight: 800;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  gap: 0.5rem; white-space: nowrap; font-family: 'Poppins', sans-serif;
+}
+.tab-btn:hover { background: rgba(255,255,255,0.04); }
+.tab-btn.active { background: linear-gradient(135deg, var(--primary), var(--accent)); }
+.tab-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* Tab content */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ═══ GLASS CARD ═══ */
+.gc {
+  background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border); border-radius: 16px; padding: 2rem;
+  position: relative; overflow: hidden;
+}
+
+/* ═══ HEADING ═══ */
+.sh { font-size: 1.25rem; font-weight: 900; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+.sh svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* ═══ STATS GRID ═══ */
+.sg { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.sm {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+  border-radius: 12px; padding: 1.25rem; text-align: center; position: relative; overflow: hidden;
+}
+.sm-l { font-size: 0.7rem; font-weight: 700; color: var(--text-50); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.sm-v { font-size: 1.5rem; font-weight: 800; }
+
+/* ═══ METRIC CARD ═══ */
+.mg { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+.mc { position: relative; padding: 1.5rem; }
+.mc .glow { position: absolute; top: -50%; right: -20%; width: 150px; height: 150px; border-radius: 50%; pointer-events: none; }
+.mc-icon {
+  width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center;
+  justify-content: center; margin-bottom: 1rem;
+}
+.mc-label { font-size: 0.875rem; color: var(--text-70); margin-bottom: 0.5rem; }
+.mc-val { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+.mc-ch { font-size: 0.875rem; color: var(--text-70); font-weight: 600; }
+
+/* ═══ TABLE ═══ */
+.dt { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8rem; }
+.dt thead th {
+  padding: 0.75rem 1rem; text-align: left; font-weight: 700; font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-50);
+  border-bottom: 1px solid var(--glass-border); white-space: nowrap;
+}
+.dt tbody td { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text-70); }
+.dt tbody tr:hover td { background: rgba(255,255,255,0.02); }
+.dt .right { text-align: right; }
+
+/* ═══ BADGES ═══ */
+.badge { display: inline-flex; padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; }
+.b-s { background: rgba(16,185,129,0.2); color: #34d399; }
+.b-w { background: rgba(245,158,11,0.2); color: #fbbf24; }
+.b-d { background: rgba(239,68,68,0.2); color: #f87171; }
+.b-i { background: rgba(6,182,212,0.2); color: #22d3ee; }
+.b-p { background: rgba(168,85,247,0.2); color: #c084fc; }
+.b-g { background: rgba(255,255,255,0.08); color: var(--text-50); }
+
+/* ═══ CHART ═══ */
+.chart { height: 220px; display: flex; align-items: flex-end; gap: 8px; padding: 1rem 0; border-bottom: 1px solid var(--glass-border); }
+.bar { flex: 1; border-radius: 6px 6px 0 0; position: relative; min-width: 20px; cursor: pointer; }
+.bar:hover { opacity: 0.85; }
+.bar .tip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; white-space: nowrap; margin-bottom: 6px; font-weight: 600; }
+.bar:hover .tip { display: block; }
+.chart-lbl { display: flex; gap: 8px; padding-top: 0.5rem; }
+.chart-lbl span { flex: 1; text-align: center; font-size: 0.65rem; color: var(--text-35); min-width: 20px; }
+
+/* ═══ TWO COL ═══ */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+/* ═══ TAG ═══ */
+.tag {
+  display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px;
+  background: rgba(20,184,166,0.15); border: 1px solid rgba(20,184,166,0.3);
+  font-size: 0.7rem; font-weight: 600; color: var(--primary); margin: 0.25rem;
+}
+
+/* ═══ TIER CARDS ═══ */
+.tier-g { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.tc {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 1.25rem; text-align: center; position: relative;
+}
+.tc.hi { border-color: var(--primary); box-shadow: 0 0 20px rgba(20,184,166,0.2); }
+
+/* ═══ FORM ═══ */
+.fg { margin-bottom: 1rem; }
+.fl { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-50); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.fi {
+  width: 100%; padding: 0.7rem 1rem; border-radius: 10px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+  color: white; font-size: 0.85rem; font-family: 'Poppins', sans-serif; outline: none;
+}
+.fi:focus { border-color: var(--primary); }
+select.fi { cursor: pointer; appearance: auto; }
+textarea.fi { resize: vertical; font-family: 'Poppins', sans-serif; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.form-3 { display: grid; grid-template-columns: 1fr 80px 100px; gap: 1rem; }
+
+/* ═══ RECEIPT CARD ═══ */
+.rc {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+  border-radius: 14px; padding: 1.25rem; display: flex; gap: 1.25rem; align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.rc-thumb {
+  width: 120px; height: 160px; border-radius: 8px; background: rgba(255,255,255,0.06);
+  flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.5rem; color: var(--text-35); font-size: 0.7rem;
+}
+.rc-thumb-btns { display: flex; gap: 0.35rem; }
+.rc-thumb-btns button {
+  padding: 0.2rem 0.5rem; border-radius: 4px; background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15); color: var(--text-70); font-size: 0.6rem;
+  cursor: pointer; font-family: 'Poppins', sans-serif; font-weight: 600;
+}
+
+/* ═══ TOGGLE ═══ */
+.toggle {
+  width: 48px; height: 26px; border-radius: 13px; position: relative; cursor: pointer;
+  display: inline-block; vertical-align: middle;
+}
+.toggle.on { background: var(--primary); }
+.toggle.off { background: rgba(255,255,255,0.15); }
+.toggle::after {
+  content: ''; width: 20px; height: 20px; border-radius: 50%; background: white;
+  position: absolute; top: 3px; transition: 0.2s;
+}
+.toggle.on::after { right: 3px; }
+.toggle.off::after { left: 3px; }
+
+/* ═══ EVENT CARD ═══ */
+.ev {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+  border-radius: 14px; overflow: hidden; margin-bottom: 1rem;
+}
+.ev-hero {
+  height: 200px; position: relative; background-size: cover; background-position: center;
+  display: flex; flex-direction: column; justify-content: flex-end; padding: 1.25rem;
+}
+.ev-hero::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 70%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85)); pointer-events: none;
+}
+.ev-hero > * { position: relative; z-index: 1; }
+.ev-body { padding: 1.25rem; }
+
+/* ═══ PLAN CARD ═══ */
+.plan-card {
+  border-radius: 16px; padding: 2rem; position: relative; overflow: hidden; border: 2px solid;
+}
+.plan-card.basic { border-color: rgba(249,115,22,0.3); background: rgba(249,115,22,0.05); }
+.plan-card.prem { border-color: rgba(20,184,166,0.3); background: rgba(20,184,166,0.05); }
+.plan-card ul { list-style: none; }
+.plan-card li { padding: 0.35rem 0; font-size: 0.8rem; color: var(--text-70); display: flex; align-items: center; gap: 0.5rem; }
+.pop-badge {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  background: var(--warning); color: #000; padding: 0.25rem 1.25rem;
+  font-size: 0.65rem; font-weight: 900; letter-spacing: 0.08em; border-radius: 0 0 8px 8px;
+}
+.cur-badge {
+  display: inline-block; margin-top: 1rem; padding: 0.4rem 1rem; border-radius: 8px;
+  font-size: 0.75rem; font-weight: 800; background: rgba(20,184,166,0.2);
+  border: 1px solid rgba(20,184,166,0.4); color: #34d399;
+}
+
+/* ═══ PAYMENT ═══ */
+.pm-card {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+  border-radius: 12px; padding: 1.25rem;
+}
+.pm-card.pref { border-color: rgba(20,184,166,0.4); }
+
+/* ═══ KPI RING ═══ */
+.kpi { width: 120px; height: 120px; position: relative; display: flex; align-items: center; justify-content: center; }
+.kpi-val { position: absolute; font-size: 1.25rem; font-weight: 900; }
+
+/* ═══ BILL BREAKDOWN ═══ */
+.bb { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 1.25rem; }
+.bi { padding: 0.75rem 1rem; border-radius: 8px; background: rgba(255,255,255,0.03); border-left: 3px solid; display: flex; justify-content: space-between; align-items: center; }
+.bi-l { font-size: 0.8rem; color: var(--text-70); }
+.bi-v { font-weight: 800; font-size: 0.9rem; }
+
+/* ═══ CHAT ═══ */
+.chat-area { height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 1rem; }
+.chat-msg { max-width: 75%; padding: 0.75rem 1rem; border-radius: 12px; font-size: 0.8rem; line-height: 1.5; }
+.chat-staff { align-self: flex-start; background: rgba(255,255,255,0.08); border-radius: 4px 12px 12px 12px; }
+.chat-you { align-self: flex-end; background: linear-gradient(135deg, var(--primary), var(--accent)); border-radius: 12px 4px 12px 12px; }
+.chat-meta { font-size: 0.6rem; color: var(--text-35); margin-top: 0.25rem; }
+
+/* ═══ AD CARD ═══ */
+.ac {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px; padding: 1.5rem; text-align: center; cursor: pointer;
+}
+.ac:hover { border-color: rgba(255,255,255,0.2); }
+
+/* ═══ INFO BANNER ═══ */
+.info {
+  padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.8rem; font-weight: 700;
+  display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+}
+
+/* ═══ NOTIF DOT ═══ */
+.ndot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); position: absolute; top: -2px; right: -2px; }
+
+/* ═══ TEAM ROW ═══ */
+.tr-m { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.tr-av {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; flex-shrink: 0;
+}
+
+/* ═══ ACTIONS GRID ═══ */
+.ag { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 1rem; }
+
+/* ═══ MEDIA GRID ═══ */
+.media-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+.media-i {
+  aspect-ratio: 1; border-radius: 12px; background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border); display: flex; align-items: center;
+  justify-content: center; position: relative; overflow: hidden; cursor: pointer;
+}
+.media-i:hover { border-color: rgba(255,255,255,0.2); }
+.media-lbl {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  padding: 0.75rem; font-size: 0.7rem; font-weight: 600;
+}
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 900px) {
+  .header { padding: 0.75rem 1rem; }
+  .main { padding: 1rem; }
+  .two, .form-grid { grid-template-columns: 1fr; }
+  .form-3 { grid-template-columns: 1fr 1fr; }
+  .tab-btn .tl { display: none; }
+  .tab-btn { font-size: 0.7rem; padding: 0.6rem; }
+}
+@media (max-width: 600px) {
+  .mg { grid-template-columns: 1fr; }
+  .ag { grid-template-columns: 1fr; }
+}
+
+/* Inline SVG icon helper */
+.ico { display: inline-flex; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<!-- Download Bar -->
+<div class="download-bar">
+  <span>LetsGo Business Dashboard — Demo Preview</span>
+  <button onclick="window.print()">Print / Save PDF</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- HEADER (mirrors BusinessProfileV2.tsx lines 382-498) -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-logo">
+        <img src="/lg-logo.png" alt="LetsGo" onerror="this.style.display='none';this.parentElement.textContent='LG';">
+      </div>
+      <div>
+        <div class="header-title">Rosie's Kitchen &amp; Bar</div>
+        <div class="header-sub">Business ID: <span class="mono">biz_rk8472</span></div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div style="position:relative; cursor:pointer; padding:0.5rem;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <div class="ndot"></div>
+      </div>
+      <div class="plan-badge">Plan: <span class="mono">premium</span></div>
+      <button class="btn-ghost">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign Out
+      </button>
+      <button class="btn-grad">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+        Publish Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- TAB BAR (mirrors BusinessProfileV2.tsx lines 516-551) -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="tab-bar" id="tabBar">
+  <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span class="tl">Overview</span></button>
+  <button class="tab-btn" data-tab="analytics" onclick="switchTab('analytics')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="tl">Analytics</span></button>
+  <button class="tab-btn" data-tab="receipts" onclick="switchTab('receipts')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="tl">Receipt Redemption</span></button>
+  <button class="tab-btn" data-tab="media" onclick="switchTab('media')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span class="tl">Media Gallery</span></button>
+  <button class="tab-btn" data-tab="events" onclick="switchTab('events')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span class="tl">Events</span></button>
+  <button class="tab-btn" data-tab="advertising" onclick="switchTab('advertising')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="tl">Advertising &amp; Add-ons</span></button>
+  <button class="tab-btn" data-tab="billing" onclick="switchTab('billing')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span class="tl">Plans &amp; Billing</span></button>
+  <button class="tab-btn" data-tab="profile" onclick="switchTab('profile')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tl">Profile Settings</span></button>
+  <button class="tab-btn" data-tab="support" onclick="switchTab('support')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span class="tl">Support &amp; Help</span></button>
+</div>
+
+
+<!-- ══════════════════════════════════════ OVERVIEW ══════════════════════════════════════ -->
+<div class="tab-content active" id="tab-overview">
+  <!-- Welcome -->
+  <div class="gc" style="background: linear-gradient(135deg, rgba(20,184,166,0.12), rgba(6,182,212,0.12)); margin-bottom: 2rem;">
+    <div style="font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem;">Welcome to Your LetsGo Business Dashboard</div>
+    <div style="font-size: 0.9375rem; color: var(--text-70); line-height: 1.6;">Your complete business management platform with receipt redemption, event management, analytics, advertising, and comprehensive support tools.</div>
+    <div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-35);">Business ID: <span class="mono">biz_rk8472</span> &bull; Plan: <span class="mono">premium</span></div>
+  </div>
+
+  <!-- Key Metrics (4 cards) -->
+  <div class="mg">
+    <div class="gc mc"><div class="glow" style="background: radial-gradient(circle, rgba(20,184,166,0.25), transparent 70%);"></div><div class="mc-icon" style="background: rgba(20,184,166,0.2); color: var(--primary);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="mc-label">Total Customers</div><div class="mc-val mono" style="color: var(--primary);">847</div><div class="mc-ch" style="color: #34d399;">+12.3% this month</div></div>
+    <div class="gc mc"><div class="glow" style="background: radial-gradient(circle, rgba(16,185,129,0.25), transparent 70%);"></div><div class="mc-icon" style="background: rgba(16,185,129,0.2); color: var(--success);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="mc-label">Latest Invoice Total</div><div class="mc-val mono" style="color: var(--success);">$940</div><div class="mc-ch">Pulled from most recent invoice</div></div>
+    <div class="gc mc"><div class="glow" style="background: radial-gradient(circle, rgba(6,182,212,0.25), transparent 70%);"></div><div class="mc-icon" style="background: rgba(6,182,212,0.2); color: var(--accent);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="mc-label">Upcoming Events</div><div class="mc-val mono" style="color: var(--accent);">3</div><div class="mc-ch">Open Events tab to manage</div></div>
+    <div class="gc mc"><div class="glow" style="background: radial-gradient(circle, rgba(245,158,11,0.25), transparent 70%);"></div><div class="mc-icon" style="background: rgba(245,158,11,0.2); color: var(--warning);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="mc-label">Pending Receipts</div><div class="mc-val mono" style="color: var(--warning);">7</div><div class="mc-ch">$218 pending approval</div></div>
+  </div>
+
+  <!-- Quick Actions (4 cards) -->
+  <div class="ag">
+    <div class="gc" style="padding: 1.5rem; cursor: pointer;" onclick="switchTab('receipts')"><div style="position: absolute; top: 1rem; right: 1rem; background: rgba(20,184,166,0.2); color: var(--primary); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700;">7 pending</div><div style="width: 40px; height: 40px; background: rgba(20,184,166,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--primary);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div style="font-size: 1.125rem; font-weight: 800; margin-bottom: 0.5rem;">Receipt Redemption</div><div style="font-size: 0.875rem; color: var(--text-70);">Review and approve customer receipts</div></div>
+    <div class="gc" style="padding: 1.5rem; cursor: pointer;" onclick="switchTab('events')"><div style="position: absolute; top: 1rem; right: 1rem; background: rgba(6,182,212,0.2); color: var(--accent); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700;">3 upcoming</div><div style="width: 40px; height: 40px; background: rgba(6,182,212,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--accent);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div style="font-size: 1.125rem; font-weight: 800; margin-bottom: 0.5rem;">Events</div><div style="font-size: 0.875rem; color: var(--text-70);">Manage upcoming and past events</div></div>
+    <div class="gc" style="padding: 1.5rem; cursor: pointer;" onclick="switchTab('media')"><div style="position: absolute; top: 1rem; right: 1rem; background: rgba(249,115,22,0.2); color: var(--secondary); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700;">14 files</div><div style="width: 40px; height: 40px; background: rgba(249,115,22,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--secondary);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><div style="font-size: 1.125rem; font-weight: 800; margin-bottom: 0.5rem;">Media Gallery</div><div style="font-size: 0.875rem; color: var(--text-70);">Upload photos and videos</div></div>
+    <div class="gc" style="padding: 1.5rem; cursor: pointer;" onclick="switchTab('advertising')"><div style="position: absolute; top: 1rem; right: 1rem; background: rgba(245,158,11,0.2); color: var(--warning); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700;">5 options</div><div style="width: 40px; height: 40px; background: rgba(245,158,11,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--warning);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div style="font-size: 1.125rem; font-weight: 800; margin-bottom: 0.5rem;">Advertising</div><div style="font-size: 0.875rem; color: var(--text-70);">Boost visibility with campaigns</div></div>
+  </div>
+
+  <!-- Suite Summary -->
+  <div class="gc" style="margin-top: 2rem;">
+    <div class="sh">Your Complete Business Management Suite</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
+      <div style="padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: var(--primary); margin-bottom: 0.75rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><div style="font-size: 0.875rem; font-weight: 700; margin-bottom: 0.25rem;">Analytics</div><div style="font-size: 0.75rem; color: var(--text-50);">Revenue tracking &amp; insights</div></div>
+      <div style="padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: var(--primary); margin-bottom: 0.75rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div style="font-size: 0.875rem; font-weight: 700; margin-bottom: 0.25rem;">Event Management</div><div style="font-size: 0.75rem; color: var(--text-50);">Create &amp; track events</div></div>
+      <div style="padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: var(--primary); margin-bottom: 0.75rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div style="font-size: 0.875rem; font-weight: 700; margin-bottom: 0.25rem;">Advertising</div><div style="font-size: 0.75rem; color: var(--text-50);">Boost your visibility</div></div>
+      <div style="padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);"><div style="color: var(--primary); margin-bottom: 0.75rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div style="font-size: 0.875rem; font-weight: 700; margin-bottom: 0.25rem;">Receipts</div><div style="font-size: 0.75rem; color: var(--text-50);">Receipt redemption workflow</div></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ ANALYTICS ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-analytics">
+  <!-- 6 stat cards -->
+  <div class="sg">
+    <div class="sm"><div class="sm-l">Approval Rate</div><div class="sm-v mono" style="color: var(--success);">94.2%</div></div>
+    <div class="sm"><div class="sm-l">Repeat Customer Rate</div><div class="sm-v mono" style="color: var(--primary);">67.8%</div></div>
+    <div class="sm"><div class="sm-l">Pending Receipts</div><div class="sm-v mono" style="color: var(--warning);">7</div></div>
+    <div class="sm"><div class="sm-l">Total Revenue</div><div class="sm-v mono" style="color: var(--secondary);">$42,680</div></div>
+    <div class="sm"><div class="sm-l">Unique Customers</div><div class="sm-v mono" style="color: var(--accent);">847</div></div>
+    <div class="sm"><div class="sm-l">Customer Rating</div><div class="sm-v" style="color: var(--warning);">4.6 &#9733;</div></div>
+  </div>
+
+  <!-- Revenue chart -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Receipts &amp; Revenue by Month</div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">Refresh</button>
+        <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">CSV</button>
+      </div>
+    </div>
+    <div class="chart">
+      <div class="bar" style="height: 35%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Nov: $2,840</div></div>
+      <div class="bar" style="height: 42%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Dec: $3,410</div></div>
+      <div class="bar" style="height: 38%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Jan: $3,050</div></div>
+      <div class="bar" style="height: 52%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Feb: $4,190</div></div>
+      <div class="bar" style="height: 48%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Mar: $3,820</div></div>
+      <div class="bar" style="height: 55%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Apr: $4,410</div></div>
+      <div class="bar" style="height: 62%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">May: $4,980</div></div>
+      <div class="bar" style="height: 58%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Jun: $4,640</div></div>
+      <div class="bar" style="height: 70%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Jul: $5,610</div></div>
+      <div class="bar" style="height: 65%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Aug: $5,210</div></div>
+      <div class="bar" style="height: 78%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Sep: $6,270</div></div>
+      <div class="bar" style="height: 85%; background: linear-gradient(to top, var(--primary), var(--accent));"><div class="tip">Oct: $6,820</div></div>
+    </div>
+    <div class="chart-lbl"><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></div>
+  </div>
+
+  <!-- Two-col charts -->
+  <div class="two" style="margin-bottom: 1.5rem;">
+    <div class="gc">
+      <div class="sh" style="font-size: 1rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Avg Subtotal Per Receipt</div>
+      <div class="chart" style="height: 160px;"><div class="bar" style="height: 60%; background: var(--success);"><div class="tip">$28</div></div><div class="bar" style="height: 65%; background: var(--success);"><div class="tip">$31</div></div><div class="bar" style="height: 58%; background: var(--success);"><div class="tip">$27</div></div><div class="bar" style="height: 72%; background: var(--success);"><div class="tip">$34</div></div><div class="bar" style="height: 68%; background: var(--success);"><div class="tip">$32</div></div><div class="bar" style="height: 75%; background: var(--success);"><div class="tip">$36</div></div><div class="bar" style="height: 70%; background: var(--success);"><div class="tip">$33</div></div><div class="bar" style="height: 78%; background: var(--success);"><div class="tip">$37</div></div><div class="bar" style="height: 82%; background: var(--success);"><div class="tip">$39</div></div><div class="bar" style="height: 76%; background: var(--success);"><div class="tip">$36</div></div><div class="bar" style="height: 85%; background: var(--success);"><div class="tip">$40</div></div><div class="bar" style="height: 80%; background: var(--success);"><div class="tip">$38</div></div></div>
+      <div class="chart-lbl"><span>N</span><span>D</span><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span></div>
+    </div>
+    <div class="gc">
+      <div class="sh" style="font-size: 1rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg> Receipts by Customer Tier</div>
+      <div class="chart" style="height: 160px;"><div class="bar" style="height: 90%; background: linear-gradient(to top, #ef4444, #f97316);"><div class="tip">T1: 312</div></div><div class="bar" style="height: 70%; background: linear-gradient(to top, #f97316, #f59e0b);"><div class="tip">T2: 241</div></div><div class="bar" style="height: 55%; background: linear-gradient(to top, #f59e0b, #eab308);"><div class="tip">T3: 187</div></div><div class="bar" style="height: 40%; background: linear-gradient(to top, #eab308, #84cc16);"><div class="tip">T4: 134</div></div><div class="bar" style="height: 25%; background: linear-gradient(to top, #84cc16, #22c55e);"><div class="tip">T5: 89</div></div><div class="bar" style="height: 15%; background: linear-gradient(to top, #22c55e, #10b981);"><div class="tip">T6: 52</div></div><div class="bar" style="height: 8%; background: linear-gradient(to top, #10b981, #14b8a6);"><div class="tip">T7: 28</div></div></div>
+      <div class="chart-lbl"><span>T1</span><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span></div>
+    </div>
+  </div>
+
+  <!-- Game Wins -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 7 7 7 7"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 17 7 17 7"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg> Group Vote &amp; 5v3v1 Wins</div>
+    <div class="sg" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 0;">
+      <div class="sm"><div class="sm-l">Total Wins</div><div class="sm-v mono" style="color: var(--purple);">42</div></div>
+      <div class="sm"><div class="sm-l">Group Vote Wins</div><div class="sm-v mono" style="color: var(--accent);">18</div></div>
+      <div class="sm"><div class="sm-l">5v3v1 Wins</div><div class="sm-v mono" style="color: var(--secondary);">24</div></div>
+      <div class="sm"><div class="sm-l">Avg Group Size</div><div class="sm-v mono" style="color: var(--success);">4.2</div></div>
+    </div>
+  </div>
+
+  <!-- Competitor Analysis -->
+  <div class="gc">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Competitor Analysis</div>
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;">
+      <button class="btn-ghost" style="padding: 0.4rem 0.85rem; font-size: 0.75rem; background: rgba(20,184,166,0.15); border-color: rgba(20,184,166,0.35);">Business Type</button>
+      <button class="btn-ghost" style="padding: 0.4rem 0.85rem; font-size: 0.75rem;">Category</button>
+    </div>
+    <div class="info" style="background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.25); margin-bottom: 1.5rem;">
+      <span>Comparing against: <strong>Restaurant &amp; Bar</strong> businesses in your area</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; text-align: center;">
+      <div><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="rgba(255,255,255,0.08)" stroke-width="10" fill="none"/><circle cx="60" cy="60" r="50" stroke="var(--primary)" stroke-width="10" fill="none" stroke-dasharray="314" stroke-dashoffset="282" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="18" font-weight="900" font-family="Space Mono">47</text></svg><div style="font-size: 0.75rem; color: var(--text-50); margin-top: 0.5rem;">Total Businesses</div></div>
+      <div><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="rgba(255,255,255,0.08)" stroke-width="10" fill="none"/><circle cx="60" cy="60" r="50" stroke="var(--success)" stroke-width="10" fill="none" stroke-dasharray="314" stroke-dashoffset="267" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="18" font-weight="900" font-family="Space Mono">15%</text></svg><div style="font-size: 0.75rem; color: var(--text-50); margin-top: 0.5rem;">Market Share</div></div>
+      <div><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="rgba(255,255,255,0.08)" stroke-width="10" fill="none"/><circle cx="60" cy="60" r="50" stroke="var(--accent)" stroke-width="10" fill="none" stroke-dasharray="314" stroke-dashoffset="251" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="18" font-weight="900" font-family="Space Mono">20%</text></svg><div style="font-size: 0.75rem; color: var(--text-50); margin-top: 0.5rem;">% Total Customers</div></div>
+      <div><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" stroke="rgba(255,255,255,0.08)" stroke-width="10" fill="none"/><circle cx="60" cy="60" r="50" stroke="var(--warning)" stroke-width="10" fill="none" stroke-dasharray="314" stroke-dashoffset="236" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="18" font-weight="900" font-family="Space Mono">25%</text></svg><div style="font-size: 0.75rem; color: var(--text-50); margin-top: 0.5rem;">% Repeat Customers</div></div>
+    </div>
+  </div>
+
+  <!-- Footer note -->
+  <div style="margin-top: 1.25rem; font-size: 0.7rem; color: var(--text-35);">Business ID: <span class="mono">biz_rk8472</span> &bull; Data sourced from approved receipts</div>
+</div>
+
+
+<!-- ══════════════════════════════════════ RECEIPTS ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-receipts">
+  <!-- Stats -->
+  <div class="sg" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="sm"><div class="sm-l">Pending Review</div><div class="sm-v mono" style="color: var(--warning);">7</div></div>
+    <div class="sm"><div class="sm-l">Approved Today</div><div class="sm-v mono" style="color: var(--success);">4</div></div>
+    <div class="sm"><div class="sm-l">Total This Month</div><div class="sm-v mono" style="color: var(--accent);">86</div></div>
+    <div class="sm"><div class="sm-l">Avg Response Time</div><div class="sm-v mono" style="color: var(--purple);">2.4h</div></div>
+  </div>
+
+  <!-- Auto-Approve -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Auto-Approve Settings</div>
+      <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">Edit</button>
+    </div>
+    <div class="info" style="background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.25);">When enabled, receipts under the threshold are automatically approved without manual review.</div>
+    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 8px; height: 8px; border-radius: 50%; background: var(--success);"></div><span style="font-weight: 700; font-size: 0.85rem;">Enabled</span></div>
+      <div style="font-size: 0.8rem; color: var(--text-50);">Threshold: <span class="mono" style="font-weight: 700; color: var(--text-70);">$50.00</span></div>
+    </div>
+  </div>
+
+  <!-- Pending Receipts -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Pending Receipt Approvals <span class="badge b-w" style="margin-left: 0.5rem;">7</span></div>
+    </div>
+    <!-- Receipt 1 -->
+    <div class="rc">
+      <div class="rc-thumb"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><div class="rc-thumb-btns"><button>View</button><button>Download</button></div></div>
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><input type="checkbox" style="cursor: pointer;"><span style="font-weight: 700; font-size: 0.95rem;">RCP-71843</span><span class="badge b-w">Pending Review</span></div>
+        <div style="font-size: 0.75rem; color: var(--text-50); margin-bottom: 0.5rem;">Customer: usr_sm414 &bull; Submitted 2 hours ago &bull; Visit #14</div>
+        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <div style="font-size: 0.8rem;"><span style="color: var(--text-50);">Subtotal: </span><span class="mono" style="font-weight: 700;">$34.50</span></div>
+          <div style="font-size: 0.8rem;"><span style="color: var(--text-50);">Your Fee (5%): </span><span class="mono" style="font-weight: 700; color: var(--primary);">$1.73</span></div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button style="padding: 0.4rem 1rem; border-radius: 8px; background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); color: #34d399; font-weight: 700; font-size: 0.75rem; cursor: pointer; font-family: 'Poppins';">Approve</button>
+          <button style="padding: 0.4rem 1rem; border-radius: 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-weight: 700; font-size: 0.75rem; cursor: pointer; font-family: 'Poppins';">Deny</button>
+        </div>
+      </div>
+    </div>
+    <!-- Receipt 2 -->
+    <div class="rc">
+      <div class="rc-thumb"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><div class="rc-thumb-btns"><button>View</button><button>Download</button></div></div>
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><input type="checkbox" style="cursor: pointer;"><span style="font-weight: 700; font-size: 0.95rem;">RCP-71842</span><span class="badge b-w">Pending Review</span></div>
+        <div style="font-size: 0.75rem; color: var(--text-50); margin-bottom: 0.5rem;">Customer: usr_jt203 &bull; Submitted 5 hours ago &bull; Visit #3</div>
+        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <div style="font-size: 0.8rem;"><span style="color: var(--text-50);">Subtotal: </span><span class="mono" style="font-weight: 700;">$27.80</span></div>
+          <div style="font-size: 0.8rem;"><span style="color: var(--text-50);">Your Fee (4%): </span><span class="mono" style="font-weight: 700; color: var(--primary);">$1.11</span></div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button style="padding: 0.4rem 1rem; border-radius: 8px; background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); color: #34d399; font-weight: 700; font-size: 0.75rem; cursor: pointer; font-family: 'Poppins';">Approve</button>
+          <button style="padding: 0.4rem 1rem; border-radius: 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-weight: 700; font-size: 0.75rem; cursor: pointer; font-family: 'Poppins';">Deny</button>
+        </div>
+      </div>
+    </div>
+    <!-- Receipt 3 -->
+    <div class="rc">
+      <div class="rc-thumb"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="13" x2="13" y2="13"/></svg><div class="rc-thumb-btns"><button>View</button><button>Download</button></div></div>
+      <div style="flex: 1;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><input type="checkbox" style="cursor: pointer;"><span style="font-weight: 700; font-size: 0.95rem;">RCP-71841</span><span class="badge b-w">Pending Review</span></div>
+        <div style="font-size: 0.75rem; color: var(--text-50); margin-bottom: 0.5rem;">Customer: usr_er558 &bull; Submitted 6 hours ago &bull; Visit #28</div>
+        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <div style="font-size: 0.8rem;"><span style="color: var(--text-50);">Subtotal: </span><span class="mono" style="font-weight: 700;">$42.15</span></div>
+          <div style="font-size: 0.8rem;"><span style="color: var(--text-50);">Your Fee (6%): </span><span class="mono" style="font-weight: 700; color: var(--primary);">$2.53</span></div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button style="padding: 0.4rem 1rem; border-radius: 8px; background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); color: #34d399; font-weight: 700; font-size: 0.75rem; cursor: pointer; font-family: 'Poppins';">Approve</button>
+          <button style="padding: 0.4rem 1rem; border-radius: 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-weight: 700; font-size: 0.75rem; cursor: pointer; font-family: 'Poppins';">Deny</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progressive Payout Structure -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg> Progressive Payout Structure</div>
+      <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">Edit Structure</button>
+    </div>
+    <div class="info" style="background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25);">Structure Change Limit: <strong>1 change remaining</strong> this year</div>
+    <div style="font-size: 0.8rem; color: var(--text-50); margin-bottom: 1.25rem;">Customers earn increasing cash-back the more they visit &mdash; from 4% up to 10%. Tiers reset on a 365-day rolling window.</div>
+    <div class="tier-g">
+      <div class="tc" style="border-color: rgba(239,68,68,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 1</div><div style="font-size: 0.9rem; font-weight: 800; color: #f87171; margin-bottom: 0.5rem;">Starter</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #f87171; margin-bottom: 0.25rem;">4.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">1 &ndash; 10 visits</div></div>
+      <div class="tc" style="border-color: rgba(249,115,22,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 2</div><div style="font-size: 0.9rem; font-weight: 800; color: #fb923c; margin-bottom: 0.5rem;">Regular</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #fb923c; margin-bottom: 0.25rem;">5.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">11 &ndash; 20 visits</div></div>
+      <div class="tc" style="border-color: rgba(245,158,11,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 3</div><div style="font-size: 0.9rem; font-weight: 800; color: #fbbf24; margin-bottom: 0.5rem;">Favorite</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #fbbf24; margin-bottom: 0.25rem;">6.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">21 &ndash; 30 visits</div></div>
+      <div class="tc hi" style="border-color: rgba(234,179,8,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 4</div><div style="font-size: 0.9rem; font-weight: 800; color: #facc15; margin-bottom: 0.5rem;">VIP</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #facc15; margin-bottom: 0.25rem;">7.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">31 &ndash; 40 visits</div></div>
+      <div class="tc" style="border-color: rgba(132,204,22,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 5</div><div style="font-size: 0.9rem; font-weight: 800; color: #a3e635; margin-bottom: 0.5rem;">Elite</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #a3e635; margin-bottom: 0.25rem;">8.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">41 &ndash; 50 visits</div></div>
+      <div class="tc" style="border-color: rgba(34,197,94,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 6</div><div style="font-size: 0.9rem; font-weight: 800; color: #4ade80; margin-bottom: 0.5rem;">Legend</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #4ade80; margin-bottom: 0.25rem;">9.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">51 &ndash; 60 visits</div></div>
+      <div class="tc" style="border-color: rgba(20,184,166,0.3);"><div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-35); margin-bottom: 0.5rem;">Tier 7</div><div style="font-size: 0.9rem; font-weight: 800; color: #2dd4bf; margin-bottom: 0.5rem;">Ultimate</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: #2dd4bf; margin-bottom: 0.25rem;">10.0%</div><div style="font-size: 0.7rem; color: var(--text-50);">61+ visits</div></div>
+    </div>
+  </div>
+
+  <!-- Payout History -->
+  <div class="gc" style="margin-bottom: 1.5rem; overflow-x: auto;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Progressive Payout History</div>
+    <table class="dt">
+      <thead><tr><th>Date</th><th class="right">Amount</th><th class="right">Receipts</th><th>Payment Method</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight: 700;">Mar 2026</td><td class="right mono">$762.45</td><td class="right mono">78</td><td>ACH &bull; ****4821</td><td><span class="badge b-s">Paid</span></td></tr>
+        <tr><td style="font-weight: 700;">Feb 2026</td><td class="right mono">$691.20</td><td class="right mono">72</td><td>ACH &bull; ****4821</td><td><span class="badge b-s">Paid</span></td></tr>
+        <tr><td style="font-weight: 700;">Jan 2026</td><td class="right mono">$583.70</td><td class="right mono">64</td><td>ACH &bull; ****4821</td><td><span class="badge b-s">Paid</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Monthly Statement Download -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Monthly Receipt Statement</div>
+    <div class="info" style="background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.25);">Download a detailed Excel statement of all receipts, payouts, and fees for any month.</div>
+    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
+      <input type="month" value="2026-04" class="fi" style="width: 200px;">
+      <button class="btn-grad" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Download Statement (.xlsx)</button>
+      <span style="font-size: 0.75rem; color: var(--text-50);">86 receipts this month</span>
+    </div>
+  </div>
+
+  <!-- Recent Receipt History -->
+  <div class="gc" style="overflow-x: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Recent Receipt History</div>
+      <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">CSV</button>
+    </div>
+    <table class="dt">
+      <thead><tr><th>Receipt ID</th><th>Customer</th><th>Date</th><th class="right">Subtotal</th><th class="right">Payout</th><th>Tier</th><th>Status</th><th>Dispute</th></tr></thead>
+      <tbody>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71843</td><td>usr_sm414</td><td>Apr 16</td><td class="right mono">$34.50</td><td class="right mono" style="color: var(--primary);">$1.73</td><td><span class="badge b-w">Tier 2</span></td><td><span class="badge b-w">Pending</span></td><td>&mdash;</td></tr>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71842</td><td>usr_jt203</td><td>Apr 15</td><td class="right mono">$27.80</td><td class="right mono" style="color: var(--primary);">$1.11</td><td><span class="badge b-d">Tier 1</span></td><td><span class="badge b-w">Pending</span></td><td>&mdash;</td></tr>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71841</td><td>usr_er558</td><td>Apr 15</td><td class="right mono">$42.15</td><td class="right mono" style="color: var(--primary);">$2.53</td><td><span class="badge b-i">Tier 3</span></td><td><span class="badge b-w">Pending</span></td><td>&mdash;</td></tr>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71840</td><td>usr_dk017</td><td>Apr 14</td><td class="right mono">$29.00</td><td class="right mono" style="color: var(--primary);">$1.16</td><td><span class="badge b-d">Tier 1</span></td><td><span class="badge b-s">Approved</span></td><td style="font-size: 0.7rem; color: var(--text-50);">28 days left</td></tr>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71839</td><td>usr_lw882</td><td>Apr 14</td><td class="right mono">$56.40</td><td class="right mono" style="color: var(--primary);">$3.95</td><td><span class="badge b-p">Tier 4</span></td><td><span class="badge b-s">Approved</span></td><td style="font-size: 0.7rem; color: var(--text-50);">28 days left</td></tr>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71838</td><td>usr_mb741</td><td>Apr 13</td><td class="right mono">$38.75</td><td class="right mono" style="color: var(--primary);">$1.94</td><td><span class="badge b-w">Tier 2</span></td><td><span class="badge b-s">Approved</span></td><td style="font-size: 0.7rem; color: var(--text-50);">27 days left</td></tr>
+        <tr><td class="mono" style="font-size: 0.7rem;">RCP-71837</td><td>usr_ac329</td><td>Apr 12</td><td class="right mono">$21.50</td><td class="right mono" style="color: var(--primary);">$0.86</td><td><span class="badge b-d">Tier 1</span></td><td><span class="badge b-s">Approved</span></td><td style="font-size: 0.7rem; color: var(--text-50);">26 days left</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ MEDIA ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-media">
+  <div class="sg" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="sm"><div class="sm-l">Active Videos</div><div class="sm-v mono" style="color: var(--primary);">3 / 10</div></div>
+    <div class="sm"><div class="sm-l">Library Photos</div><div class="sm-v mono" style="color: var(--accent);">14</div></div>
+    <div class="sm"><div class="sm-l">Pending Approval</div><div class="sm-v mono" style="color: var(--warning);">5</div></div>
+  </div>
+
+  <!-- UGC Pending -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Submissions Pending Your Approval <span class="badge b-w" style="margin-left: 0.5rem;">5</span></div>
+    <div class="rc"><div class="rc-thumb" style="width: 120px; height: 80px;"><span style="font-size: 1.5rem; opacity: 0.3;">&#128247;</span></div><div style="flex: 1;"><div style="font-weight: 700; font-size: 0.9rem;">Great burger night!</div><div style="font-size: 0.75rem; color: var(--text-50); margin-bottom: 0.5rem;">by usr_sm414 &bull; Apr 16, 2026</div><div style="display: flex; gap: 0.5rem;"><span class="tag">food</span><span class="tag">dinner</span></div></div><div style="display: flex; gap: 0.35rem; flex-direction: column;"><button style="padding: 0.3rem 0.75rem; border-radius: 6px; background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); color: #34d399; font-weight: 700; font-size: 0.7rem; cursor: pointer; font-family: 'Poppins';">Approve</button><button style="padding: 0.3rem 0.75rem; border-radius: 6px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-weight: 700; font-size: 0.7rem; cursor: pointer; font-family: 'Poppins';">Reject</button></div></div>
+    <div class="rc"><div class="rc-thumb" style="width: 120px; height: 80px;"><span style="font-size: 1.5rem; opacity: 0.3;">&#128247;</span></div><div style="flex: 1;"><div style="font-weight: 700; font-size: 0.9rem;">Patio vibes</div><div style="font-size: 0.75rem; color: var(--text-50); margin-bottom: 0.5rem;">by usr_jt203 &bull; Apr 15, 2026</div><div style="display: flex; gap: 0.5rem;"><span class="tag">atmosphere</span><span class="tag">patio</span></div></div><div style="display: flex; gap: 0.35rem; flex-direction: column;"><button style="padding: 0.3rem 0.75rem; border-radius: 6px; background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); color: #34d399; font-weight: 700; font-size: 0.7rem; cursor: pointer; font-family: 'Poppins';">Approve</button><button style="padding: 0.3rem 0.75rem; border-radius: 6px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-weight: 700; font-size: 0.7rem; cursor: pointer; font-family: 'Poppins';">Reject</button></div></div>
+  </div>
+
+  <!-- Photo Gallery -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div style="font-weight: 800; font-size: 1.1rem;">Photos</div>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">Reorder Mode</button>
+        <button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">Guide</button>
+      </div>
+    </div>
+    <div class="media-g">
+      <div class="media-i" style="background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(239,68,68,0.1));"><span style="font-size: 2rem; opacity: 0.3;">&#127869;</span><div class="media-lbl"><span class="badge b-s" style="font-size: 0.55rem; margin-right: 0.25rem;">MAIN</span> Signature burger</div></div>
+      <div class="media-i" style="background: linear-gradient(135deg, rgba(20,184,166,0.15), rgba(6,182,212,0.1));"><span style="font-size: 2rem; opacity: 0.3;">&#127863;</span><div class="media-lbl">Bar area at night</div></div>
+      <div class="media-i" style="background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.1));"><span style="font-size: 2rem; opacity: 0.3;">&#127860;</span><div class="media-lbl">Patio seating</div></div>
+      <div class="media-i" style="background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(249,115,22,0.1));"><span style="font-size: 2rem; opacity: 0.3;">&#127828;</span><div class="media-lbl">Weekend brunch</div></div>
+      <div class="media-i" style="background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(20,184,166,0.1));"><span style="font-size: 2rem; opacity: 0.3;">&#127858;</span><div class="media-lbl">Chef's pasta</div></div>
+      <div class="media-i" style="background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1));"><span style="font-size: 2rem; opacity: 0.3;">&#127866;</span><div class="media-lbl">Craft cocktails</div></div>
+      <div class="media-i" style="background: rgba(255,255,255,0.04); border-style: dashed;"><div style="text-align: center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.3;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><div style="font-size: 0.7rem; color: var(--text-35); margin-top: 0.25rem;">Upload</div></div></div>
+    </div>
+  </div>
+
+  <!-- Videos -->
+  <div class="gc">
+    <div style="font-weight: 800; font-size: 1.1rem; margin-bottom: 1rem;">Videos <span style="font-size: 0.75rem; color: var(--text-50); font-weight: 600;">3 / 10 active</span></div>
+    <div class="media-g" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
+      <div class="media-i" style="aspect-ratio: 16/9; background: linear-gradient(135deg, rgba(168,85,247,0.1), rgba(20,184,166,0.1));"><span style="font-size: 2.5rem; opacity: 0.4;">&#9654;</span><div class="media-lbl">Happy hour promo &bull; 0:28</div></div>
+      <div class="media-i" style="aspect-ratio: 16/9; background: linear-gradient(135deg, rgba(249,115,22,0.1), rgba(245,158,11,0.1));"><span style="font-size: 2.5rem; opacity: 0.4;">&#9654;</span><div class="media-lbl">Kitchen tour &bull; 0:45</div></div>
+      <div class="media-i" style="aspect-ratio: 16/9; background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(16,185,129,0.1));"><span style="font-size: 2.5rem; opacity: 0.4;">&#9654;</span><div class="media-lbl">Live music night &bull; 0:32</div></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ EVENTS ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-events">
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+    <div><div style="font-size: 1.5rem; font-weight: 900; margin-bottom: 0.25rem;">Event Management</div><div style="font-size: 0.85rem; color: var(--text-50);">Create and manage events to attract new customers</div></div>
+    <div style="display: flex; gap: 0.5rem;">
+      <div style="display: flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--glass-border);"><button class="btn-ghost" style="border-radius: 0; border: none; padding: 0.4rem 0.85rem; font-size: 0.75rem; background: rgba(20,184,166,0.15);">List</button><button class="btn-ghost" style="border-radius: 0; border: none; padding: 0.4rem 0.85rem; font-size: 0.75rem;">Calendar</button></div>
+      <button class="btn-grad" style="padding: 0.5rem 1rem; font-size: 0.8rem;">+ Create New Event</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="sg" style="grid-template-columns: repeat(5, 1fr);">
+    <div class="sm"><div class="sm-l">Total Views</div><div class="sm-v mono" style="color: var(--purple);">1,247</div></div>
+    <div class="sm"><div class="sm-l">Upcoming</div><div class="sm-v mono" style="color: var(--primary);">3</div></div>
+    <div class="sm"><div class="sm-l">Going (Yes)</div><div class="sm-v mono" style="color: var(--success);">74</div></div>
+    <div class="sm"><div class="sm-l">This Month</div><div class="sm-v mono" style="color: var(--warning);">2</div></div>
+    <div class="sm"><div class="sm-l">Past Events</div><div class="sm-v mono" style="color: var(--accent);">12</div></div>
+  </div>
+
+  <!-- Event Cards (live view + edit split) -->
+  <div class="ev">
+    <div class="ev-hero" style="background: linear-gradient(135deg, rgba(20,184,166,0.2), rgba(6,182,212,0.3));">
+      <div style="position: absolute; top: 1rem; left: 1rem;"><span class="badge b-p">Trivia</span></div>
+      <div style="display: flex; gap: 1rem; align-items: flex-end;">
+        <div style="background: rgba(0,0,0,0.6); padding: 0.5rem 0.75rem; border-radius: 8px; text-align: center; line-height: 1;"><div style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; opacity: 0.7;">APR</div><div style="font-size: 1.5rem; font-weight: 900;">22</div><div style="font-size: 0.6rem; opacity: 0.7;">TUE</div></div>
+        <div><div style="font-size: 1.1rem; font-weight: 800;">Taco Tuesday Trivia Night</div><div style="font-size: 0.8rem; opacity: 0.7;">7:00 PM &ndash; 10:00 PM</div></div>
+      </div>
+    </div>
+    <div class="ev-body">
+      <div style="font-size: 0.85rem; color: var(--text-70); margin-bottom: 0.75rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">Join us for trivia with $2 street tacos and half-price margaritas. Teams of up to 6. Prizes for top 3 teams.</div>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;"><span class="tag">trivia</span><span class="tag">tacos</span><span class="tag">margaritas</span><span style="padding: 0.25rem 0.75rem; border-radius: 20px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); font-size: 0.7rem; font-weight: 600; color: var(--success);">Free Entry</span></div>
+      <div style="display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-50);">
+        <span style="color: var(--success);">&#10003; 24 Going</span>
+        <span>&#126; 8 Maybe</span>
+        <span style="color: var(--text-35);">&#10005; 2 No</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ev">
+    <div class="ev-hero" style="background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(236,72,153,0.2));">
+      <div style="position: absolute; top: 1rem; left: 1rem;"><span class="badge b-p">Live Music</span></div>
+      <div style="display: flex; gap: 1rem; align-items: flex-end;">
+        <div style="background: rgba(0,0,0,0.6); padding: 0.5rem 0.75rem; border-radius: 8px; text-align: center; line-height: 1;"><div style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; opacity: 0.7;">APR</div><div style="font-size: 1.5rem; font-weight: 900;">25</div><div style="font-size: 0.6rem; opacity: 0.7;">FRI</div></div>
+        <div><div style="font-size: 1.1rem; font-weight: 800;">Live Music: The Midtown Groove</div><div style="font-size: 0.8rem; opacity: 0.7;">8:00 PM &ndash; 11:00 PM</div></div>
+      </div>
+    </div>
+    <div class="ev-body">
+      <div style="font-size: 0.85rem; color: var(--text-70); margin-bottom: 0.75rem;">Local Omaha band playing funk, soul, and R&amp;B covers. Full bar menu available. Outdoor seating &mdash; weather permitting.</div>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;"><span class="tag">live music</span><span class="tag">patio</span><span style="padding: 0.25rem 0.75rem; border-radius: 20px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); font-size: 0.7rem; font-weight: 600; color: var(--success);">No Cover</span></div>
+      <div style="display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-50);"><span style="color: var(--success);">&#10003; 38 Going</span><span>&#126; 12 Maybe</span></div>
+    </div>
+  </div>
+
+  <div class="ev">
+    <div class="ev-hero" style="background: linear-gradient(135deg, rgba(249,115,22,0.2), rgba(245,158,11,0.2));">
+      <div style="position: absolute; top: 1rem; left: 1rem;"><span class="badge b-p">Tasting</span></div>
+      <div style="display: flex; gap: 1rem; align-items: flex-end;">
+        <div style="background: rgba(0,0,0,0.6); padding: 0.5rem 0.75rem; border-radius: 8px; text-align: center; line-height: 1;"><div style="font-size: 0.6rem; font-weight: 700; text-transform: uppercase; opacity: 0.7;">MAY</div><div style="font-size: 1.5rem; font-weight: 900;">3</div><div style="font-size: 0.6rem; opacity: 0.7;">SAT</div></div>
+        <div><div style="font-size: 1.1rem; font-weight: 800;">Rosie's Spring Wine Tasting</div><div style="font-size: 0.8rem; opacity: 0.7;">6:00 PM &ndash; 9:00 PM</div></div>
+      </div>
+    </div>
+    <div class="ev-body">
+      <div style="font-size: 0.85rem; color: var(--text-70); margin-bottom: 0.75rem;">Sample 8 wines from local Nebraska vineyards. Paired with appetizer bites from Chef Rosie. Limited to 30 guests.</div>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;"><span class="tag">wine</span><span class="tag">tasting</span><span style="padding: 0.25rem 0.75rem; border-radius: 20px; background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3); font-size: 0.7rem; font-weight: 600; color: var(--purple);">$15/person</span></div>
+      <div style="display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-50);"><span style="color: var(--success);">&#10003; 12 Going</span><span>18 spots left</span></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ ADVERTISING ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-advertising">
+  <!-- Current Add-ons & Costs -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="two">
+      <div>
+        <div style="font-weight: 800; margin-bottom: 1rem;">Active Premium Add-ons</div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-size: 0.85rem;">Professional Video Hosting</span><span class="mono" style="font-size: 0.8rem; color: var(--primary);">$29/mo</span></div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-size: 0.85rem;">Priority Placement</span><span class="mono" style="font-size: 0.8rem; color: var(--primary);">$49/mo</span></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight: 800; margin-bottom: 1rem; color: var(--secondary);">This Month's Ad &amp; Add-on Costs</div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem;"><span style="color: var(--text-50);">Video Hosting</span><span class="mono">$29.00</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem;"><span style="color: var(--text-50);">Priority Placement</span><span class="mono">$49.00</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem;"><span style="color: var(--text-50);">Active Campaigns</span><span class="mono">$0.00</span></div>
+          <div style="border-top: 1px solid var(--glass-border); padding-top: 0.5rem; margin-top: 0.25rem; display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 800;"><span>Total Due</span><span class="mono" style="color: var(--secondary);">$78.00</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spend Chart -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="sh" style="margin-bottom: 0;">Ad Spend History</div>
+      <div style="display: flex; gap: 0.5rem;"><button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem; background: rgba(20,184,166,0.15); border-color: rgba(20,184,166,0.35);">Monthly</button><button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">Yearly</button></div>
+    </div>
+    <div class="chart" style="height: 140px;">
+      <div class="bar" style="height: 20%; background: var(--secondary);"><div class="tip">Nov: $78</div></div>
+      <div class="bar" style="height: 45%; background: var(--secondary);"><div class="tip">Dec: $177</div></div>
+      <div class="bar" style="height: 20%; background: var(--secondary);"><div class="tip">Jan: $78</div></div>
+      <div class="bar" style="height: 20%; background: var(--secondary);"><div class="tip">Feb: $78</div></div>
+      <div class="bar" style="height: 55%; background: var(--secondary);"><div class="tip">Mar: $177</div></div>
+      <div class="bar" style="height: 20%; background: var(--secondary);"><div class="tip">Apr: $78</div></div>
+    </div>
+    <div class="chart-lbl"><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span></div>
+  </div>
+
+  <!-- Spotlight Campaigns -->
+  <div style="font-weight: 800; font-size: 1.1rem; margin-bottom: 1rem;">Spotlight Campaigns</div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="ac"><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.1em;">1-Day</div><div style="font-weight: 800; font-size: 1rem; margin-top: 0.25rem;">Spotlight</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: var(--warning); margin: 0.75rem 0;">$99</div><div style="font-size: 0.75rem; color: var(--text-50);">24 hours at the top of the discovery feed</div><button class="btn-grad" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 0.8rem;">Schedule Campaign</button></div>
+    <div class="ac" style="border-color: rgba(245,158,11,0.25);"><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.1em;">7-Day</div><div style="font-weight: 800; font-size: 1rem; margin-top: 0.25rem;">Spotlight</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: var(--warning); margin: 0.75rem 0;">$599</div><div style="font-size: 0.75rem; color: var(--text-50);">Full week + push notification to nearby users</div><button class="btn-grad" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 0.8rem;">Schedule Campaign</button></div>
+    <div class="ac" style="border-color: rgba(249,115,22,0.25);"><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.1em;">14-Day</div><div style="font-weight: 800; font-size: 1rem; margin-top: 0.25rem;">Spotlight</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: var(--secondary); margin: 0.75rem 0;">$999</div><div style="font-size: 0.75rem; color: var(--text-50);">Two weeks featured + 3 push notifications + report</div><button class="btn-grad" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 0.8rem;">Schedule Campaign</button></div>
+  </div>
+
+  <!-- Push Campaigns -->
+  <div style="font-weight: 800; font-size: 1.1rem; margin-bottom: 1rem;">Push Campaigns</div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="ac"><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.1em;">Local</div><div style="font-weight: 800; font-size: 1rem; margin-top: 0.25rem;">100 Mile Push</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: var(--accent); margin: 0.75rem 0;">$2,599</div><div style="font-size: 0.75rem; color: var(--text-50);">Push notification to all users within 100 miles</div><button class="btn-grad" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 0.8rem;">Schedule Campaign</button></div>
+    <div class="ac" style="border-color: rgba(168,85,247,0.25);"><div style="font-size: 0.7rem; font-weight: 700; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.1em;">National</div><div style="font-weight: 800; font-size: 1rem; margin-top: 0.25rem;">Tour Wide Push</div><div class="mono" style="font-size: 1.75rem; font-weight: 900; color: var(--purple); margin: 0.75rem 0;">$4,599</div><div style="font-size: 0.75rem; color: var(--text-50);">Push notification to all LetsGo users nationwide</div><button class="btn-grad" style="margin-top: 1rem; width: 100%; justify-content: center; font-size: 0.8rem;">Schedule Campaign</button></div>
+  </div>
+
+  <!-- Campaign History -->
+  <div class="gc" style="overflow-x: auto;">
+    <div class="sh">Campaign History</div>
+    <table class="dt">
+      <thead><tr><th>Campaign</th><th>Dates</th><th class="right">Cost</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>7-Day Spotlight</td><td>Mar 10 &ndash; Mar 17</td><td class="right mono">$599.00</td><td><span class="badge b-s">Completed</span></td></tr>
+        <tr><td>1-Day Spotlight</td><td>Dec 23</td><td class="right mono">$99.00</td><td><span class="badge b-s">Completed</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ BILLING ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-billing">
+  <!-- Expected Bill -->
+  <div class="gc" style="margin-bottom: 2rem; background: linear-gradient(135deg, rgba(20,184,166,0.12), rgba(6,182,212,0.12));">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+      <div><div style="font-size: 0.8rem; color: var(--text-50); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">Expected Monthly Bill</div><div class="mono" style="font-size: 3rem; font-weight: 900; color: var(--primary); margin-bottom: 0.5rem;">$940.27</div><span class="badge b-w">April 2026 &mdash; Pending</span></div>
+    </div>
+    <div class="bb">
+      <div class="bi" style="border-color: var(--primary);"><span class="bi-l">Premium Plan</span><span class="bi-v mono">$100.00</span></div>
+      <div class="bi" style="border-color: var(--accent);"><span class="bi-l">Progressive Payouts</span><span class="bi-v mono">$847.12</span></div>
+      <div class="bi" style="border-color: var(--warning);"><span class="bi-l">CC Processing (3.5%)</span><span class="bi-v mono">$33.15</span></div>
+      <div class="bi" style="border-color: var(--purple);"><span class="bi-l">Ad Campaigns</span><span class="bi-v mono">$0.00</span></div>
+      <div class="bi" style="border-color: var(--success);"><span class="bi-l">Adjustments / Credits</span><span class="bi-v mono" style="color: var(--success);">-$40.00</span></div>
+    </div>
+  </div>
+
+  <!-- Pending Adjustments -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Pending Account Adjustments</div>
+    <div style="font-size: 0.8rem; color: var(--text-50); margin-bottom: 1rem;">These adjustments will appear on your next invoice.</div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><div><span style="font-weight: 700; font-size: 0.85rem;">Onboarding credit</span><div style="font-size: 0.7rem; color: var(--text-35);">Apr 1, 2026</div></div><span class="mono" style="color: var(--success); font-weight: 800;">-$40.00</span></div>
+    </div>
+    <div style="display: flex; gap: 2rem; margin-top: 0.75rem; font-size: 0.8rem; font-weight: 700;">
+      <span>Credits: <span class="mono" style="color: var(--success);">$40.00</span></span>
+      <span>Charges: <span class="mono">$0.00</span></span>
+    </div>
+  </div>
+
+  <!-- Plans -->
+  <div class="sh">Choose Your Package</div>
+  <div style="font-size: 0.85rem; color: var(--text-50); margin-bottom: 1.5rem;">Choose Basic or Premium to match your business needs.</div>
+  <div class="two" style="margin-bottom: 2rem;">
+    <div class="plan-card basic">
+      <div style="font-size: 1.5rem; font-weight: 900; color: var(--secondary); margin-bottom: 0.25rem;">Basic</div>
+      <div style="font-size: 2.25rem; font-weight: 900; margin-bottom: 0.25rem;">No Upfront Costs</div>
+      <div style="font-size: 0.8rem; color: var(--text-50); margin-bottom: 1rem;">Pay later</div>
+      <ul>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Receipt redemption &amp; approvals</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Progressive payout management</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Basic analytics dashboard</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Media gallery (up to 10 photos)</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Support &amp; help center</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 10% platform fee (capped $5)</li>
+        <li style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.75rem; margin-top: 0.5rem; font-weight: 700; font-size: 0.7rem; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.05em;">Feature Access</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Discovery Feed</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 5v3v1 &amp; Group Vote</li>
+      </ul>
+      <button class="btn-ghost" style="margin-top: 1rem; width: 100%; justify-content: center;">Switch to Basic</button>
+    </div>
+    <div class="plan-card prem" style="position: relative;">
+      <div class="pop-badge">MOST POPULAR</div>
+      <div style="font-size: 1.5rem; font-weight: 900; color: var(--primary); margin-bottom: 0.25rem;">Premium Subscription</div>
+      <div class="mono" style="font-size: 2.25rem; font-weight: 900; color: var(--primary); margin-bottom: 1rem;">$100<span style="font-size: 1rem; font-weight: 600;">/month</span></div>
+      <ul>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Everything in Basic</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Event creation &amp; management</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Advertising &amp; spotlight campaigns</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Advanced analytics &amp; competitor data</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Unlimited media uploads</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Customer rating insights</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Priority support</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> No LetsGo platform fee</li>
+        <li style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.75rem; margin-top: 0.5rem; font-weight: 700; font-size: 0.7rem; color: var(--text-35); text-transform: uppercase; letter-spacing: 0.05em;">Feature Access</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> All Basic features</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Events, Advertising, Competitor Analysis</li>
+      </ul>
+      <div class="cur-badge">Your Current Plan</div>
+    </div>
+  </div>
+
+  <!-- Payment Methods -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh">Billing &amp; Payment</div>
+    <div class="info" style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);">Your payment information is encrypted and securely stored via Stripe.</div>
+    <div class="two" style="margin-bottom: 1rem;">
+      <div class="pm-card pref">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;"><span style="font-weight: 800;">Bank Account (ACH)</span><span class="badge b-s" style="font-size: 0.6rem;">PREFERRED</span></div>
+        <div style="font-size: 0.8rem; color: var(--text-50); display: flex; flex-direction: column; gap: 0.25rem;">
+          <span>Bank: <span style="color: var(--text-70);">First National Bank</span></span>
+          <span>Type: <span style="color: var(--text-70);">Checking</span></span>
+          <span>Account: <span class="mono" style="color: var(--text-70);">****4821</span></span>
+        </div>
+      </div>
+      <div class="pm-card">
+        <div style="font-weight: 800; margin-bottom: 0.75rem;">Credit / Debit Card</div>
+        <div style="font-size: 0.8rem; color: var(--text-50); display: flex; flex-direction: column; gap: 0.25rem;">
+          <span>Card: <span style="color: var(--text-70);">VISA ****9134</span></span>
+          <span>Expires: <span class="mono" style="color: var(--text-70);">08/2028</span></span>
+        </div>
+        <button class="btn-ghost" style="margin-top: 0.75rem; padding: 0.3rem 0.75rem; font-size: 0.7rem;">Set as Preferred</button>
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <button class="btn-grad" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Update Card</button>
+      <button class="btn-ghost" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-color: rgba(6,182,212,0.3); color: var(--accent);">Update Bank Account</button>
+      <button class="btn-ghost" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Use Stripe Link</button>
+    </div>
+  </div>
+
+  <!-- Invoice History -->
+  <div class="gc" style="overflow-x: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Monthly Billing Summary</div>
+      <div style="display: flex; gap: 0.5rem;"><button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">CSV</button><button class="btn-ghost" style="padding: 0.35rem 0.75rem; font-size: 0.7rem;">XLSX</button></div>
+    </div>
+    <table class="dt">
+      <thead><tr><th>Month</th><th class="right">Premium</th><th class="right">Progressive</th><th class="right">CC Fees</th><th class="right">Total</th><th>Status</th><th>Invoice</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight: 700;">Apr 2026</td><td class="right mono">$100.00</td><td class="right mono">$847.12</td><td class="right mono">$33.15</td><td class="right mono" style="font-weight: 800; color: var(--success);">$940.27</td><td><span class="badge b-w">Pending</span></td><td>&mdash;</td></tr>
+        <tr><td style="font-weight: 700;">Mar 2026</td><td class="right mono">$100.00</td><td class="right mono">$762.45</td><td class="right mono">$30.19</td><td class="right mono" style="font-weight: 800; color: var(--success);">$892.64</td><td><span class="badge b-s">Paid</span></td><td><button class="btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem;">View</button></td></tr>
+        <tr><td style="font-weight: 700;">Feb 2026</td><td class="right mono">$100.00</td><td class="right mono">$691.20</td><td class="right mono">$27.69</td><td class="right mono" style="font-weight: 800; color: var(--success);">$818.89</td><td><span class="badge b-s">Paid</span></td><td><button class="btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem;">View</button></td></tr>
+        <tr><td style="font-weight: 700;">Jan 2026</td><td class="right mono">$100.00</td><td class="right mono">$583.70</td><td class="right mono">$23.93</td><td class="right mono" style="font-weight: 800; color: var(--success);">$707.63</td><td><span class="badge b-s">Paid</span></td><td><button class="btn-ghost" style="padding: 0.2rem 0.5rem; font-size: 0.65rem;">View</button></td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top: 0.75rem; font-size: 0.7rem; color: var(--text-35);">Billing timing: Charges post once at month end. Invoices generate on the 1st.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ PROFILE ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-profile">
+  <!-- Info banner -->
+  <div class="info" style="background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.25); margin-bottom: 1.5rem;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Edits are local-only. Nothing is saved until you click <strong>Publish Changes</strong> in the header.
+  </div>
+
+  <!-- Business Info -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.18V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Business Information</div>
+    <div class="form-grid">
+      <div class="fg"><label class="fl">Business Name</label><input class="fi" value="Rosie's Kitchen & Bar" style="opacity: 0.6; cursor: not-allowed;" disabled><div style="font-size: 0.65rem; color: var(--text-35); margin-top: 0.25rem;">Contact customer service to change</div></div>
+      <div class="fg"><label class="fl">Business Type</label><select class="fi"><option>Restaurant & Bar</option><option>Activity</option><option>Salon & Beauty</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Street Address</label><input class="fi" value="3847 Farnam Street"><div style="font-size: 0.65rem; color: var(--text-35); margin-top: 0.25rem;">Google Places will auto-fill City/State/Zip</div></div>
+    <div class="form-3">
+      <div class="fg"><label class="fl">City</label><input class="fi" value="Omaha"></div>
+      <div class="fg"><label class="fl">State</label><select class="fi"><option>NE</option></select></div>
+      <div class="fg"><label class="fl">Zip</label><input class="fi" value="68131"></div>
+    </div>
+    <div class="form-grid">
+      <div class="fg"><label class="fl">Business Phone</label><input class="fi" value="(402) 555-0187"></div>
+      <div class="fg"><label class="fl">Contact Email</label><input class="fi" value="hello@rosieskitchen.com"></div>
+    </div>
+    <div class="fg"><label class="fl">Website</label><input class="fi" value="www.rosieskitchenomaha.com"></div>
+    <div class="fg"><label class="fl">Description</label><textarea class="fi" rows="3">Neighborhood American kitchen & bar in Midtown Omaha. Scratch-made comfort food, craft cocktails, and a welcoming patio. Known for our signature burgers, weekend brunch, and Tuesday trivia nights. Family-friendly until 9 PM.</textarea></div>
+    <div class="form-3">
+      <div class="fg"><label class="fl">Category</label><select class="fi"><option>American</option></select></div>
+      <div class="fg"><label class="fl">Price</label><select class="fi"><option>$$</option></select></div>
+      <div class="fg"><label class="fl">Age</label><select class="fi"><option>All Ages</option></select></div>
+    </div>
+  </div>
+
+  <!-- Hours -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Operating Hours</div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-weight: 700; font-size: 0.85rem;">Monday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">11:00 AM &ndash; 10:00 PM</span></div>
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-weight: 700; font-size: 0.85rem;">Tuesday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">11:00 AM &ndash; 11:00 PM</span></div>
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-weight: 700; font-size: 0.85rem;">Wednesday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">11:00 AM &ndash; 10:00 PM</span></div>
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-weight: 700; font-size: 0.85rem;">Thursday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">11:00 AM &ndash; 11:00 PM</span></div>
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-weight: 700; font-size: 0.85rem;">Friday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">11:00 AM &ndash; 12:00 AM</span></div>
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);"><span style="font-weight: 700; font-size: 0.85rem;">Saturday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">9:00 AM &ndash; 12:00 AM</span></div>
+      <div style="display: grid; grid-template-columns: 120px 100px 1fr; align-items: center; gap: 0.75rem; padding: 0.35rem 0;"><span style="font-weight: 700; font-size: 0.85rem;">Sunday</span><span class="badge b-s" style="justify-content: center;">Open</span><span style="font-size: 0.85rem; color: var(--text-70);">9:00 AM &ndash; 9:00 PM</span></div>
+    </div>
+  </div>
+
+  <!-- Tags -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> Tags &amp; Keywords</div>
+    <div style="margin-bottom: 1rem;"><span class="tag">American</span><span class="tag">Burgers</span><span class="tag">Brunch</span><span class="tag">Craft Cocktails</span><span class="tag">Patio Dining</span><span class="tag">Family Friendly</span><span class="tag">Trivia Night</span><span class="tag">Live Music</span><span class="tag">Happy Hour</span><span class="tag">Late Night</span></div>
+    <input class="fi" placeholder="Search and add tags..." style="max-width: 400px;">
+  </div>
+
+  <!-- Rep -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Business Representative</div>
+    <div class="form-grid">
+      <div class="fg"><label class="fl">Name</label><input class="fi" value="Rosie Ortega"></div>
+      <div class="fg"><label class="fl">Title / Role</label><input class="fi" value="Owner"></div>
+      <div class="fg"><label class="fl">Email</label><input class="fi" value="rosie@rosieskitchen.com"></div>
+      <div class="fg"><label class="fl">Phone</label><input class="fi" value="(402) 555-0187"></div>
+    </div>
+  </div>
+
+  <!-- Team -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Team Members</div>
+    <div class="tr-m"><div class="tr-av">RO</div><div style="flex: 1;"><div style="font-weight: 700; font-size: 0.9rem;">Rosie Ortega</div><div style="font-size: 0.75rem; color: var(--text-50);">rosie@rosieskitchen.com</div></div><span class="badge b-s">Owner</span><button class="btn-ghost" style="padding: 0.25rem 0.5rem; font-size: 0.65rem;">Change Password</button></div>
+    <div class="tr-m"><div class="tr-av" style="background: linear-gradient(135deg, var(--secondary), var(--warning));">JM</div><div style="flex: 1;"><div style="font-weight: 700; font-size: 0.9rem;">Jake Martinez</div><div style="font-size: 0.75rem; color: var(--text-50);">jake@rosieskitchen.com &bull; Added Mar 2026</div></div><span class="badge b-i">Manager</span><button class="btn-ghost" style="padding: 0.25rem 0.5rem; font-size: 0.65rem; color: var(--danger); border-color: rgba(239,68,68,0.3);">Remove</button></div>
+    <div class="tr-m" style="border-bottom: none;"><div class="tr-av" style="background: linear-gradient(135deg, var(--purple), var(--danger));">TP</div><div style="flex: 1;"><div style="font-weight: 700; font-size: 0.9rem;">Taylor Park</div><div style="font-size: 0.75rem; color: var(--text-50);">taylor@rosieskitchen.com &bull; Added Apr 2026</div></div><span class="badge b-p">Staff</span><button class="btn-ghost" style="padding: 0.25rem 0.5rem; font-size: 0.65rem; color: var(--danger); border-color: rgba(239,68,68,0.3);">Remove</button></div>
+    <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <input class="fi" placeholder="Email address" style="max-width: 250px;">
+      <select class="fi" style="width: 120px;"><option>Staff</option><option>Manager</option></select>
+      <button class="btn-grad" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Add Member</button>
+    </div>
+    <div style="font-size: 0.7rem; color: var(--text-35); margin-top: 0.5rem;">Person must have a LetsGo account first.</div>
+  </div>
+
+  <!-- Account Actions -->
+  <div class="gc" style="border-color: rgba(239,68,68,0.2);">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Account Actions</div>
+    <div class="info" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);">These actions will affect your account visibility and access on LetsGo.</div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <button style="padding: 0.5rem 1rem; border-radius: 8px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #34d399; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: 'Poppins';">Reinstate Account</button>
+      <button style="padding: 0.5rem 1rem; border-radius: 8px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: 'Poppins';">Put Account on Hold</button>
+      <button style="padding: 0.5rem 1rem; border-radius: 8px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: 'Poppins';">Delete Account</button>
+    </div>
+    <div style="font-size: 0.7rem; color: var(--text-35); margin-top: 0.75rem;">Put on Hold: pauses your listing. Delete: permanent removal.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════ SUPPORT ══════════════════════════════════════ -->
+<div class="tab-content" id="tab-support">
+  <!-- Quick Actions -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="gc" style="cursor: pointer; padding: 1.5rem;">
+      <div style="font-weight: 800; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email Support</div>
+      <div style="font-size: 0.85rem; color: var(--text-70);">support@useletsgo.com</div>
+      <div style="font-size: 0.7rem; color: var(--text-35); margin-top: 0.25rem;">Response within 24 hours</div>
+    </div>
+    <div class="gc" style="cursor: pointer; padding: 1.5rem;">
+      <div style="font-weight: 800; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Live Chat</div>
+      <div style="font-size: 0.85rem; color: var(--text-70);">Chat with our team</div>
+      <div style="font-size: 0.7rem; color: var(--text-35); margin-top: 0.25rem;">Available now</div>
+    </div>
+  </div>
+
+  <!-- Submit Ticket -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit a Support Ticket</div>
+    <div class="fg"><label class="fl">Subject</label><input class="fi" placeholder="Brief description of your issue"></div>
+    <div class="fg"><label class="fl">Category</label><select class="fi" style="max-width: 300px;"><option>General</option><option>Payout</option><option>Receipt</option><option>Account</option><option>Billing</option></select></div>
+    <div class="fg"><label class="fl">Message</label><textarea class="fi" rows="4" placeholder="Describe your issue in detail..."></textarea></div>
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+      <div style="padding: 1rem 1.5rem; border: 1px dashed rgba(255,255,255,0.15); border-radius: 10px; cursor: pointer; font-size: 0.8rem; color: var(--text-50); display: flex; align-items: center; gap: 0.5rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        Attach Image (optional)
+      </div>
+    </div>
+    <button class="btn-grad" style="padding: 0.6rem 1.5rem; font-size: 0.85rem;">Submit Ticket</button>
+  </div>
+
+  <!-- FAQ -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Frequently Asked Questions</div>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;"><div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 0.5rem;">How does the progressive payout system work?</div><div style="font-size: 0.8rem; color: var(--text-70); line-height: 1.6;">Customers earn increasing cash-back percentages the more they visit. Starting at 4% for their first 10 visits, progressing up to 10% for 61+ visits. The payout resets on a 365-day rolling window per customer.</div></div>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;"><div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 0.5rem;">When do I get charged?</div><div style="font-size: 0.8rem; color: var(--text-70); line-height: 1.6;">Billing is monthly. Your invoice includes the premium plan fee (if applicable), progressive payouts you owe to customers, and any credit card processing fees (3.5%). Basic plan businesses also pay a LetsGo platform fee (10% capped at $5) &mdash; Premium plan businesses do not. Invoices generate on the 1st of each month.</div></div>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;"><div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 0.5rem;">Can I dispute a customer receipt?</div><div style="font-size: 0.8rem; color: var(--text-70); line-height: 1.6;">Yes. You have a 30-day dispute window after approving a receipt. Go to the Receipts tab, find the receipt in your history, and click the dispute button. Our team reviews within 48 hours.</div></div>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;"><div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 0.5rem;">How do I upgrade to Premium?</div><div style="font-size: 0.8rem; color: var(--text-70); line-height: 1.6;">Go to the Plans &amp; Billing tab and click the Premium plan. Premium unlocks event management, advertising campaigns, advanced analytics, unlimited media uploads, and priority support.</div></div>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;"><div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 0.5rem;">What's the difference between my photos and user-generated content?</div><div style="font-size: 0.8rem; color: var(--text-70); line-height: 1.6;">Your photos appear on your discovery card and profile. User-generated content (UGC) is submitted by customers and must be approved by you before appearing on the public Experiences feed.</div></div>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.25rem;"><div style="font-weight: 700; font-size: 0.9rem; color: var(--primary); margin-bottom: 0.5rem;">How do events help my business?</div><div style="font-size: 0.8rem; color: var(--text-70); line-height: 1.6;">Events appear in the LetsGo discovery feed and event calendar, driving new visitors to your business. Users can RSVP and share events with friends, increasing your reach organically.</div></div>
+    </div>
+  </div>
+
+  <!-- Notifications -->
+  <div class="gc" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="sh" style="margin-bottom: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--secondary)" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notification Preferences</div>
+      <span class="badge b-s" style="font-size: 0.6rem;">Saved &#10003;</span>
+    </div>
+    <div style="font-size: 0.8rem; color: var(--text-50); margin-bottom: 1.25rem;">Manage how you receive updates about your business activity.</div>
+
+    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Email Notifications</div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; padding-left: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">New Receipt Submissions</span><div class="toggle on"></div></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Receipt Approval Confirmations</span><div class="toggle on"></div></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Advertising Campaign Updates</span><div class="toggle on"></div></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Weekly Performance Reports</span><div class="toggle off"></div></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Monthly Invoices</span><div class="toggle on"></div></div>
+    </div>
+
+    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> SMS Notifications</div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; padding-left: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Urgent Account Alerts</span><div class="toggle on"></div></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Receipt Approval Reminders</span><div class="toggle off"></div></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 0.8rem;">Campaign Start Notifications</span><div class="toggle on"></div></div>
+    </div>
+
+    <div class="info" style="background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.25); margin-bottom: 0;">You'll always receive critical account and security notifications regardless of these settings.</div>
+  </div>
+
+  <!-- Live Chat Preview -->
+  <div class="gc">
+    <div class="sh"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Live Chat</div>
+    <div class="chat-area">
+      <div class="chat-msg chat-staff"><div style="font-size: 0.65rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem;">LetsGo Staff #4821</div>Hi! Welcome to LetsGo support. How can I help you today?<div class="chat-meta">2:14 PM</div></div>
+      <div class="chat-msg chat-you">Hey, I had a question about my latest invoice &mdash; the progressive payout amount seems higher than expected for March.<div class="chat-meta">2:15 PM</div></div>
+      <div class="chat-msg chat-staff"><div style="font-size: 0.65rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem;">LetsGo Staff #4821</div>I can look into that! Let me pull up your March invoice. One moment.<div class="chat-meta">2:16 PM</div></div>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+      <button class="btn-ghost" style="padding: 0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+      <input class="fi" placeholder="Type a message..." style="flex: 1;">
+      <button class="btn-grad" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Send</button>
+    </div>
+  </div>
+</div>
+
+
+</div><!-- end .main -->
+
+<!-- Footer -->
+<div style="text-align: center; padding: 3rem 2rem 2rem; color: var(--text-35); font-size: 0.75rem;">
+  <div style="margin-bottom: 0.5rem; font-weight: 700;">LetsGo Business Dashboard &mdash; Demo Preview</div>
+  <div>This is a demonstration of the business management experience. All data shown is sample data.</div>
+  <div style="margin-top: 0.5rem;">www.useletsgo.com &bull; Olson Creations LLC, DBA "LETS GO OUT"</div>
+</div>
+
+<script>
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + tabId));
+  window.scrollTo({ top: 160, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
