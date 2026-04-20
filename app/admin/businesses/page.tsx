@@ -611,11 +611,18 @@ function BusinessesPage() {
     try {
       // Sales previews live only in the Sales tab — they're stored in the `business`
       // table with id `preview-<slug>-<timestamp>`, so exclude them from the admin list.
+      // Fetch count first to set proper limit (Supabase defaults to 1000)
+      const { count } = await supabaseBrowser
+        .from("business")
+        .select("id", { count: "exact", head: true })
+        .not("id", "like", "preview-%");
+
       const { data, error } = await supabaseBrowser
         .from("business")
         .select("*")
         .not("id", "like", "preview-%")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(Math.max(count ?? 1000, 1000));
 
       if (error) throw error;
       setBusinesses(data || []);
