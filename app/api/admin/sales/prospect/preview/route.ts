@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { generateClaimCode } from "@/lib/claimCode";
 
 // Verify caller is authenticated staff
 async function requireStaff(req: NextRequest): Promise<{ userId: string } | Response> {
@@ -21,7 +22,9 @@ async function requireStaff(req: NextRequest): Promise<{ userId: string } | Resp
  * - Creates a business record (is_active = false)
  * - Links the sales lead to the new business via preview_business_id
  *
- * Body: { leadId: string }
+ * Body: { leadId: string, recreate?: boolean, mode?: "preview" | "seed" }
+ * - mode "preview": creates inactive business for sales preview (default)
+ * - mode "seed": creates active trial business with 0% payouts + claim code
  * Returns: { businessId: string, previewUrl: string }
  */
 export async function POST(req: NextRequest) {
@@ -30,7 +33,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { leadId, recreate } = body;
+    const { leadId, recreate, mode } = body;
+    const isSeedMode = mode === "seed";
 
     if (!leadId) {
       return NextResponse.json({ error: "leadId is required" }, { status: 400 });
@@ -164,17 +168,52 @@ export async function POST(req: NextRequest) {
     const config: Record<string, unknown> = {
       businessType: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
       priceLevel,
-      payoutPreset: "standard",
+      payoutPreset: isSeedMode ? "trial" : "standard",
       images: photos.map(p => p.url),
     };
 
+    // 5b. For seed mode, read trial duration from platform_settings and generate claim code
+    let trialExpiresAt: string | null = null;
+    let claimCode: string | null = null;
+
+    if (isSeedMode) {
+      const { data: settings } = await supabaseServer
+        .from("platform_settings")
+        .select("value")
+        .eq("id", 1)
+        .maybeSingle();
+
+      const trialDays = settings?.value?.trial_duration_days ?? 90;
+      const expiresDate = new Date();
+      expiresDate.setDate(expiresDate.getDate() + trialDays);
+      trialExpiresAt = expiresDate.toISOString();
+
+      // Generate a unique claim code (retry on collision)
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const candidate = generateClaimCode();
+        const { data: existing } = await supabaseServer
+          .from("business")
+          .select("id")
+          .eq("claim_code", candidate)
+          .maybeSingle();
+        if (!existing) {
+          claimCode = candidate;
+          break;
+        }
+      }
+      if (!claimCode) {
+        return NextResponse.json({ error: "Failed to generate unique claim code" }, { status: 500 });
+      }
+    }
+
     // 6. Generate a business ID (slug from name)
+    const idPrefix = isSeedMode ? "seed" : "preview";
     const slug = (lead.business_name || "business")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 50);
-    const businessId = `preview-${slug}-${Date.now().toString(36)}`;
+    const businessId = `${idPrefix}-${slug}-${Date.now().toString(36)}`;
 
     // 7. Create business record
     const { error: bizErr } = await supabaseServer
@@ -183,7 +222,11 @@ export async function POST(req: NextRequest) {
         id: businessId,
         business_name: lead.business_name,
         public_business_name: lead.business_name,
-        is_active: false,
+        is_active: isSeedMode ? true : false,
+        billing_plan: isSeedMode ? "trial" : null,
+        seeded_at: isSeedMode ? new Date().toISOString() : null,
+        trial_expires_at: trialExpiresAt,
+        claim_code: claimCode,
         street_address: addressParts.street || lead.address || "",
         address_line1: addressParts.street || lead.address || "",
         city: lead.city || addressParts.city || "",
@@ -196,7 +239,7 @@ export async function POST(req: NextRequest) {
         website_url: lead.website || "",
         category_main: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
         config,
-        payout_preset: "standard",
+        payout_preset: isSeedMode ? "trial" : "standard",
         ...hourColumns,
       });
 
@@ -227,9 +270,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 9. Create default payout tiers (Standard plan)
-    const standardBps = [500, 750, 1000, 1250, 1500, 1750, 2000];
-    const tierRows = standardBps.map((bps, idx) => ({
+    // 9. Create payout tiers (0% for seed mode, standard for preview)
+    const tierBps = isSeedMode
+      ? [0, 0, 0, 0, 0, 0, 0]
+      : [500, 750, 1000, 1250, 1500, 1750, 2000];
+    const tierRows = tierBps.map((bps, idx) => ({
       business_id: businessId,
       tier_index: idx + 1,
       percent_bps: bps,
@@ -247,10 +292,15 @@ export async function POST(req: NextRequest) {
       // Non-fatal
     }
 
-    // 10. Update sales_leads with the preview business ID
+    // 10. Update sales_leads with the preview/seed business ID
+    const leadUpdate: Record<string, unknown> = { preview_business_id: businessId };
+    if (isSeedMode) {
+      leadUpdate.seeded_at = new Date().toISOString();
+    }
+
     const { error: updateErr } = await supabaseServer
       .from("sales_leads")
-      .update({ preview_business_id: businessId })
+      .update(leadUpdate)
       .eq("id", leadId);
 
     if (updateErr) {
@@ -262,6 +312,7 @@ export async function POST(req: NextRequest) {
       businessId,
       previewUrl: `/preview/${businessId}`,
       photosStored: photos.length,
+      ...(isSeedMode && { claimCode, trialExpiresAt, mode: "seed" }),
     });
   } catch (err) {
     console.error("[preview] Unexpected error:", err);

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LetsGo — Full Month Invoice</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#1a0d2e;
+  display:flex; align-items:center; justify-content:center;
+  min-height:100vh; font-family:'Inter',sans-serif;
+}
+.ad {
+  width:1080px; height:1080px;
+  position:relative; overflow:hidden; flex-shrink:0;
+  background:linear-gradient(140deg,#1e0a3c 0%,#0d1a3a 50%,#091f16 100%);
+  display:flex; flex-direction:column;
+}
+.bg-dots {
+  position:absolute; inset:0; z-index:0;
+  background-image:radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size:30px 30px;
+}
+.glow { position:absolute; border-radius:50%; pointer-events:none; z-index:1; }
+.g1 { width:660px; height:660px; top:-220px; left:-180px;
+  background:radial-gradient(circle,rgba(168,85,247,0.42) 0%,transparent 62%); filter:blur(90px); }
+.g2 { width:580px; height:580px; bottom:-160px; right:-140px;
+  background:radial-gradient(circle,rgba(52,211,153,0.38) 0%,transparent 62%); filter:blur(90px); }
+.g3 { width:340px; height:340px; top:260px; right:140px;
+  background:radial-gradient(circle,rgba(56,189,248,0.2) 0%,transparent 62%); filter:blur(70px); }
+.g4 { width:300px; height:300px; bottom:260px; left:140px;
+  background:radial-gradient(circle,rgba(236,72,153,0.25) 0%,transparent 62%); filter:blur(70px); }
+.top-bar {
+  position:absolute; top:0; left:0; right:0; height:4px; z-index:50;
+  background:linear-gradient(90deg,#ec4899,#a855f7,#38bdf8,#34d399,#fbbf24,#ec4899);
+}
+.divider {
+  position:absolute; top:0; left:50%; width:2px;
+  transform:translateX(-50%); z-index:20;
+  bottom:380px;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,0.08) 8%,rgba(255,255,255,0.28) 30%,rgba(255,255,255,0.38) 50%,rgba(255,255,255,0.28) 70%,rgba(255,255,255,0.08) 92%,transparent);
+}
+.vs {
+  position:absolute; top:370px; left:50%; transform:translateX(-50%);
+  z-index:30; width:54px; height:54px; border-radius:50%;
+  background:linear-gradient(135deg,#1e0a3c,#0d1a3a);
+  border:2px solid rgba(255,255,255,0.2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-weight:900; color:#fff;
+  box-shadow:0 0 0 10px rgba(12,8,24,0.94),0 0 36px rgba(168,85,247,0.5);
+}
+
+/* ── INVOICE COLUMNS ── */
+.cols {
+  position:relative;
+  display:grid; grid-template-columns:1fr 1fr;
+  z-index:10;
+}
+.col   { padding:46px 28px 14px 48px; display:flex; flex-direction:column; gap:20px; }
+.col-r { padding:46px 48px 14px 28px; }
+
+.tag { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.14em; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.tag::before { content:''; display:block; width:14px; height:2px; border-radius:2px; flex-shrink:0; }
+.tl { color:#f472b6; } .tl::before { background:linear-gradient(90deg,#ec4899,#f472b6); }
+.tr { color:#34d399; } .tr::before { background:linear-gradient(90deg,#34d399,#38bdf8); }
+
+.hl-box { height:92px; display:flex; align-items:flex-start; flex-shrink:0; }
+.hl { font-size:38px; font-weight:900; letter-spacing:-1.8px; line-height:0.92; }
+.hl-l { color:#fff; }
+.hl-r { background:linear-gradient(90deg,#34d399,#38bdf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+
+/* ── INVOICE ── */
+.invoice {
+  background:#f8f9fa; border-radius:10px; overflow:hidden;
+  display:flex; flex-direction:column;
+  box-shadow:0 0 0 1px rgba(255,255,255,0.1),0 16px 48px rgba(0,0,0,0.55);
+}
+.stripe { height:3px; flex-shrink:0; }
+.sl { background:linear-gradient(90deg,#ec4899,#a855f7); }
+.sr { background:linear-gradient(90deg,#34d399,#38bdf8); }
+
+.lh { padding:12px 16px; background:#fff; flex-shrink:0; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
+.lh-name { font-size:16px; font-weight:900; color:#111; letter-spacing:-0.3px; }
+.lh-sub  { font-size:9px; color:#9ca3af; margin-top:2px; }
+.lh-bdg  { font-size:7.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; padding:4px 9px; border-radius:20px; white-space:nowrap; flex-shrink:0; margin-left:12px; }
+.bdg-l { background:#fdf2f8; color:#db2777; border:1px solid #fbcfe8; }
+.bdg-r { background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+
+.meta { padding:5px 14px; background:#f9fafb; flex-shrink:0; border-bottom:1px solid #e5e7eb; display:flex; }
+.mc { flex:1; border-right:1px solid #e5e7eb; padding-right:7px; margin-right:7px; }
+.mc:last-child { border:none; margin:0; padding:0; }
+.ml { font-size:7px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:#9ca3af; margin-bottom:1px; }
+.mv { font-size:9px; font-weight:700; color:#374151; }
+.mvl { color:#db2777 !important; }
+.mvr { color:#16a34a !important; }
+
+/* Left: simple line items */
+.items { background:#fff; }
+.row { display:flex; align-items:flex-start; justify-content:space-between; padding:6px 14px; border-bottom:1px solid #f3f4f6; gap:12px; }
+.row:last-child { border:none; }
+.ri-name { font-size:10.5px; font-weight:700; color:#111; margin-bottom:1px; }
+.ri-sub  { font-size:8px; color:#9ca3af; line-height:1.3; }
+.ri-amt  { font-size:11.5px; font-weight:800; color:#374151; white-space:nowrap; flex-shrink:0; padding-top:1px; }
+.row-spacer { padding:8px 14px 10px; }
+.fine-print { font-size:7.5px; color:#db2777; font-weight:600; line-height:1.4; }
+
+.tots { padding:7px 14px; background:#f9fafb; border-top:1.5px solid #e5e7eb; }
+.tot { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:3px; }
+.tot:last-child { margin:0; }
+.tla  { font-size:8.5px; color:#9ca3af; }
+.tva  { font-size:9px; font-weight:600; color:#6b7280; }
+.tla-g { font-size:11px; font-weight:800; color:#111; }
+.tva-g { font-size:18px; font-weight:900; }
+.tvl { color:#db2777; }
+.tvr { color:#16a34a; }
+
+/* Right: Excel table */
+.xls { overflow:hidden; }
+table { width:100%; border-collapse:collapse; background:#fff; table-layout:fixed; }
+thead tr { background:#f3f4f6; }
+th {
+  padding:4px 6px; text-align:right;
+  font-size:7px; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:#6b7280;
+  border-bottom:1.5px solid #e5e7eb; border-right:1px solid #eee; white-space:nowrap;
+}
+th:first-child { text-align:left; }
+th:last-child  { border-right:none; }
+td {
+  padding:3.5px 6px; text-align:right;
+  font-size:9.5px; color:#374151;
+  border-bottom:1px solid #f3f4f6; border-right:1px solid #f5f5f5;
+  white-space:nowrap;
+}
+td:first-child { text-align:left; font-weight:700; border-right:1px solid #eee; }
+td:last-child  { border-right:none; font-weight:800; color:#15803d; }
+tr:last-child td { border-bottom:none; }
+tr:nth-child(even) td { background:#fafafa; }
+tr:nth-child(even) td:first-child { background:#fafafa; }
+.tr-tot td { background:#f0fdf4 !important; font-weight:800; border-top:1.5px solid #bbf7d0; font-size:10px; color:#15803d; }
+.tr-tot td:first-child { font-weight:900; font-size:10px; }
+.tc { display:flex; align-items:center; gap:5px; }
+.td { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+/* ── STAMP OVERLAY ── */
+.stamp-overlay {
+  position:absolute; inset:0; z-index:50;
+  background:rgba(200,200,210,0.13);
+  display:flex; align-items:center; justify-content:center;
+  border-radius:10px; pointer-events:none;
+}
+.stamp-x {
+  transform:rotate(-14deg);
+  opacity:0.82;
+  filter:drop-shadow(0 0 8px rgba(180,0,30,0.5));
+}
+
+/* ── BIG STATEMENT ── */
+.big-statement {
+  flex:1;
+  display:grid; grid-template-columns:1fr 1fr;
+  flex-shrink:0;
+  padding-bottom:120px;
+}
+.bs-left {
+  padding:0 36px 0 48px;
+  display:flex; align-items:center; justify-content:flex-end;
+  border-right:2px solid rgba(255,255,255,0.08);
+}
+.bs-right {
+  padding:0 48px 0 36px;
+  display:flex; align-items:center; justify-content:flex-start;
+}
+.bs-line {
+  font-size:68px; font-weight:900; letter-spacing:-2.5px; line-height:0.95;
+  color:rgba(255,255,255,0.85); text-align:center;
+}
+.bs-bad  { color:#f472b6; font-style:italic; }
+.bs-good {
+  background:linear-gradient(90deg,#34d399,#38bdf8);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  font-style:italic;
+  text-decoration:underline;
+  text-decoration-color:#34d399;
+  text-underline-offset:6px;
+  text-decoration-thickness:3px;
+}
+
+/* ── INVOICE RESULT BAR ── */
+.inv-result {
+  display:flex; flex-shrink:0;
+}
+.inv-result-bad  { background:#1a0408; border-top:1px solid rgba(236,72,153,0.3); }
+.inv-result-good { background:#041a10; border-top:1px solid rgba(52,211,153,0.3); }
+.ir-cell {
+  flex:1; padding:10px 14px; text-align:center;
+  border-right:1px solid rgba(255,255,255,0.06);
+}
+.ir-cell:last-child { border-right:none; }
+.ir-lbl { font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:0.09em; color:rgba(255,255,255,0.35); margin-bottom:4px; }
+.ir-val { font-size:20px; font-weight:900; letter-spacing:-0.5px; line-height:1; }
+.irv-bad  { color:#f472b6; }
+.irv-unk  { color:rgba(255,255,255,0.25); font-size:17px; }
+.irv-good { color:#34d399; }
+
+/* ── RESULTS CARDS — matching screenshot style ── */
+.results {
+  position:absolute; left:48px; right:48px; bottom:96px;
+  display:grid; grid-template-columns:1fr 1fr; gap:20px;
+  z-index:15;
+}
+.res-card {
+  border-radius:10px; overflow:hidden;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(6,10,18,0.92);
+  box-shadow:0 8px 32px rgba(0,0,0,0.4);
+}
+.res-head {
+  padding:8px 16px;
+  font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.12em;
+  display:flex; align-items:center; gap:8px;
+}
+.rh-bad  { background:rgba(236,72,153,0.15); color:#f472b6; border-bottom:1px solid rgba(236,72,153,0.2); }
+.rh-good { background:rgba(52,211,153,0.15); color:#34d399; border-bottom:1px solid rgba(52,211,153,0.2); }
+.rh-bad::before  { content:''; display:block; width:3px; height:14px; border-radius:2px; background:#f472b6; flex-shrink:0; }
+.rh-good::before { content:''; display:block; width:3px; height:14px; border-radius:2px; background:#34d399; flex-shrink:0; }
+
+.res-stats { display:flex; }
+.rs {
+  flex:1; padding:12px 16px; text-align:center;
+  border-right:1px solid rgba(255,255,255,0.07);
+}
+.rs:last-child { border:none; }
+.rs-lbl  { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.09em; color:rgba(255,255,255,0.38); margin-bottom:5px; }
+.rs-val  { font-size:26px; font-weight:900; letter-spacing:-1px; line-height:1; }
+.rv-bad  { color:#f472b6; }
+.rv-unk  { color:rgba(255,255,255,0.22); font-size:22px; }
+.rv-good { color:#34d399; }
+.rs-note { font-size:8px; color:rgba(255,255,255,0.28); margin-top:4px; line-height:1.3; }
+.rs-note strong { color:rgba(255,255,255,0.55); font-weight:600; }
+
+/* ── CTA STRIP ── */
+.cta-strip {
+  position:absolute; bottom:0; left:0; right:0;
+  height:120px; padding:0 54px;
+  display:flex; align-items:center; justify-content:space-between;
+  background:linear-gradient(180deg,transparent,rgba(8,5,18,0.92));
+  border-top:1px solid rgba(255,255,255,0.07);
+  z-index:25;
+}
+.top-logo {
+  position:absolute; top:18px; right:48px; z-index:40;
+  display:flex; align-items:center; gap:10px;
+}
+.top-logo img {
+  height:72px; width:auto; object-fit:contain;
+}
+.qr-wrap {
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+}
+.qr-wrap img {
+  width:80px; height:80px; border-radius:8px;
+}
+.qr-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:rgba(255,255,255,0.5); }
+.qr-url { font-size:13px; font-weight:600; color:rgba(255,255,255,0.7); letter-spacing:0.02em; margin-top:1px; }
+.cta-wrap {
+  padding:3px; border-radius:100px;
+  background:linear-gradient(90deg,#ec4899,#a855f7,#38bdf8,#34d399,#fbbf24,#ec4899);
+}
+.cta {
+  display:inline-flex; align-items:center; gap:14px;
+  background:#fff;
+  color:#0d1a3a; font-size:18px; font-weight:800;
+  padding:18px 42px; border-radius:100px;
+  position:relative; letter-spacing:-0.2px;
+}
+.arr { width:28px; height:28px; border-radius:50%; background:rgba(13,26,58,0.1); display:flex; align-items:center; justify-content:center; font-size:14px; }
+.url { text-align:right; }
+.url-m { font-size:15px; color:rgba(255,255,255,0.5); font-weight:500; }
+.url-s { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#fbbf24; margin-top:4px; }
+</style>
+<body>
+<div class="ad">
+  <div class="bg-dots"></div>
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="glow g3"></div><div class="glow g4"></div>
+  <div class="top-bar"></div>
+  <div class="divider"></div>
+  <div class="vs">VS</div>
+
+  <!-- ── INVOICE COLUMNS ── -->
+  <div class="cols">
+
+    <!-- LEFT -->
+    <div class="col">
+      <div class="tag tl">Other Ad Platforms</div>
+      <div class="hl-box"><div class="hl hl-l">Clicks don't<br>pay your rent.</div></div>
+      <div class="invoice" style="position:relative;">
+        <div class="stamp-overlay">
+          <div class="stamp-x">
+            <svg width="260" height="260" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+              <rect x="-18" y="108" width="296" height="44" rx="8" fill="#cc0a22" transform="rotate(45 130 130)"/>
+              <rect x="-18" y="108" width="296" height="44" rx="8" fill="#cc0a22" transform="rotate(-45 130 130)"/>
+              <rect x="-18" y="112" width="296" height="36" rx="6" fill="#e8102e" opacity="0.5" transform="rotate(45 130 130)"/>
+              <rect x="-18" y="112" width="296" height="36" rx="6" fill="#e8102e" opacity="0.5" transform="rotate(-45 130 130)"/>
+            </svg>
+          </div>
+        </div>
+        <div class="stripe sl"></div>
+        <div class="lh">
+          <div><div class="lh-name">AdReach Pro LLC</div><div class="lh-sub">Invoice #AR-20847 · May 2026 · Due Jun 1</div></div>
+          <div class="lh-bdg bdg-l">0 Customers Guaranteed</div>
+        </div>
+        <div class="meta">
+          <div class="mc"><div class="ml">Impressions</div><div class="mv">48,200</div></div>
+          <div class="mc"><div class="ml">Clicks</div><div class="mv">1,247</div></div>
+          <div class="mc"><div class="ml">Store Visits</div><div class="mv mvl">0 confirmed</div></div>
+          <div class="mc"><div class="ml">Revenue Tracked</div><div class="mv mvl">None</div></div>
+        </div>
+        <div class="items">
+          <div class="row">
+            <div><div class="ri-name">Impression Delivery Fee</div><div class="ri-sub">48,200 impressions · $0.004 CPM</div></div>
+            <div class="ri-amt">$192.80</div>
+          </div>
+          <div class="row">
+            <div><div class="ri-name">Cost-Per-Click Charges</div><div class="ri-sub">1,247 paid clicks on sponsored placements · $0.25 avg</div></div>
+            <div class="ri-amt">$311.75</div>
+          </div>
+          <div class="row">
+            <div><div class="ri-name">Audience Retargeting Suite</div><div class="ri-sub">Re-served to 12,400 prior page visitors · flat monthly</div></div>
+            <div class="ri-amt">$49.00</div>
+          </div>
+          <div class="row">
+            <div><div class="ri-name">Smart Bid Optimization</div><div class="ri-sub">Automated bidding & A/B creative testing · 12% of spend</div></div>
+            <div class="ri-amt">$62.40</div>
+          </div>
+          <div class="row">
+            <div><div class="ri-name">Analytics Dashboard + Platform Fee</div><div class="ri-sub">Monthly reporting portal + maintenance surcharge</div></div>
+            <div class="ri-amt">$82.68</div>
+          </div>
+          <div class="row-spacer">
+            <div class="fine-print">Payment due regardless of in-store visits or sales results.<br>All charges are non-refundable.</div>
+          </div>
+        </div>
+        <div class="tots">
+          <div class="tot"><div class="tla">Subtotal</div><div class="tva">$698.63</div></div>
+          <div class="tot"><div class="tla-g">Total Due</div><div class="tva-g tvl">$698.63</div></div>
+        </div>
+        <div class="inv-result inv-result-bad">
+          <div class="ir-cell">
+            <div class="ir-lbl">Revenue Generated</div>
+            <div class="ir-val irv-unk">$???</div>
+          </div>
+          <div class="ir-cell">
+            <div class="ir-lbl">Expenses</div>
+            <div class="ir-val irv-bad">$698.63</div>
+          </div>
+          <div class="ir-cell">
+            <div class="ir-lbl">Provable Profit</div>
+            <div class="ir-val irv-bad">$0.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col col-r">
+      <div class="tag tr">LetsGo Basic</div>
+      <div class="hl-box"><div class="hl hl-r">Customers do.</div></div>
+      <div class="invoice">
+        <div class="stripe sr"></div>
+        <div class="lh">
+          <div><div class="lh-name">LetsGo · Business Statement</div><div class="lh-sub">Statement #LG-00291 · May 2026 · 25 Verified Visits</div></div>
+          <div class="lh-bdg bdg-r">Every Charge = A Real Customer</div>
+        </div>
+        <div class="meta">
+          <div class="mc"><div class="ml">Confirmed Visits</div><div class="mv mvr">25</div></div>
+          <div class="mc"><div class="ml">Receipts Verified</div><div class="mv mvr">25 / 25</div></div>
+          <div class="mc"><div class="ml">Revenue Generated</div><div class="mv mvr">$650.00</div></div>
+          <div class="mc"><div class="ml">Your Net After Fees</div><div class="mv mvr">$551.98</div></div>
+        </div>
+        <div class="xls">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:32%;text-align:left;">Loyalty Tier</th>
+                <th>Visits</th>
+                <th>Avg Tab</th>
+                <th>Revenue</th>
+                <th>User Payout</th>
+                <th>LG Fee</th>
+                <th>Your Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#38bdf8;"></div>Starter (3%)</div></td>
+                <td>8</td><td>$20.00</td><td>$160.00</td>
+                <td style="color:#9ca3af;">$4.80</td><td style="color:#9ca3af;">$16.00</td>
+                <td>$20.80</td>
+              </tr>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#34d399;"></div>Regular (4%)</div></td>
+                <td>6</td><td>$24.00</td><td>$144.00</td>
+                <td style="color:#9ca3af;">$5.76</td><td style="color:#9ca3af;">$14.40</td>
+                <td>$20.16</td>
+              </tr>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#a855f7;"></div>Favorite (5%)</div></td>
+                <td>4</td><td>$28.00</td><td>$112.00</td>
+                <td style="color:#9ca3af;">$5.60</td><td style="color:#9ca3af;">$11.20</td>
+                <td>$16.80</td>
+              </tr>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#fbbf24;"></div>VIP (6%)</div></td>
+                <td>3</td><td>$32.00</td><td>$96.00</td>
+                <td style="color:#9ca3af;">$5.76</td><td style="color:#9ca3af;">$9.60</td>
+                <td>$15.36</td>
+              </tr>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#f97316;"></div>Elite (7%)</div></td>
+                <td>2</td><td>$35.00</td><td>$70.00</td>
+                <td style="color:#9ca3af;">$4.90</td><td style="color:#9ca3af;">$7.00</td>
+                <td>$11.90</td>
+              </tr>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#ec4899;"></div>Legend (8%)</div></td>
+                <td>1</td><td>$30.00</td><td>$30.00</td>
+                <td style="color:#9ca3af;">$2.40</td><td style="color:#9ca3af;">$3.00</td>
+                <td>$5.40</td>
+              </tr>
+              <tr>
+                <td><div class="tc"><div class="td" style="background:#e879f9;"></div>Ultimate (10%)</div></td>
+                <td>1</td><td>$38.00</td><td>$38.00</td>
+                <td style="color:#9ca3af;">$3.80</td><td style="color:#9ca3af;">$3.80</td>
+                <td>$7.60</td>
+              </tr>
+              <tr class="tr-tot">
+                <td>TOTAL — 25 Verified Visits</td>
+                <td>25</td><td>—</td>
+                <td>$650.00</td>
+                <td>$33.02</td><td>$65.00</td>
+                <td>$98.02</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tots">
+          <div class="tot"><div class="tla">Total user payouts</div><div class="tva">$33.02</div></div>
+          <div class="tot"><div class="tla">Total LetsGo fees (10% of receipt, capped at $5.00)</div><div class="tva">$65.00</div></div>
+          <div class="tot"><div class="tla-g">Total Due</div><div class="tva-g tvr">$98.02</div></div>
+        </div>
+        <div class="inv-result inv-result-good">
+          <div class="ir-cell">
+            <div class="ir-lbl">Revenue Generated</div>
+            <div class="ir-val irv-good">$650.00</div>
+          </div>
+          <div class="ir-cell">
+            <div class="ir-lbl">Expenses</div>
+            <div class="ir-val irv-good">$98.02</div>
+          </div>
+          <div class="ir-cell">
+            <div class="ir-lbl">Net Profit</div>
+            <div class="ir-val irv-good">$551.98</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── BIG STATEMENT ── -->
+  <div class="big-statement">
+    <div class="bs-left">
+      <div class="bs-line">Don't pay for <span class="bs-bad">views.</span></div>
+    </div>
+    <div class="bs-right">
+      <div class="bs-line">Pay for <span class="bs-good">Results.</span></div>
+    </div>
+  </div>
+
+  <!-- ── TOP-RIGHT LOGO ── -->
+  <div class="top-logo">
+    <img src="Logo-removebg%20(2).png" alt="LetsGo">
+  </div>
+
+  <!-- ── CTA ── -->
+  <div class="cta-strip">
+    <div class="qr-wrap">
+      <img src="QR%20Code%20-%20www.useletsgo.com/Business%20QR%20Codes%20-%20For%20Advertising%20Purposes.png" alt="Scan to sign up">
+      <div class="qr-label">Scan to sign up</div>
+    </div>
+    <div class="cta-wrap"><div class="cta">List Your Business on LetsGo Today!! <div class="arr">→</div></div></div>
+    <div class="url">
+      <div class="url-m">www.useletsgo.com</div>
+      <div class="url-s">Launching May 1st</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Download button -->
+<div style="display:flex;gap:16px;margin-top:20px;">
+  <button onclick="downloadAd()" style="padding:12px 32px;background:linear-gradient(90deg,#ec4899,#a855f7,#38bdf8);color:white;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">Download Ad (PNG)</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+async function downloadAd() {
+  const btn = event.target;
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+
+  // html2canvas doesn't support background-clip:text — swap gradient text to solid colors before capture
+  const gradientEls = document.querySelectorAll('.hl-r, .bs-good');
+  const saved = [];
+  gradientEls.forEach(el => {
+    saved.push({
+      el,
+      bg: el.style.background,
+      bgClip: el.style.webkitBackgroundClip,
+      fill: el.style.webkitTextFillColor,
+      color: el.style.color
+    });
+    el.style.background = 'none';
+    el.style.webkitBackgroundClip = 'unset';
+    el.style.webkitTextFillColor = 'unset';
+    el.style.color = '#34d399';
+  });
+
+  try {
+    const el = document.querySelector('.ad');
+    const canvas = await html2canvas(el, {
+      scale: 4,
+      useCORS: true,
+      backgroundColor: null
+    });
+    const link = document.createElement('a');
+    link.download = 'letsgo-ad-comparison.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    // Restore gradient text styles
+    saved.forEach(s => {
+      s.el.style.background = s.bg;
+      s.el.style.webkitBackgroundClip = s.bgClip;
+      s.el.style.webkitTextFillColor = s.fill;
+      s.el.style.color = s.color;
+    });
+    btn.textContent = 'Download Ad (PNG)';
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>

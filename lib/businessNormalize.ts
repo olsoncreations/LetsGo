@@ -47,6 +47,10 @@ export type BusinessRow = {
   sat_close?: string | null;
   sun_open?: string | null;
   sun_close?: string | null;
+  // Seeding / trial fields
+  billing_plan?: string | null;
+  claim_code?: string | null;
+  seeded_at?: string | null;
 };
 
 export type MediaRow = {
@@ -83,6 +87,8 @@ export type DiscoveryBusiness = {
   vibe: string;
   businessZip: string;
   isSponsored: boolean;
+  isTrial: boolean;
+  claimCode: string | null;
 };
 
 // ─── Constants ───
@@ -357,10 +363,13 @@ export function normalizeToDiscoveryBusiness(
 
   const businessZip = row.zip || "";
 
+  const isTrial = row.billing_plan === "trial" && !!row.seeded_at;
+  const claimCode = row.claim_code || null;
+
   return {
     id: row.id, name, type, slogan, address, phone, website, price,
     isOpen, closesAt, hours, payout, tags, images, categoryMain, vibe, businessZip,
-    isSponsored: false,
+    isSponsored: false, isTrial, claimCode,
   };
 }
 

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:1080px; overflow:hidden; font-family:'Helvetica Neue',Arial,sans-serif; background:#1a0d2e; display:flex; flex-direction:column; align-items:center; }
+.wrap { width:1080px; height:1080px; display:flex; flex-direction:column; background:#08080f; position:relative; border:2px solid rgba(255,255,255,0.1); border-radius:12px; overflow:hidden; }
+.body { flex:1; display:flex; }
+.left { width:570px; flex-shrink:0; padding:52px 48px 36px 60px; display:flex; flex-direction:column; justify-content:space-between; }
+.right { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 40px 20px 10px; gap:14px; }
+
+/* Logo row */
+.logo-row { display:flex; align-items:center; justify-content:space-between; }
+.logo { display:flex; align-items:center; gap:10px; }
+.logo img { height:90px; width:auto; object-fit:contain; }
+.lg-name { font-size:28px; font-weight:800; color:#fff; letter-spacing:-0.5px; }
+.lg-name em { color:#FFD600; font-style:normal; }
+.launch-tag { font-size:11px; font-weight:700; color:#FFD600; border:1.5px solid #FFD600; padding:5px 12px; border-radius:4px; letter-spacing:0.5px; }
+
+/* Feature badge */
+.feat-badge { display:inline-flex; align-items:center; gap:8px; background:rgba(255,214,0,0.1); border:1.5px solid rgba(255,214,0,0.35); border-radius:100px; padding:5px 14px; }
+.feat-badge span { font-size:11px; font-weight:700; color:#FFD600; text-transform:uppercase; letter-spacing:0.5px; }
+
+/* Headline */
+.hl { font-size:86px; font-weight:900; line-height:0.95; letter-spacing:-4px; color:#fff; }
+.hl .pink { color:#FFD600; }
+.sub { font-size:16px; color:rgba(255,255,255,0.5); margin-top:16px; line-height:1.6; max-width:380px; }
+.sub strong { color:rgba(255,255,255,0.85); font-weight:600; }
+
+/* How it works flow */
+.flow { display:flex; align-items:center; gap:0; margin-top:20px; }
+.flow-step { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.flow-num { font-size:32px; font-weight:900; color:#FFD600; line-height:1; text-shadow:0 0 16px rgba(255,214,0,0.5); }
+.flow-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:rgba(255,255,255,0.4); }
+.flow-arrow { font-size:18px; color:rgba(255,214,0,0.4); margin:0 12px; padding-bottom:14px; font-weight:300; }
+
+/* Features */
+.feats { display:flex; flex-direction:column; gap:12px; }
+.feat { display:flex; align-items:flex-start; gap:14px; }
+.fdot { color:#FFD600; font-size:20px; flex-shrink:0; line-height:1.2; }
+.ftxt { font-size:18px; color:rgba(255,255,255,0.7); line-height:1.45; }
+.ftxt b { color:#fff; font-weight:700; }
+
+/* Tagline */
+.tagline { font-size:24px; font-weight:800; color:#fff; letter-spacing:-0.3px; border-left:3px solid #FFD600; padding-left:16px; line-height:1.3; }
+.tagline span { color:#FFD600; }
+
+/* NEW neon sign */
+.phone-wrap { position:relative; }
+.new-stamp { position:absolute; top:-28px; left:-68px; z-index:20; transform:rotate(-45deg); }
+.neon-bubble { border:2.5px solid #ff2d92; border-radius:12px; padding:4px 20px 3px; background:#1a0a1a; box-shadow:0 0 8px #ff2d92, 0 0 20px rgba(255,45,146,0.5), inset 0 0 8px rgba(255,45,146,0.15); }
+.neon-text { font-size:44px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#fff; text-shadow:0 0 4px #fff, 0 0 10px #ff2d92, 0 0 25px #ff2d92, 0 0 50px rgba(255,45,146,0.6), 0 0 80px rgba(255,45,146,0.3); line-height:1; }
+
+/* Phone */
+.phone { width:340px; height:692px; border-radius:40px; background:#0e0d1e; border:2px solid rgba(255,255,255,0.1); overflow:hidden; position:relative; box-shadow:0 40px 80px rgba(0,0,0,0.7); }
+.phone img { width:100%; height:100%; object-fit:contain; object-position:top; }
+
+/* CTA */
+.cta { height:120px; background:#0f0f1a; border-top:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; padding:0 60px; gap:24px; }
+.qr { width:78px; height:78px; flex-shrink:0; }
+.qr img { width:78px; height:78px; display:block; border-radius:4px; }
+.cdiv { width:1px; height:58px; background:rgba(255,255,255,.08); flex-shrink:0; }
+.cmain { flex:1; }
+.ctitle { font-size:24px; font-weight:900; color:#fff; letter-spacing:-0.5px; line-height:1; }
+.ctitle em { color:#FFD600; font-style:normal; }
+.curl { font-size:13px; color:rgba(255,255,255,.38); margin-top:4px; }
+.cright { text-align:right; }
+.cpill { display:inline-block; background:#FFD600; color:#05071A; font-size:13px; font-weight:800; padding:11px 24px; border-radius:6px; letter-spacing:0.2px; }
+.cfree { font-size:10px; color:rgba(255,255,255,.28); margin-top:5px; text-transform:uppercase; letter-spacing:0.8px; }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="body">
+    <div class="left">
+      <div class="logo-row">
+        <div class="logo"><img src="Logo-removebg%20(2).png" alt="LetsGo"><div class="lg-name">Lets<em>Go</em></div></div>
+      </div>
+      <div>
+        <div class="hl"><span class="pink">5</span> picks.<br><span class="pink">3</span> rounds.<br><span class="pink">1</span> winner.</div>
+        <p class="sub">No more "I don't care, you pick" loops. <strong>Decide where to go in 3 rounds.</strong></p>
+      </div>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num" style="font-size:22px;">&#9881;</div>
+          <div class="flow-label">Setup</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-num">5</div>
+          <div class="flow-label">You pick</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-num">3</div>
+          <div class="flow-label">Narrow down</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-label">You decide</div>
+        </div>
+      </div>
+      <div class="feats">
+        <div class="feat"><span class="fdot">&#10022;</span><div class="ftxt"><b>Restaurants, bars, activities</b> &mdash; anything you can't decide on</div></div>
+        <div class="feat"><span class="fdot">&#10022;</span><div class="ftxt"><b>Mini-games</b> to play while you wait for your friend</div></div>
+        <div class="feat"><span class="fdot">&#10022;</span><div class="ftxt"><b>Full history</b> of past rounds &mdash; revisit winning spots anytime</div></div>
+      </div>
+      <div class="tagline">Stop arguing.<br><span>Start going.</span></div>
+    </div>
+    <div class="right">
+      <div class="feat-badge"><span>5v3v1 Feature</span></div>
+      <div class="phone">
+        <img src="manual-screenshots%20-%20redone/5v3v1%20Page.jpg" alt="5v3v1">
+      </div>
+    </div>
+  </div>
+  <div class="cta">
+    <div class="qr"><img src="QR%20Code%20-%20www.useletsgo.com/User%20QR%20Codes%20-%20For%20Advertising%20Purposes.png" alt="Scan to download"></div>
+    <div class="cdiv"></div>
+    <div class="cmain"><div class="ctitle">Download <em>LetsGo</em></div><div class="curl">www.useletsgo.com</div></div>
+    <div class="cright"><div class="cpill">Download Free &rarr;</div><div class="cfree">iOS &amp; Android</div></div>
+  </div>
+</div>
+
+<!-- Download button -->
+<div style="display:flex;gap:16px;margin-top:20px;justify-content:center;">
+  <button onclick="downloadAd()" style="padding:12px 32px;background:#FFD600;color:#05071A;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">Download Ad (PNG)</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+async function downloadAd() {
+  const btn = event.target;
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  try {
+    const el = document.querySelector('.wrap');
+    const canvas = await html2canvas(el, {
+      scale: 4,
+      useCORS: true,
+      backgroundColor: null
+    });
+    const link = document.createElement('a');
+    link.download = 'letsgo-ad-5v3v1.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    btn.textContent = 'Download Ad (PNG)';
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body></html>

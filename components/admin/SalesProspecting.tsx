@@ -48,6 +48,7 @@ interface SalesLead {
   outreach_opened_at: string | null;
   outreach_clicked_at: string | null;
   outreach_count: number;
+  seeded_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -517,6 +518,11 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [selectedTemplate, setSelectedTemplate] = useState("initial_outreach");
   const [bulkScraping, setBulkScraping] = useState(false);
   const [bulkScrapeProgress, setBulkScrapeProgress] = useState({ current: 0, total: 0, found: 0 });
+
+  // ---------- Seeding state ----------
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [seedingInProgress, setSeedingInProgress] = useState(false);
+  const [seedProgress, setSeedProgress] = useState<{ current: number; total: number; succeeded: number; failed: number; skipped: number } | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkSendProgress, setBulkSendProgress] = useState({ current: 0, total: 0, sent: 0 });
   const [filterHasEmail, setFilterHasEmail] = useState("all");
@@ -1057,6 +1063,94 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
     } finally {
       setReclassifying(false);
+    }
+  }
+
+  // ---------- Seeding handlers ----------
+
+  function toggleLeadSelection(leadId: string) {
+    setSelectedLeadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  }
+
+  function selectAllVisible() {
+    const seedableIds = filteredLeads
+      .filter(l => !l.seeded_at)
+      .map(l => l.id);
+    setSelectedLeadIds(new Set(seedableIds));
+  }
+
+  function deselectAll() {
+    setSelectedLeadIds(new Set());
+  }
+
+  async function handleBulkSeed() {
+    if (selectedLeadIds.size === 0) return;
+    const count = selectedLeadIds.size;
+    if (!confirm(`Seed ${count} businesses to production with 0% payouts?\n\nThese businesses will appear in the discovery feed immediately as "Unclaimed" trial listings.`)) return;
+
+    setSeedingInProgress(true);
+    setSeedProgress({ current: 0, total: count, succeeded: 0, failed: 0, skipped: 0 });
+
+    try {
+      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token;
+      if (!token) { alert("Not authenticated"); return; }
+
+      // Process in batches of 10 to get progress updates
+      const leadIds = Array.from(selectedLeadIds);
+      const batchSize = 10;
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+      let totalSkipped = 0;
+
+      for (let i = 0; i < leadIds.length; i += batchSize) {
+        const batch = leadIds.slice(i, i + batchSize);
+        const res = await fetch("/api/admin/sales/prospect/bulk-seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ leadIds: batch }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ error: "Unknown error" }));
+          alert(`Batch failed: ${errData.error}`);
+          totalFailed += batch.length;
+        } else {
+          const data = await res.json();
+          totalSucceeded += data.succeeded;
+          totalFailed += data.failed;
+          totalSkipped += data.skipped;
+        }
+
+        setSeedProgress({
+          current: Math.min(i + batchSize, leadIds.length),
+          total: count,
+          succeeded: totalSucceeded,
+          failed: totalFailed,
+          skipped: totalSkipped,
+        });
+      }
+
+      await logAudit({
+        action: "bulk_seed_businesses",
+        tab: AUDIT_TABS.SALES,
+        targetType: "business",
+        details: `Bulk seeded ${totalSucceeded} businesses (${totalSkipped} skipped, ${totalFailed} failed) from ${count} leads`,
+      });
+
+      alert(`Seeding complete!\n\n✓ Succeeded: ${totalSucceeded}\n⊘ Skipped: ${totalSkipped}\n✕ Failed: ${totalFailed}`);
+      setSelectedLeadIds(new Set());
+      fetchLeads();
+    } catch (err) {
+      console.error("Bulk seed error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setSeedingInProgress(false);
+      setSeedProgress(null);
     }
   }
 
@@ -2026,6 +2120,34 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   const leadsColumns = [
     {
+      key: "id",
+      label: "✓",
+      align: "center" as const,
+      render: (_v: unknown, row: Record<string, unknown>) => {
+        const lead = row as unknown as SalesLead;
+        if (lead.seeded_at) {
+          return (
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+              background: "rgba(57,255,20,0.15)", color: COLORS.neonGreen,
+              border: `1px solid rgba(57,255,20,0.3)`, whiteSpace: "nowrap",
+            }}>
+              SEEDED
+            </span>
+          );
+        }
+        return (
+          <input
+            type="checkbox"
+            checked={selectedLeadIds.has(lead.id)}
+            onChange={(e) => { e.stopPropagation(); toggleLeadSelection(lead.id); }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ cursor: "pointer", width: 16, height: 16, accentColor: COLORS.neonGreen }}
+          />
+        );
+      },
+    },
+    {
       key: "business_name",
       label: "Business",
       render: (v: unknown, row: Record<string, unknown>) => {
@@ -2696,6 +2818,43 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         </button>
       </div>
 
+      {/* Seed Controls */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 12 }}>
+        <button
+          onClick={() => selectedLeadIds.size > 0 ? deselectAll() : selectAllVisible()}
+          style={{
+            ...btnSecondary,
+            fontSize: 12,
+          }}
+        >
+          {selectedLeadIds.size > 0
+            ? `Deselect All (${selectedLeadIds.size})`
+            : `Select All Seedable (${filteredLeads.filter(l => !l.seeded_at).length})`}
+        </button>
+        <button
+          onClick={handleBulkSeed}
+          disabled={selectedLeadIds.size === 0 || seedingInProgress}
+          style={{
+            ...btnPrimary,
+            background: selectedLeadIds.size === 0 || seedingInProgress
+              ? COLORS.cardBorder
+              : `linear-gradient(135deg, ${COLORS.neonGreen}, #00c896)`,
+            color: "#000",
+            fontWeight: 700,
+            opacity: selectedLeadIds.size === 0 || seedingInProgress ? 0.5 : 1,
+          }}
+        >
+          {seedingInProgress && seedProgress
+            ? `Seeding... ${seedProgress.current}/${seedProgress.total} (${seedProgress.succeeded} ok, ${seedProgress.failed} err)`
+            : `Seed Selected (${selectedLeadIds.size})`}
+        </button>
+        {selectedLeadIds.size > 0 && !seedingInProgress && (
+          <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+            Selected businesses will appear in the discovery feed as unclaimed trial listings with 0% payouts
+          </span>
+        )}
+      </div>
+
       {/* Leads Table */}
       <Card style={{ marginTop: 16 }} title={`Leads (${filteredLeads.length})`}>
         {leadsLoading ? (
@@ -3162,6 +3321,23 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 </div>
               )}
             </div>
+
+            {/* Seeded Status */}
+            {selectedLead.seeded_at && (
+              <div style={{
+                marginBottom: 24, padding: 16,
+                background: `rgba(57,255,20,0.05)`,
+                border: `1px solid rgba(57,255,20,0.2)`,
+                borderRadius: 12,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.neonGreen, marginBottom: 6 }}>
+                  Seeded to Production
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  Seeded on {new Date(selectedLead.seeded_at).toLocaleDateString()} — This business is live in the discovery feed as an unclaimed trial listing with 0% payouts.
+                </div>
+              </div>
+            )}
 
             {/* Email Outreach */}
             <div style={{ marginBottom: 24 }}>

@@ -114,9 +114,12 @@ interface Business {
   avg_receipt_amount: number | null;
   ad_spend_total: number | null;
   status: string | null;
+  seeded_at: string | null;
+  trial_expires_at: string | null;
+  claim_code: string | null;
 }
 
-type StatusFilter = "all" | "active" | "paused" | "suspended" | "submitted";
+type StatusFilter = "all" | "active" | "paused" | "suspended" | "submitted" | "trial";
 
 export default function BusinessesPageWrapper() {
   return (
@@ -576,6 +579,7 @@ function BusinessesPage() {
 
   // Derive status from is_active and status field
   function getStatus(b: Business): string {
+    if (b.billing_plan === "trial") return "trial";
     if (b.status) return b.status;
     return b.is_active ? "active" : "paused";
   }
@@ -913,6 +917,7 @@ function BusinessesPage() {
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
+              <option value="trial">Trial (Seeded)</option>
               <option value="paused">Paused</option>
               <option value="suspended">Suspended</option>
               <option value="submitted">Submitted</option>
@@ -1670,11 +1675,51 @@ function BusinessesPage() {
                       options={[
                         { value: "basic", label: "Basic" },
                         { value: "premium", label: "Premium" },
-                        { value: "trial", label: "Trial (No Discounts)" },
+                        { value: "trial", label: "Trial (Seeded)" },
                       ]}
                     />
-                    <EditField 
-                      label="Payment Method" 
+                    {selected?.billing_plan === "trial" && (
+                      <div style={{
+                        padding: 12, borderRadius: 8, marginBottom: 12,
+                        background: "rgba(255,180,0,0.06)",
+                        border: "1px solid rgba(255,180,0,0.2)",
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#ffb400", marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+                          Seeded Business
+                        </div>
+                        {selected.seeded_at && (
+                          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>
+                            Seeded: {new Date(selected.seeded_at).toLocaleDateString()}
+                          </div>
+                        )}
+                        {selected.trial_expires_at && (
+                          <EditField
+                            label="Trial Expires"
+                            value={(selected.trial_expires_at || "").slice(0, 10)}
+                            editable={isEditing}
+                            onChange={(v) => updateField("trial_expires_at", v ? new Date(v as string).toISOString() : null)}
+                          />
+                        )}
+                        {selected.claim_code && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                            <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Claim Code:</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.neonGreen, fontFamily: "monospace" }}>{selected.claim_code}</span>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/claim/${selected.claim_code}`); alert("Claim link copied!"); }}
+                              style={{
+                                fontSize: 10, padding: "2px 8px", borderRadius: 4,
+                                background: "rgba(57,255,20,0.1)", border: "1px solid rgba(57,255,20,0.3)",
+                                color: COLORS.neonGreen, cursor: "pointer",
+                              }}
+                            >
+                              Copy Link
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <EditField
+                      label="Payment Method"
                       value={getValue("payment_method") as string} 
                       editable={isEditing} 
                       onChange={(v) => updateField("payment_method", v)}

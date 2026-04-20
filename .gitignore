@@ -49,3 +49,5 @@ next-env.d.ts
 
 
 .mcp.json
+
+.vercel

@@ -774,7 +774,18 @@ function OnboardingActionModal({
         >
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ color: COLORS.textSecondary }}>Business:</span>
-            <span style={{ fontWeight: 600 }}>{submission.business_name || (p.publicBusinessName as string)}</span>
+            <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+              {submission.business_name || (p.publicBusinessName as string)}
+              {!!(p.claim_business_id) && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                  background: "rgba(57,255,20,0.15)", color: "#39ff14",
+                  border: "1px solid rgba(57,255,20,0.3)",
+                }}>
+                  CLAIM
+                </span>
+              )}
+            </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ color: COLORS.textSecondary }}>Contact:</span>
@@ -1045,18 +1056,91 @@ export default function OnboardingPage() {
     if (!selected) return;
     setActionLoading(true);
     try {
-      const { data, error } = await supabaseBrowser.rpc("approve_partner_onboarding_submission", {
-        p_submission_id: selected.id,
-      });
+      const payload = selected.payload as Record<string, unknown>;
+      const claimBusinessId = payload.claim_business_id as string | undefined;
 
-      if (error) {
-        alert("Error approving: " + error.message);
-        return;
+      let businessId: string;
+
+      if (claimBusinessId) {
+        // ─── CLAIM MODE: Update existing seeded business instead of creating new ───
+        const selectedPlan = (payload.plan as string) || "basic";
+        const payoutPreset = (payload.payoutPreset as string) || "standard";
+        const payoutBps = (payload.payoutBps as number[]) || [500, 750, 1000, 1250, 1500, 1750, 2000];
+
+        // Update the business record
+        const { error: bizErr } = await supabaseBrowser
+          .from("business")
+          .update({
+            billing_plan: selectedPlan,
+            seeded_at: null,
+            claim_code: null,
+            trial_expires_at: null,
+            payout_preset: payoutPreset,
+            business_name: (payload.businessName as string) || undefined,
+            public_business_name: (payload.publicBusinessName as string) || (payload.businessName as string) || undefined,
+            contact_phone: (payload.businessPhone as string) || undefined,
+            website: (payload.website as string) || undefined,
+          })
+          .eq("id", claimBusinessId);
+
+        if (bizErr) {
+          alert("Error updating claimed business: " + bizErr.message);
+          return;
+        }
+
+        // Update payout tiers
+        await supabaseBrowser
+          .from("business_payout_tiers")
+          .delete()
+          .eq("business_id", claimBusinessId);
+
+        const tierLabels = ["Starter", "Regular", "Favorite", "VIP", "Elite", "Legend", "Ultimate"];
+        const tierRows = payoutBps.slice(0, 7).map((bps: number, idx: number) => ({
+          business_id: claimBusinessId,
+          tier_index: idx + 1,
+          percent_bps: bps,
+          min_visits: idx === 0 ? 1 : idx * 10 + 1,
+          max_visits: idx === 6 ? null : (idx + 1) * 10,
+          label: tierLabels[idx],
+        }));
+
+        await supabaseBrowser
+          .from("business_payout_tiers")
+          .insert(tierRows);
+
+        // Create business_users entry (owner)
+        if (selected.user_id) {
+          await supabaseBrowser
+            .from("business_users")
+            .upsert({
+              business_id: claimBusinessId,
+              user_id: selected.user_id,
+              role: "owner",
+            }, { onConflict: "business_id,user_id" });
+        }
+
+        // Update submission status
+        await supabaseBrowser
+          .from("partner_onboarding_submissions")
+          .update({ status: "approved" })
+          .eq("id", selected.id);
+
+        businessId = claimBusinessId;
+      } else {
+        // ─── NORMAL MODE: Create new business via RPC ───
+        const { data, error } = await supabaseBrowser.rpc("approve_partner_onboarding_submission", {
+          p_submission_id: selected.id,
+        });
+
+        if (error) {
+          alert("Error approving: " + error.message);
+          return;
+        }
+
+        businessId = data as string;
       }
 
-      // Copy Stripe payment IDs from submission payload to the new business record
-      const businessId = data as string;
-      const payload = selected.payload as Record<string, unknown>;
+      // Copy Stripe payment IDs from submission payload to the business record
       if (businessId && (payload.stripeCustomerId || payload.stripePaymentMethodId)) {
         await supabaseBrowser
           .from("business")
@@ -1068,18 +1152,20 @@ export default function OnboardingPage() {
       }
 
       logAudit({
-        action: "approve_onboarding",
+        action: claimBusinessId ? "approve_claim" : "approve_onboarding",
         tab: AUDIT_TABS.ONBOARDING,
         subTab: "Review Actions",
         targetType: "onboarding_submission",
         targetId: selected.id,
-        entityName: selected.business_name || (selected.payload as Record<string, unknown>).publicBusinessName as string || "",
+        entityName: selected.business_name || (payload.publicBusinessName as string) || "",
         fieldName: "status",
         oldValue: selected.status,
         newValue: "approved",
-        details: `Approved onboarding submission. Business ID: ${data}`,
+        details: claimBusinessId
+          ? `Approved business claim. Existing business ${businessId} updated from trial to active.`
+          : `Approved onboarding submission. Business ID: ${businessId}`,
       });
-      alert("✅ Approved! Business ID: " + data);
+      alert(`✅ ${claimBusinessId ? "Claim approved" : "Approved"}! Business ID: ${businessId}`);
       await fetchSubmissions();
       setSelectedId(null);
     } catch (err) {

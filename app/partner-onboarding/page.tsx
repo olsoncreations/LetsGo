@@ -439,6 +439,9 @@ function PartnerOnboardingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillBusinessId = searchParams.get("prefill");
+  const claimBusinessId = searchParams.get("claim");
+  const [claimMode, setClaimMode] = useState(false);
+  const [claimBusinessName, setClaimBusinessName] = useState("");
   const [step, setStep] = useState<number>(1);
   const [data, setData] = useState<OnboardingData>(initialData());
   const [error, setError] = useState<string>("");
@@ -690,6 +693,84 @@ function PartnerOnboardingPage() {
     })();
   }, [prefillBusinessId, restored]);
 
+  // Claim mode: pre-fill from seeded business when arriving via ?claim=businessId
+  useEffect(() => {
+    if (!claimBusinessId || !restored) return;
+
+    (async () => {
+      try {
+        const { data: biz, error: bizErr } = await supabaseBrowser
+          .from("business")
+          .select(`
+            id, business_name, public_business_name,
+            contact_phone, website, street_address, city, state, zip,
+            phone_number, website_url, address_line1,
+            category_main, config, billing_plan, seeded_at,
+            mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
+            thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
+            sun_open, sun_close
+          `)
+          .eq("id", claimBusinessId)
+          .maybeSingle();
+
+        if (bizErr || !biz) return;
+
+        // Only allow claiming trial/seeded businesses
+        if (biz.billing_plan !== "trial" || !biz.seeded_at) return;
+
+        setClaimMode(true);
+        setClaimBusinessName(biz.public_business_name || biz.business_name || "");
+
+        const cfg = (biz.config || {}) as Record<string, unknown>;
+        const priceLevel = String(cfg.priceLevel || "$$");
+
+        const catMap: Record<string, BusinessType> = {
+          restaurant_bar: "restaurant_bar",
+          activity: "activity",
+          salon_beauty: "salon_beauty",
+          retail: "retail",
+          event_venue: "event_venue",
+          other: "other",
+        };
+        const businessType = catMap[biz.category_main || ""] || "restaurant_bar";
+
+        const dayKeys: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+        const hours: Record<DayKey, HoursDay> = {} as Record<DayKey, HoursDay>;
+        for (const day of dayKeys) {
+          const open = (biz as Record<string, unknown>)[`${day}_open`] as string | null;
+          const close = (biz as Record<string, unknown>)[`${day}_close`] as string | null;
+          if (open && close) {
+            hours[day] = {
+              enabled: true,
+              open: open.replace(/^(\d{2}:\d{2}):\d{2}$/, "$1"),
+              close: close.replace(/^(\d{2}:\d{2}):\d{2}$/, "$1"),
+            };
+          } else {
+            hours[day] = { enabled: false, open: "", close: "" };
+          }
+        }
+
+        setData((prev) => ({
+          ...prev,
+          businessName: biz.business_name || prev.businessName,
+          businessType,
+          businessTypeTag: String(cfg.businessType || biz.category_main || prev.businessTypeTag),
+          priceLevel,
+          streetAddress: biz.street_address || biz.address_line1 || prev.streetAddress,
+          city: biz.city || prev.city,
+          state: biz.state || prev.state,
+          zip: biz.zip || prev.zip,
+          businessPhone: biz.contact_phone || biz.phone_number || prev.businessPhone,
+          website: biz.website || biz.website_url || prev.website,
+          publicBusinessName: biz.public_business_name || biz.business_name || prev.publicBusinessName,
+          hours,
+        }));
+      } catch (err) {
+        console.error("Claim prefill error:", err);
+      }
+    })();
+  }, [claimBusinessId, restored]);
+
   useEffect(() => {
     if (!restored) return;
     try {
@@ -783,10 +864,10 @@ async function completeSignup() {
     // Save everything as JSON, plus a few helpful top-level fields
     const payload = {
       ...data,
-      email: data.email || authUser.email, // Ensure email is included
-      // optional: include some metadata
+      email: data.email || authUser.email,
       submittedAt: new Date().toISOString(),
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      ...(claimMode && claimBusinessId ? { claim_business_id: claimBusinessId } : {}),
     };
 
     const { error: insertError } = await supabaseBrowser.from("partner_onboarding_submissions").insert([
@@ -899,6 +980,40 @@ async function completeSignup() {
 )}
       <Header />
       <Progress step={step} />
+
+      {claimMode && (
+        <div style={{
+          maxWidth: 680, margin: "0 auto 16px", padding: "14px 20px",
+          borderRadius: 12,
+          background: "rgba(57,255,20,0.06)",
+          border: "1px solid rgba(57,255,20,0.2)",
+          textAlign: "center",
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#39ff14" }}>
+            Claiming: {claimBusinessName}
+          </span>
+          <span style={{ fontSize: 13, color: "rgba(0,0,0,0.5)", marginLeft: 8 }}>
+            — Complete onboarding to take ownership
+          </span>
+        </div>
+      )}
+
+      {!claimMode && step === 1 && (
+        <div style={{
+          maxWidth: 680, margin: "0 auto 16px", padding: "14px 20px",
+          borderRadius: 12,
+          background: "rgba(0,191,255,0.04)",
+          border: "1px solid rgba(0,191,255,0.15)",
+          textAlign: "center",
+        }}>
+          <span style={{ fontSize: 13, color: "#666" }}>
+            Already on LetsGo?{" "}
+            <a href="/claim" style={{ color: "#00bfff", fontWeight: 600, textDecoration: "none" }}>
+              Search and claim your business →
+            </a>
+          </span>
+        </div>
+      )}
 
       <div className="form-card">
         <h1 className="form-title">{stepTitle(step)}</h1>

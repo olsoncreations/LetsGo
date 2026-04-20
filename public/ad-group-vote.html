@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LetsGo — Group Vote Ad v5</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #030810;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.ad {
+  width: 1080px;
+  height: 1080px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+}
+
+.top-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 4px; z-index: 50;
+  background: linear-gradient(90deg, #FF2D78, #FF6B2D, #FFD600, #00FF87, #00E5FF, #D050FF, #FF2D78);
+}
+
+/* ══ LEFT: iMESSAGE ══ */
+.left {
+  width: 560px;
+  flex-shrink: 0;
+  background: #F2F2F7;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ios-status {
+  padding: 20px 20px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.ios-time { font-size: 16px; font-weight: 700; color: #000; }
+.ios-icons { display: flex; align-items: center; gap: 5px; }
+
+.ios-nav {
+  padding: 6px 16px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 0.5px solid rgba(0,0,0,0.12);
+  flex-shrink: 0;
+}
+.ios-back { font-size: 16px; color: #007AFF; }
+.ios-group-info { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ios-avatars-mini { display: flex; }
+.ios-av-mini {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid #F2F2F7;
+  margin-left: -7px; font-size: 8px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.ios-av-mini:first-child { margin-left: 0; }
+.iam1 { background: #FF3B30; }
+.iam2 { background: #FF9500; }
+.iam3 { background: #34C759; }
+.iam4 { background: #007AFF; }
+.iam5 { background: #AF52DE; }
+.ios-group-name { font-size: 11px; font-weight: 600; color: #000; }
+.ios-group-count { font-size: 10px; color: #8E8E93; }
+.ios-detail { font-size: 17px; color: #007AFF; }
+
+.ios-messages {
+  flex: 1;
+  overflow: hidden;
+  padding: 10px 20px 6px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.time-sep { text-align: center; font-size: 11px; color: #8E8E93; padding: 2px 0 4px; }
+
+.msg-row { display: flex; align-items: flex-end; gap: 6px; }
+.msg-row.sent { flex-direction: row-reverse; }
+
+.sender-av {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  font-size: 8px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.sender-av.hidden { visibility: hidden; }
+
+.msg-group { display: flex; flex-direction: column; gap: 2px; max-width: 75%; }
+.msg-group.sent { align-items: flex-end; }
+.msg-group.received { align-items: flex-start; }
+
+.sender-name { font-size: 10px; color: #8E8E93; padding: 0 10px 1px; }
+
+.imsg {
+  padding: 7px 12px;
+  border-radius: 16px;
+  font-size: 15px; line-height: 1.3;
+  display: inline-block;
+  word-break: break-word;
+}
+.imsg.received { background: #E5E5EA; color: #000; border-bottom-left-radius: 4px; }
+.imsg.sent { background: #007AFF; color: #fff; border-bottom-right-radius: 4px; }
+.imsg.cont { border-top-left-radius: 4px; border-bottom-left-radius: 16px; }
+
+.typing-row { display: flex; align-items: flex-end; gap: 6px; padding: 2px 0 0; }
+.typing-bubble { background: #E5E5EA; border-radius: 16px; border-bottom-left-radius: 4px; padding: 10px 14px; display: flex; gap: 4px; align-items: center; }
+.typing-dot { width: 7px; height: 7px; border-radius: 50%; background: #8E8E93; }
+
+.ios-input-bar {
+  background: #F2F2F7;
+  border-top: 0.5px solid rgba(0,0,0,0.15);
+  padding: 8px 12px;
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.ios-apps-btn { font-size: 22px; color: #007AFF; flex-shrink: 0; }
+.ios-input-field { flex: 1; background: #fff; border: 1px solid #C7C7CC; border-radius: 18px; padding: 7px 14px; font-size: 15px; color: #8E8E93; }
+.ios-send-btn { width: 30px; height: 30px; border-radius: 50%; background: #007AFF; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 700; }
+
+.ios-keyboard { background: #CDD0D6; flex-shrink: 0; padding: 4px 6px 3px; display: flex; flex-direction: column; gap: 4px; }
+.kb-row { display: flex; justify-content: center; gap: 6px; }
+.kb-key { background: #fff; border-radius: 5px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #000; box-shadow: 0 1px 0 rgba(0,0,0,0.3); flex: 1; max-width: 42px; }
+.kb-fn { background: #ADB1BA; font-size: 13px; max-width: 54px; }
+.kb-space { max-width: 190px; font-size: 14px; }
+.kb-return { max-width: 82px; background: #ADB1BA; font-size: 13px; }
+.kb-num { background: #ADB1BA; font-size: 13px; max-width: 42px; }
+
+/* ══ RIGHT: LETSGO ══ */
+.right {
+  flex: 1;
+  background: #060610;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  gap: 12px;
+  padding: 24px 30px;
+}
+
+.right-dots { position: absolute; inset: 0; z-index: 0; background-image: radial-gradient(rgba(0,255,135,0.05) 1px, transparent 1px); background-size: 28px 28px; }
+.right-glow { position: absolute; z-index: 0; width: 500px; height: 500px; top: 50%; left: 50%; transform: translate(-50%,-50%); border-radius: 50%; filter: blur(100px); background: radial-gradient(circle, rgba(0,255,135,0.16) 0%, transparent 65%); }
+
+.with-chip { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 8px; background: rgba(0,255,135,0.08); border: 1px solid rgba(0,255,135,0.3); border-radius: 100px; padding: 7px 18px; }
+.with-chip span { font-size: 11px; font-weight: 800; letter-spacing: 2.5px; color: #00FF87; text-transform: uppercase; }
+
+.right-copy { position: relative; z-index: 2; text-align: center; }
+.right-headline { font-size: 42px; font-weight: 900; line-height: 1.05; letter-spacing: -1.5px; color: #fff; margin-bottom: 12px; }
+.right-headline .green { color: #00FF87; }
+.right-sub { font-size: 15px; font-weight: 400; line-height: 1.55; color: rgba(255,255,255,0.5); max-width: 300px; margin: 0 auto; }
+.right-sub strong { color: rgba(255,255,255,0.85); font-weight: 700; }
+
+.phone { position: relative; z-index: 2; width: 250px; height: 510px; border-radius: 38px; border: 2px solid rgba(255,255,255,0.1); background: #07071A; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,255,135,0.2), 0 0 40px rgba(0,255,135,0.2), 0 50px 80px rgba(0,0,0,0.8); margin: 24px 0; }
+.phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+
+.logo-block { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.logo-row { display: flex; align-items: center; gap: 10px; }
+.logo-row img { height: 52px; width: auto; object-fit: contain; }
+.logo-name { font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #fff; }
+.logo-name em { color: #00FF87; font-style: normal; }
+.tagline { font-size: 14px; color: rgba(255,255,255,0.45); text-align: center; }
+.tagline strong { color: rgba(255,255,255,0.8); font-weight: 700; }
+.cta-qr-row { display: flex; align-items: center; gap: 18px; }
+.cta-btn { background: #00FF87; color: #060610; font-size: 13px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; padding: 14px 28px; border-radius: 10px; white-space: nowrap; }
+.qr-block { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.qr-img { width: 64px; height: 64px; border-radius: 6px; display: block; }
+.qr-label { font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.35); letter-spacing: 0.5px; }
+.launch-tag { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.35); letter-spacing: 0.3px; }
+</style>
+</head>
+<body>
+<div class="ad">
+  <div class="top-bar"></div>
+
+  <!-- LEFT -->
+  <div class="left">
+    <div class="ios-status">
+      <div class="ios-time">9:41</div>
+      <div class="ios-icons">
+        <svg width="17" height="12" viewBox="0 0 17 12"><rect x="0" y="8" width="3" height="4" rx="1" fill="#000"/><rect x="4" y="5" width="3" height="7" rx="1" fill="#000"/><rect x="8" y="3" width="3" height="9" rx="1" fill="#000"/><rect x="12" y="0" width="3" height="12" rx="1" fill="#000"/></svg>
+        <svg width="15" height="11" viewBox="0 0 15 11"><path d="M7.5 2C9.7 2 11.7 2.9 13.1 4.4L14.5 3A10.5 10.5 0 0 0 .5 3L1.9 4.4C3.3 2.9 5.3 2 7.5 2zm0 3c1.5 0 2.8.6 3.8 1.5L12.7 5A7 7 0 0 0 2.3 5l1.4 1.5C4.7 5.6 6 5 7.5 5zm0 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" fill="#000" opacity=".8"/></svg>
+        <svg width="24" height="11" viewBox="0 0 24 11"><rect x="0" y="1" width="21" height="9" rx="2.5" stroke="#000" stroke-width="1" fill="none"/><rect x="1" y="2" width="16" height="7" rx="1.5" fill="#000"/><rect x="22" y="3.5" width="2" height="4" rx="1" fill="#000" opacity=".4"/></svg>
+      </div>
+    </div>
+    <div class="ios-nav">
+      <div class="ios-back">‹ Messages</div>
+      <div class="ios-group-info">
+        <div class="ios-avatars-mini">
+          <div class="ios-av-mini iam1">JR</div>
+          <div class="ios-av-mini iam2">AK</div>
+          <div class="ios-av-mini iam3">MT</div>
+          <div class="ios-av-mini iam4">SL</div>
+          <div class="ios-av-mini iam5">+2</div>
+        </div>
+        <div class="ios-group-name">Friday Night Out 🍕</div>
+        <div class="ios-group-count">6 people</div>
+      </div>
+      <div class="ios-detail">⋯</div>
+    </div>
+
+    <div class="ios-messages">
+      <div class="time-sep">Today 7:14 PM</div>
+      <div class="msg-row">
+        <div class="sender-av iam1">JR</div>
+        <div class="msg-group received"><div class="sender-name">Jordan</div><div class="imsg received">ok what are we doing tonight? 👀</div></div>
+      </div>
+      <div class="msg-row sent">
+        <div class="msg-group sent"><div class="imsg sent">I'm thinking that new ramen place?</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam3">MT</div>
+        <div class="msg-group received"><div class="sender-name">Marcus</div><div class="imsg received">ooh yes I've been wanting to try that</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam4">SL</div>
+        <div class="msg-group received"><div class="sender-name">Sofia</div><div class="imsg received">actually can we do something with a patio? it's so nice out 🌞</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam1">JR</div>
+        <div class="msg-group received"><div class="sender-name">Jordan</div><div class="imsg received">what about that rooftop bar on 5th?</div></div>
+      </div>
+      <div class="msg-row sent">
+        <div class="msg-group sent"><div class="imsg sent">I don't think they do food though</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam3">MT</div>
+        <div class="msg-group received"><div class="sender-name">Marcus</div><div class="imsg received">we could eat first then go there after?</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam2">AK</div>
+        <div class="msg-group received"><div class="sender-name">Alex</div><div class="imsg received">I'm down but I also kinda want tacos 🌮</div></div>
+      </div>
+      <div class="msg-row sent">
+        <div class="msg-group sent"><div class="imsg sent">lol ok we have ramen, rooftop, and tacos on the table</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam4">SL</div>
+        <div class="msg-group received"><div class="sender-name">Sofia</div><div class="imsg received">someone just pick 😭</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam1">JR</div>
+        <div class="msg-group received"><div class="sender-name">Jordan</div><div class="imsg received">We should use LetsGo! We all put in our suggestions and vote on the best ones until we reach one place! If that doesn't work, we're using their Date Night Generator and following the robot overlord. Ha!</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam3">MT</div>
+        <div class="msg-group received"><div class="sender-name">Marcus</div><div class="imsg received">omg yes sending the link now</div></div>
+      </div>
+      <div class="msg-row">
+        <div class="sender-av iam2">AK</div>
+        <div class="msg-group received"><div class="sender-name">Alex</div><div class="imsg received">wait you also get cash back every time you visit?? 👀</div></div>
+      </div>
+      <div class="msg-row sent">
+        <div class="msg-group sent"><div class="imsg sent">finally 😂 let's go</div></div>
+      </div>
+    </div>
+
+    <div class="ios-input-bar">
+      <div class="ios-apps-btn">+</div>
+      <div class="ios-input-field">iMessage</div>
+      <div class="ios-send-btn">↑</div>
+    </div>
+    <div class="ios-keyboard">
+      <div class="kb-row">
+        <div class="kb-key">q</div><div class="kb-key">w</div><div class="kb-key">e</div><div class="kb-key">r</div><div class="kb-key">t</div><div class="kb-key">y</div><div class="kb-key">u</div><div class="kb-key">i</div><div class="kb-key">o</div><div class="kb-key">p</div>
+      </div>
+      <div class="kb-row">
+        <div style="flex:.4"></div><div class="kb-key">a</div><div class="kb-key">s</div><div class="kb-key">d</div><div class="kb-key">f</div><div class="kb-key">g</div><div class="kb-key">h</div><div class="kb-key">j</div><div class="kb-key">k</div><div class="kb-key">l</div><div style="flex:.4"></div>
+      </div>
+      <div class="kb-row">
+        <div class="kb-key kb-fn">⇧</div><div style="flex:.2"></div><div class="kb-key">z</div><div class="kb-key">x</div><div class="kb-key">c</div><div class="kb-key">v</div><div class="kb-key">b</div><div class="kb-key">n</div><div class="kb-key">m</div><div style="flex:.2"></div><div class="kb-key kb-fn">⌫</div>
+      </div>
+      <div class="kb-row">
+        <div class="kb-key kb-num">123</div><div class="kb-key kb-fn" style="max-width:42px">🌐</div><div class="kb-key kb-space">space</div><div class="kb-key kb-return">return</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <div class="right-dots"></div>
+    <div class="right-glow"></div>
+    <div class="logo-row">
+      <img src="Logo-removebg%20(2).png" alt="LetsGo">
+      <div class="logo-name">LETS<em>GO</em></div>
+    </div>
+    <div class="with-chip"><span>⬡</span><span>Group Vote</span></div>
+
+    <div class="right-copy">
+      <div class="right-headline">Stop debating.<br><span class="green">Start voting.</span></div>
+      <div class="right-sub">Everyone suggests spots, votes round by round, and the group lands on <strong>one winner</strong> — no more "idk you pick."</div>
+    </div>
+
+    <div class="phone">
+      <img src="manual-screenshots%20-%20redone/Group%20Vote.jpg" alt="Group Vote">
+    </div>
+
+    <div class="logo-block">
+      <div class="tagline"><strong>Everyone votes.</strong> One place wins. No more drama.</div>
+      <div class="cta-qr-row">
+        <div class="cta-btn">Play Free →</div>
+        <div class="qr-block">
+          <img src="QR%20Code%20-%20www.useletsgo.com/User%20QR%20Codes%20-%20For%20Advertising%20Purposes.png" class="qr-img" alt="Scan to download" />
+          <div class="qr-label">Scan to download</div>
+        </div>
+      </div>
+      <div class="launch-tag">↑ Launching May 1st · useletsgo.com</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Download button -->
+<div style="display:flex;gap:16px;margin-top:20px;justify-content:center;">
+  <button onclick="downloadAd()" style="padding:12px 32px;background:#00FF87;color:#05071A;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">Download Ad (PNG)</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+async function downloadAd() {
+  const btn = event.target;
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  try {
+    const el = document.querySelector('.ad');
+    const canvas = await html2canvas(el, {
+      scale: 4,
+      useCORS: true,
+      backgroundColor: null
+    });
+    const link = document.createElement('a');
+    link.download = 'letsgo-ad-group-vote.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    btn.textContent = 'Download Ad (PNG)';
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>

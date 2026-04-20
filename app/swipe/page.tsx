@@ -812,6 +812,23 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
   const dayIdx = new Date().getDay();
   const today = dayNames[dayIdx === 0 ? 6 : dayIdx - 1];
 
+  const [showClaimQR, setShowClaimQR] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  const claimUrl = biz.claimCode ? `https://www.useletsgo.com/claim/${biz.claimCode}` : null;
+
+  useEffect(() => {
+    if (!showClaimQR || !claimUrl) return;
+    if (qrDataUrl) return; // already generated
+    import("qrcode").then((QRCode) => {
+      QRCode.toDataURL(claimUrl, {
+        width: 200,
+        margin: 2,
+        color: { dark: "#ffffffff", light: "#00000000" },
+      }).then((url: string) => setQrDataUrl(url));
+    });
+  }, [showClaimQR, claimUrl, qrDataUrl]);
+
   return (
     <div style={{
       width: "100%", height: "100%", flexShrink: 0,
@@ -844,6 +861,57 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
             {biz.tags.map(t => (
               <span key={t} style={{ padding: "5px 12px", borderRadius: 50, fontSize: 11, fontWeight: 600, background: `${COLORS.neonBlue}10`, border: `1px solid ${COLORS.neonBlue}20`, color: COLORS.neonBlue, fontFamily: "'DM Sans', sans-serif" }}>{t}</span>
             ))}
+          </div>
+        )}
+
+        {biz.isTrial && claimUrl && (
+          <div style={{ marginBottom: 20 }}>
+            <button
+              onClick={() => setShowClaimQR(!showClaimQR)}
+              style={{
+                width: "100%", padding: "14px 20px", borderRadius: 14,
+                background: showClaimQR ? `${COLORS.neonGreen}15` : `${COLORS.neonGreen}08`,
+                border: `1px solid ${COLORS.neonGreen}30`,
+                color: COLORS.neonGreen, cursor: "pointer",
+                fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                transition: "all 0.2s",
+              }}
+            >
+              <span style={{ fontSize: 18 }}>🏢</span>
+              Claim Business as the Owner / Manager
+              <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>{showClaimQR ? "▲" : "▼"}</span>
+            </button>
+
+            {showClaimQR && (
+              <div style={{
+                marginTop: 12, padding: 24, borderRadius: 14,
+                background: COLORS.cardBg, border: `1px solid ${COLORS.cardBorder}`,
+                textAlign: "center",
+              }}>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 16, lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif" }}>
+                  Scan this QR code with your phone to start the onboarding process and claim this business.
+                </div>
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt="Claim QR Code" style={{ width: 180, height: 180, margin: "0 auto 16px", display: "block", borderRadius: 8 }} />
+                ) : (
+                  <div style={{ width: 180, height: 180, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.textSecondary, fontSize: 13 }}>Generating...</div>
+                )}
+                <a
+                  href={claimUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-block", padding: "8px 20px", borderRadius: 50,
+                    background: `${COLORS.neonGreen}12`, border: `1px solid ${COLORS.neonGreen}30`,
+                    color: COLORS.neonGreen, fontSize: 12, fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif", textDecoration: "none",
+                  }}
+                >
+                  Or open claim link →
+                </a>
+              </div>
+            )}
           </div>
         )}
 
@@ -894,6 +962,21 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
           </div>
         </div>
 
+        {biz.isTrial && (
+          <div style={{
+            margin: "20px 0 12px", padding: 16, borderRadius: 16,
+            background: "rgba(255,180,0,0.06)",
+            border: "1px solid rgba(255,180,0,0.2)",
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#ffb400", marginBottom: 6, fontFamily: "'DM Sans', sans-serif" }}>
+              This business hasn&apos;t joined LetsGo yet
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif" }}>
+              Payouts activate when this business claims their profile. Tell them to join next time you visit!
+            </div>
+          </div>
+        )}
         <PayoutLadder rates={biz.payout} levels={payoutLevels || DEFAULT_PAYOUT_LEVELS} />
 
         <div style={{ textAlign: "center", marginTop: 28, padding: 16, fontSize: 12, color: COLORS.textSecondary, fontFamily: "'DM Sans', sans-serif" }}>
@@ -954,6 +1037,12 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
       )}
       {/* Top vignette so header area isn't fighting the image */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "20%", background: "linear-gradient(rgba(0,0,0,0.5), transparent)", pointerEvents: "none" }} />
+      {/* Launch banner — only on main photo page */}
+      <div style={{ position: "absolute", top: 56, left: 0, right: 0, zIndex: 10, pointerEvents: "none" }}>
+        <div style={{ pointerEvents: "auto" }}>
+          <LaunchBanner variant="user" />
+        </div>
+      </div>
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "55%", background: "linear-gradient(transparent, rgba(0,0,0,0.85))", pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "0 24px 36px" }}>
         {biz.isSponsored && (
@@ -1001,8 +1090,30 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
             background: `${COLORS.neonPink}25`, color: COLORS.neonPink, border: `1px solid ${COLORS.neonPink}40`,
             fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1, backdropFilter: "blur(8px)",
           }}>{biz.type}</span>
+          {biz.isTrial && (
+            <span style={{
+              padding: "4px 10px", borderRadius: 50, fontSize: 9, fontWeight: 700,
+              background: "rgba(255,180,0,0.15)", color: "#ffb400", border: "1px solid rgba(255,180,0,0.3)",
+              fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1.5, backdropFilter: "blur(8px)",
+            }}>Unclaimed</span>
+          )}
         </div>
-        {biz.payout.length > 0 && (() => {
+        {biz.isTrial ? (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, marginTop: 16,
+            padding: "8px 14px", borderRadius: 50,
+            background: "rgba(255,180,0,0.08)", border: "1px solid rgba(255,180,0,0.18)",
+            backdropFilter: "blur(8px)", width: "fit-content",
+          }}>
+            <span style={{ fontSize: 14 }}>🔓</span>
+            <span style={{
+              fontSize: 12, fontWeight: 700, color: "#ffb400",
+              fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.02em",
+            }}>
+              Rewards not yet active
+            </span>
+          </div>
+        ) : biz.payout.length > 0 ? (() => {
           const minP = Math.min(...biz.payout);
           const maxP = Math.max(...biz.payout);
           const rangeStr = minP === maxP ? `${minP}%` : `${minP}% – ${maxP}%`;
@@ -1022,7 +1133,7 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
               </span>
             </div>
           );
-        })()}
+        })() : null}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16, animation: "pulseGlow 2s ease-in-out infinite" }}>
           <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Sans', sans-serif" }}>Swipe for details</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
@@ -1339,6 +1450,7 @@ function DiscoveryPage() {
             phone_number, website_url, address_line1,
             category_main, config, blurb,
             payout_tiers, payout_preset,
+            billing_plan, claim_code, seeded_at,
             mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
             thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
             sun_open, sun_close
@@ -1557,12 +1669,7 @@ function DiscoveryPage() {
       <FloatingOrbs />
       <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showFollowedOnly={showFollowedOnly} setShowFollowedOnly={setShowFollowedOnly} followedCount={followedIds.size} />
 
-      {/* Launch phase banner */}
-      <div style={{ position: "absolute", bottom: 60, left: 0, right: 0, zIndex: 60, pointerEvents: "none" }}>
-        <div style={{ pointerEvents: "auto" }}>
-          <LaunchBanner variant="user" />
-        </div>
-      </div>
+      {/* LaunchBanner is rendered inside MainPhotoPage (page 1 only) */}
 
       {/* Loading state */}
       {loading && (

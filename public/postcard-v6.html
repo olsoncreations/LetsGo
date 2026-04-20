@@ -121,20 +121,27 @@
   }
 
   /* ── Front page stats ── */
-  .f-stats {
-    position: absolute; top: 24px; right: 24px;
+  /* Stamp area — 1.875" x 1.875" white box, top right, 1/8" from edge */
+  .f-stamp {
+    position: absolute; top: 19px; right: 19px;
+    width: 281px; height: 281px;
+    background: #ffffff;
     z-index: 12;
-    display: flex; flex-direction: column; gap: 8px;
-    width: 390px;
+  }
+  .f-stats {
+    position: absolute; top: 308px; right: 19px; bottom: 336px;
+    z-index: 12;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    width: 544px;
   }
   .f-stat-card {
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 6px;
-    padding: 12px 18px;
+    padding: 10px 16px;
     position: relative;
     overflow: hidden;
-    display: flex; flex-direction: column; justify-content: center;
+    display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
   }
   .f-stat-card::before {
     content: '';
@@ -146,7 +153,7 @@
   .f-stat-card:nth-child(4)::before { background: #00c896; }
   .f-stat-card .b-card-num {
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 54px; font-weight: 900;
+    font-size: 38px; font-weight: 900;
     line-height: 1; letter-spacing: -0.02em;
   }
   .f-stat-card:nth-child(1) .b-card-num { color: #ff6b35; }
@@ -154,7 +161,7 @@
   .f-stat-card:nth-child(3) .b-card-num { color: #5eb8ff; }
   .f-stat-card:nth-child(4) .b-card-num { color: #00c896; }
   .f-stat-card .b-card-desc {
-    font-size: 16px; font-weight: 500;
+    font-size: 12px; font-weight: 500;
     color: rgba(255,255,255,0.9);
     line-height: 1.3; margin-top: 2px;
   }
@@ -240,9 +247,6 @@
   .f-mail-panel {
     width: 544px; height: 300px;
     background: #ffffff;
-    border-radius: 8px;
-    padding: 20px 24px;
-    display: flex; flex-direction: column; justify-content: space-between;
     position: relative;
   }
   .f-mail-postage {
@@ -732,21 +736,18 @@
     </div>
 
     <div class="f-right">
-      <div class="f-mail-panel">
-        <div class="f-mail-postage">Place<br>Stamp<br>Here</div>
-        <div class="f-mail-from">
-          <div class="f-mail-from-name">LetsGo</div>
-          <div class="f-mail-from-addr">www.useletsgo.com</div>
-        </div>
-      </div>
+      <div class="f-mail-panel"></div>
     </div>
   </div>
 
-  <!-- Stats cards — bottom right -->
+  <!-- Stamp area — top right corner -->
+  <div class="f-stamp"></div>
+
+  <!-- Stats cards -->
   <div class="f-stats">
     <div class="f-stat-card">
-      <div class="b-card-num">65%</div>
-      <div class="b-card-desc">Of all revenue comes from repeat customers</div>
+      <div class="b-card-num">5×</div>
+      <div class="b-card-desc">More likely to refer a friend when they're a loyal customer</div>
     </div>
     <div class="f-stat-card">
       <div class="b-card-num">5–7×</div>

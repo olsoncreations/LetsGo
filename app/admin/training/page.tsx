@@ -83,6 +83,41 @@ const trainingModules: TrainingModule[] = [
     ],
   },
   {
+    id: "business_seeding",
+    title: "Business Seeding Workflow",
+    description: "Learn how to seed businesses from sales leads and manage trial listings",
+    category: "Onboarding",
+    duration: "15 min",
+    difficulty: "intermediate",
+    required: true,
+    content: [
+      {
+        title: "What is Business Seeding?",
+        detail: "Business seeding is our strategy for getting businesses onto the LetsGo discovery feed without waiting for them to sign up. We take existing sales leads (from Google Places), create trial business profiles with 0% payouts, and let users discover them. When users visit these businesses, they can show the QR code to the manager and encourage them to claim their profile. This creates bottom-up demand instead of relying on door-to-door sales.",
+      },
+      {
+        title: "How to Bulk Seed Businesses",
+        detail: "Go to the Sales page from the admin sidebar. In the Leads Pipeline section, you will see checkboxes next to each lead. Use the filters to narrow down by city, business type, rating, etc. Click 'Select All Seedable' to select leads that haven't been seeded yet, or check individual leads manually. Then click 'Seed Selected (N)' and confirm. The system will fetch photos and hours from Google Places, create active trial listings with 0% payouts, and generate a unique claim code (QR link) for each. This costs approximately $0.055 per business in Google API fees.",
+      },
+      {
+        title: "What Users See",
+        detail: "Seeded businesses appear in the discovery feed with an 'Unclaimed Business' badge (amber colored). Instead of payout tiers, users see a message: 'This business hasn't joined LetsGo yet. Payouts activate when this business claims their profile.' The business detail page shows a QR code that links to the claim flow. Users are encouraged to show this QR code to the business manager next time they visit.",
+      },
+      {
+        title: "The Claim Flow",
+        detail: "When a business scans the QR code or visits the claim URL, they land on a page showing their pre-filled business information. They click 'Claim This Business' which takes them to the partner onboarding form with their data already filled in (name, address, hours, photos). They complete the missing steps (payout tiers, payment, verification, legal) and submit. The submission appears in the admin Onboarding queue with a green 'CLAIM' badge. When you approve a claim, the existing trial business is updated (not duplicated) - payout tiers change from 0% to their selected plan, the trial status is removed, and the business becomes fully active.",
+      },
+      {
+        title: "Managing Trial Businesses",
+        detail: "Go to the Businesses page and use the 'Trial (Seeded)' status filter to see all seeded businesses. Each trial business shows its seeded date, trial expiration date (editable), and claim code (with a copy link button). The default trial period is 90 days. When a trial expires, the daily cron job automatically deactivates the business (removes from feed). You can extend a trial by editing the expiration date in the business detail panel.",
+      },
+      {
+        title: "Key Things to Remember",
+        detail: "Only seed businesses that are operationally open (the system filters for this). Trial businesses have 0% payouts so users cannot earn rewards there yet. The claim code is unique per business and cannot be reused once claimed. When approving a claim, always verify the claimant is actually associated with the business. Check documents carefully - anyone could scan the QR code, so make sure the person claiming is legitimate.",
+      },
+    ],
+  },
+  {
     id: "receipts_101",
     title: "Receipt Approval Workflow",
     description: "Master the receipt review and approval process",

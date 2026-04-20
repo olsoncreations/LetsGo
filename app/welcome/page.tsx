@@ -1458,7 +1458,7 @@ export default function WelcomePage() {
               <span>Sign In</span>
               <span>→</span>
             </button>
-            <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "center" }}>
               <button
                 className="signin-secondary"
                 onClick={() => setAuthModal({ open: true, type: "business", mode: "signup" })}
@@ -1469,9 +1469,25 @@ export default function WelcomePage() {
                   borderRadius: "25px",
                   color: "#00bfff",
                   cursor: "pointer",
+                  width: "100%",
                 }}
               >
-                New here? Start onboarding →
+                Single Location / Claim Your Business →
+              </button>
+              <button
+                className="signin-secondary"
+                onClick={() => setAuthModal({ open: true, type: "business", mode: "signup" })}
+                style={{
+                  fontWeight: 500,
+                  background: "rgba(138, 43, 226, 0.08)",
+                  border: "1px solid rgba(138, 43, 226, 0.4)",
+                  borderRadius: "25px",
+                  color: "#8a2be2",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                Multi-Location →
               </button>
             </div>
             <div className="welcome-apply-cta" style={{ marginTop: "6rem" }}>
