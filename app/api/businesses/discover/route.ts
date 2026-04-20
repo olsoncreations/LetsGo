@@ -54,10 +54,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Category filter — match category_main or config subtype
+    // Category filter — supports comma-separated multi-select
     if (category && category !== "All") {
-      const catLower = category.toLowerCase();
-      // Map filter names to category_main values
+      const categories = category.split(",").map(c => c.trim()).filter(Boolean);
       const categoryMainMap: Record<string, string> = {
         restaurant: "restaurant_bar",
         bar: "restaurant_bar",
@@ -90,10 +89,12 @@ export async function GET(req: NextRequest) {
         activity: "activity",
       };
 
-      const mainCat = categoryMainMap[catLower];
-      if (mainCat) {
-        // Filter by category_main AND check config->subtype via raw filter
-        query = query.eq("category_main", mainCat);
+      // Map selected categories to unique category_main values
+      const mainCats = [...new Set(categories.map(c => categoryMainMap[c.toLowerCase()]).filter(Boolean))];
+      if (mainCats.length === 1) {
+        query = query.eq("category_main", mainCats[0]);
+      } else if (mainCats.length > 1) {
+        query = query.in("category_main", mainCats);
       }
     }
 

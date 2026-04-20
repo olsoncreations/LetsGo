@@ -156,6 +156,40 @@ function GlassPill({ children, style: extraStyle, onClick, active, title }: { ch
   );
 }
 
+function CollapsibleSection5({ label, children, defaultOpen = false, count }: {
+  label: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  count?: number;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+          fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase",
+          letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif", background: "none", border: "none",
+          cursor: "pointer", padding: "8px 0", marginBottom: open ? 10 : 0,
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {label}
+          {(count ?? 0) > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 50,
+              background: `${NEON}25`, color: NEON, minWidth: 18, textAlign: "center",
+            }}>{count}</span>
+          )}
+        </span>
+        <span style={{ fontSize: 14, color: COLORS.textSecondary, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 // ─── NeonCard Header ───
 function NeonHeader({ title, subtitle, onBack, rightAction }: { title: string; subtitle?: string; onBack: () => void; rightAction?: ReactNode }) {
   return (
@@ -1031,7 +1065,39 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
             </div>
           </div>
 
-          {/* Category removed — already selected in step 1 */}
+          {/* Browse From — always visible, at the top */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Browse From</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {["All Businesses", "My Saved"].map(opt => (
+                <GlassPill key={opt} active={(filters.browseFrom || "All Businesses") === opt} onClick={() => setFilters(p => ({ ...p, browseFrom: opt }))} style={{ fontSize: 12, padding: "8px 16px" }}>
+                  {opt === "All Businesses" && "🌐 "}{opt === "My Saved" && "❤️ "}{opt}
+                </GlassPill>
+              ))}
+              <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+                border: `1px solid ${filters.openNow ? COLORS.neonGreen : COLORS.cardBorder}`,
+                background: filters.openNow ? `${COLORS.neonGreen}15` : COLORS.glass,
+                color: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
+                fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                backdropFilter: "blur(12px)", transition: "all 0.3s",
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
+                  boxShadow: filters.openNow ? `0 0 8px ${COLORS.neonGreen}` : "none",
+                }} />
+                Open Now
+              </button>
+            </div>
+            {filters.browseFrom === "My Saved" && (
+              <div style={{ fontSize: 11, color: COLORS.neonOrange, fontFamily: "'DM Sans', sans-serif", marginTop: 8, lineHeight: 1.5 }}>
+                Save places from your profile page to use this filter. All businesses will be shown until you have saved places.
+              </div>
+            )}
+          </div>
+
+          {/* Price — always visible */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Price</div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -1040,6 +1106,8 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
               ))}
             </div>
           </div>
+
+          {/* Distance — always visible */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif" }}>Distance</span>
@@ -1048,32 +1116,16 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
             <input type="range" min={1} max={50} value={filters.distance} onChange={e => setFilters(p => ({ ...p, distance: +e.target.value }))}
               style={{ width: "100%", accentColor: COLORS.neonBlue, height: 4 }} />
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
-              border: `1px solid ${filters.openNow ? COLORS.neonGreen : COLORS.cardBorder}`,
-              background: filters.openNow ? `${COLORS.neonGreen}15` : COLORS.glass,
-              color: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
-              fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-              backdropFilter: "blur(12px)", transition: "all 0.3s",
-            }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%",
-                background: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
-                boxShadow: filters.openNow ? `0 0 8px ${COLORS.neonGreen}` : "none",
-              }} />
-              Open Now Only
-            </button>
-          </div>
-          {/* Dynamic tag filter sections from DB (excludes Business Type) */}
+
+          {/* Dynamic tag filter sections — collapsible */}
           {tagCats
             .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
             .filter(c => !c.requires_food || showFoodCategories)
             .map(c => {
               const catTags = c.tags.map(t => t.name);
+              const activeCount = catTags.filter(t => filters.tags.includes(t)).length;
               return (
-                <div key={c.id} style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>{c.icon} {c.name}</div>
+                <CollapsibleSection5 key={c.id} label={`${c.icon} ${c.name}`} count={activeCount}>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <GlassPill active={!filters.tags.some(t => catTags.includes(t))} onClick={() => setFilters(p => ({
                       ...p, tags: p.tags.filter(t => !catTags.includes(t)),
@@ -1084,26 +1136,24 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                       }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
                     ))}
                   </div>
-                </div>
+                </CollapsibleSection5>
               );
             })}
           {/* Fallback if DB hasn't loaded */}
           {tagCats.length === 0 && (
             <>
               {showFoodCategories && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Cuisine</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {DEFAULT_CUISINE_FILTERS.map(t => (
-                    <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
-                      ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                    }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
-                  ))}
-                </div>
-              </div>
+                <CollapsibleSection5 label="Cuisine" count={DEFAULT_CUISINE_FILTERS.filter(t => filters.tags.includes(t)).length}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {DEFAULT_CUISINE_FILTERS.map(t => (
+                      <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
+                        ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+                      }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
+                    ))}
+                  </div>
+                </CollapsibleSection5>
               )}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Vibe & Atmosphere</div>
+              <CollapsibleSection5 label="Vibe & Atmosphere" count={DEFAULT_VIBE_FILTERS.filter(t => filters.tags.includes(t)).length}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {DEFAULT_VIBE_FILTERS.map(t => (
                     <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
@@ -1111,24 +1161,9 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                     }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
                   ))}
                 </div>
-              </div>
+              </CollapsibleSection5>
             </>
           )}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Browse From</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {["All Businesses", "My Saved"].map(opt => (
-                <GlassPill key={opt} active={(filters.browseFrom || "All Businesses") === opt} onClick={() => setFilters(p => ({ ...p, browseFrom: opt }))} style={{ fontSize: 12, padding: "8px 16px" }}>
-                  {opt === "All Businesses" && "🌐 "}{opt === "My Saved" && "❤️ "}{opt}
-                </GlassPill>
-              ))}
-            </div>
-            {filters.browseFrom === "My Saved" && (
-              <div style={{ fontSize: 11, color: COLORS.neonOrange, fontFamily: "'DM Sans', sans-serif", marginTop: 8, lineHeight: 1.5 }}>
-                Save places from your profile page to use this filter. All businesses will be shown until you have saved places.
-              </div>
-            )}
-          </div>
         </div>
       )}
 

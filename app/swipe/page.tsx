@@ -43,7 +43,7 @@ const COLORS = {
 
 type FilterState = {
   search: string;
-  category: string;
+  categories: string[];
   price: string;
   sort: string;
   openNow: boolean;
@@ -208,11 +208,13 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
   }, [tagCats]);
   // Smart visibility: hide Cuisine/Dietary when non-food category selected
   const selectedCatIsFood = useMemo(() => {
-    if (filters.category === "All") return true;
+    if (filters.categories.length === 0) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
-    const tag = bt?.tags.find(t => t.name === filters.category);
-    return tag?.is_food ?? true;
-  }, [filters.category, tagCats]);
+    return filters.categories.some(cat => {
+      const tag = bt?.tags.find(t => t.name === cat);
+      return tag?.is_food ?? true;
+    });
+  }, [filters.categories, tagCats]);
 
   const ZIP_LOOKUP: Record<string, [string, string]> = {
     "68102": ["Omaha", "NE"], "68131": ["Omaha", "NE"], "68124": ["Omaha", "NE"], "68114": ["Omaha", "NE"], "68106": ["Omaha", "NE"],
@@ -527,55 +529,35 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
           </div>
         </div>
 
-        <FilterSection label="Category" items={FILTER_CATEGORIES} filters={filters} setFilters={setFilters} type="category" />
-        <FilterSection label="Price" items={PRICE_FILTERS} filters={filters} setFilters={setFilters} type="price" />
-
-        <div style={{ display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Sort By</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {SORT_OPTIONS.map(s => (
-                <GlassPill key={s} active={filters.sort === s} onClick={() => setFilters(prev => ({ ...prev, sort: s }))}>{s}</GlassPill>
-              ))}
-            </div>
-          </div>
-          <div>
-            <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
-              border: `1px solid ${filters.openNow ? COLORS.neonGreen : COLORS.cardBorder}`,
-              background: filters.openNow ? `${COLORS.neonGreen}15` : COLORS.glass,
-              color: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
-              fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-              backdropFilter: "blur(12px)", transition: "all 0.3s",
-            }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%", display: "inline-block",
-                background: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
-                boxShadow: filters.openNow ? `0 0 8px ${COLORS.neonGreen}` : "none",
-              }} />
-              Open Now
-            </button>
-            {followedCount > 0 && (
-              <button onClick={() => setShowFollowedOnly(!showFollowedOnly)} style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
-                border: `1px solid ${showFollowedOnly ? COLORS.neonBlue : COLORS.cardBorder}`,
-                background: showFollowedOnly ? `${COLORS.neonBlue}15` : COLORS.glass,
-                color: showFollowedOnly ? COLORS.neonBlue : COLORS.textSecondary,
-                fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                backdropFilter: "blur(12px)", transition: "all 0.3s",
-              }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: "50%", display: "inline-block",
-                  background: showFollowedOnly ? COLORS.neonBlue : COLORS.textSecondary,
-                  boxShadow: showFollowedOnly ? `0 0 8px ${COLORS.neonBlue}` : "none",
-                }} />
-                Following ({followedCount})
-              </button>
-            )}
-          </div>
+        {/* Browse From — always visible, at the top */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif", marginRight: 8 }}>Browse From</div>
+          <GlassPill active={!showFollowedOnly} onClick={() => setShowFollowedOnly(false)}>🌐 All Businesses</GlassPill>
+          {followedCount > 0 && (
+            <GlassPill active={showFollowedOnly} onClick={() => setShowFollowedOnly(true)}>❤️ My Saved ({followedCount})</GlassPill>
+          )}
+          <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+            border: `1px solid ${filters.openNow ? COLORS.neonGreen : COLORS.cardBorder}`,
+            background: filters.openNow ? `${COLORS.neonGreen}15` : COLORS.glass,
+            color: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
+            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+            backdropFilter: "blur(12px)", transition: "all 0.3s",
+          }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%", display: "inline-block",
+              background: filters.openNow ? COLORS.neonGreen : COLORS.textSecondary,
+              boxShadow: filters.openNow ? `0 0 8px ${COLORS.neonGreen}` : "none",
+            }} />
+            Open Now
+          </button>
         </div>
 
-        <div style={{ marginTop: 16 }}>
+        {/* Price — always visible */}
+        <FilterSection label="Price" items={PRICE_FILTERS} filters={filters} setFilters={setFilters} type="price" />
+
+        {/* Distance — always visible */}
+        <div style={{ marginTop: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif" }}>Distance</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.neonBlue, fontFamily: "'DM Sans', sans-serif" }}>{filters.distance} mi</span>
@@ -584,24 +566,36 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
             style={{ width: "100%", accentColor: COLORS.neonBlue, height: 4 }} />
         </div>
 
-        {/* Dynamic tag filter sections from DB (excludes Business Type) */}
+        {/* Category — collapsible, multi-select */}
+        <FilterSection label="Category" items={FILTER_CATEGORIES} filters={filters} setFilters={setFilters} type="category" collapsible />
+
+        {/* Sort By — collapsible */}
+        <CollapsibleSection label="Sort By" count={filters.sort !== "Nearest" ? 1 : 0}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {SORT_OPTIONS.map(s => (
+              <GlassPill key={s} active={filters.sort === s} onClick={() => setFilters(prev => ({ ...prev, sort: s }))}>{s}</GlassPill>
+            ))}
+          </div>
+        </CollapsibleSection>
+
+        {/* Dynamic tag filter sections — collapsible */}
         {tagCats
           .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
           .filter(c => !c.requires_food || selectedCatIsFood)
           .map(c => (
-            <TagFilterSection key={c.id} label={`${c.icon} ${c.name}`} items={c.tags.map(t => t.name)} filters={filters} setFilters={setFilters} />
+            <TagFilterSection key={c.id} label={`${c.icon} ${c.name}`} items={c.tags.map(t => t.name)} filters={filters} setFilters={setFilters} collapsible />
           ))}
         {/* Fallback if DB hasn't loaded yet */}
         {tagCats.length === 0 && (
           <>
-            <TagFilterSection label="Cuisine" items={DEFAULT_CUISINE_FILTERS} filters={filters} setFilters={setFilters} />
-            <TagFilterSection label="Vibe & Atmosphere" items={DEFAULT_VIBE_FILTERS} filters={filters} setFilters={setFilters} />
+            <TagFilterSection label="Cuisine" items={DEFAULT_CUISINE_FILTERS} filters={filters} setFilters={setFilters} collapsible />
+            <TagFilterSection label="Vibe & Atmosphere" items={DEFAULT_VIBE_FILTERS} filters={filters} setFilters={setFilters} collapsible />
           </>
         )}
 
         {/* Apply & Clear buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>
-          <button onClick={() => { setFilters({ search: "", category: "All", price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [] }); setShowFollowedOnly(false); }} style={{
+          <button onClick={() => { setFilters({ search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [] }); setShowFollowedOnly(false); }} style={{
             flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
             border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
             color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
@@ -620,41 +614,117 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
 }
 
 // Filter section helpers to reduce repetition
-function FilterSection({ label, items, filters, setFilters, type }: {
+function CollapsibleSection({ label, children, defaultOpen = false, count }: {
+  label: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  count?: number;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginTop: 16 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+          fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase",
+          letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif", background: "none", border: "none",
+          cursor: "pointer", padding: "8px 0", marginBottom: open ? 10 : 0,
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {label}
+          {(count ?? 0) > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 50,
+              background: `${COLORS.neonPink}25`, color: COLORS.neonPink, minWidth: 18, textAlign: "center",
+            }}>{count}</span>
+          )}
+        </span>
+        <span style={{ fontSize: 14, color: COLORS.textSecondary, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+function FilterSection({ label, items, filters, setFilters, type, collapsible = false }: {
   label: string;
   items: string[];
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   type: "category" | "price";
+  collapsible?: boolean;
 }) {
+  const activeCount = type === "category"
+    ? (filters.categories.length > 0 && !(filters.categories.length === 1 && filters.categories[0] === "All") ? filters.categories.length : 0)
+    : (filters[type] !== "Any" && filters[type] !== "All" ? 1 : 0);
+
+  const content = (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {items.map(item => {
+        const isActive = type === "category"
+          ? filters.categories.includes(item) || (item === "All" && filters.categories.length === 0)
+          : filters[type] === item;
+        return (
+          <GlassPill key={item} active={isActive} onClick={() => {
+            if (type === "category") {
+              if (item === "All") {
+                setFilters(p => ({ ...p, categories: [] }));
+              } else {
+                setFilters(p => {
+                  const cats = p.categories.filter(c => c !== "All");
+                  return { ...p, categories: cats.includes(item) ? cats.filter(c => c !== item) : [...cats, item] };
+                });
+              }
+            } else {
+              setFilters(p => ({ ...p, [type]: item }));
+            }
+          }} title={type === "price" ? PRICE_TOOLTIPS[item] : undefined}>{item}</GlassPill>
+        );
+      })}
+    </div>
+  );
+
+  if (collapsible) {
+    return <CollapsibleSection label={label} count={activeCount}>{content}</CollapsibleSection>;
+  }
+
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>{label}</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {items.map(item => (
-          <GlassPill key={item} active={filters[type] === item} onClick={() => setFilters(p => ({ ...p, [type]: item }))} title={type === "price" ? PRICE_TOOLTIPS[item] : undefined}>{item}</GlassPill>
-        ))}
-      </div>
+      {content}
     </div>
   );
 }
 
-function TagFilterSection({ label, items, filters, setFilters }: {
+function TagFilterSection({ label, items, filters, setFilters, collapsible = true }: {
   label: string;
   items: string[];
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
+  collapsible?: boolean;
 }) {
+  const activeCount = items.filter(t => filters.tags.includes(t)).length;
+
+  const content = (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {items.map(t => (
+        <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
+          ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
+        }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
+      ))}
+    </div>
+  );
+
+  if (collapsible) {
+    return <CollapsibleSection label={label} count={activeCount}>{content}</CollapsibleSection>;
+  }
+
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>{label}</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {items.map(t => (
-          <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
-            ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-          }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
-        ))}
-      </div>
+      {content}
     </div>
   );
 }
@@ -1295,7 +1365,7 @@ function DiscoveryPage() {
   const [totalBizCount, setTotalBizCount] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    search: "", category: "All", price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [],
+    search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [],
   });
   const [currentBiz, setCurrentBiz] = useState(0);
   const [locationZip, setLocationZip] = useState("68102");
@@ -1450,7 +1520,7 @@ function DiscoveryPage() {
     try {
       const params = new URLSearchParams({ page: String(pageNum), limit: "50" });
       if (currentFilters.search.trim()) params.set("search", currentFilters.search.trim());
-      if (currentFilters.category !== "All") params.set("category", currentFilters.category);
+      if (currentFilters.categories.length > 0) params.set("category", currentFilters.categories.join(","));
       if (currentFilters.price !== "Any") params.set("price", currentFilters.price);
       if (currentFilters.openNow) params.set("openNow", "true");
       if (currentFilters.tags.length > 0) params.set("tags", currentFilters.tags.join(","));
