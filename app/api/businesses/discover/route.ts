@@ -1,0 +1,185 @@
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { supabaseServer } from "@/lib/supabaseServer";
+
+/**
+ * GET /api/businesses/discover
+ * Paginated business discovery endpoint for the swipe feed.
+ *
+ * Query params:
+ *   page     - page number (default 1)
+ *   limit    - businesses per page (default 50, max 100)
+ *   search   - text search (name, address, tags)
+ *   category - filter by business subtype/category
+ *   price    - filter by price level ($, $$, $$$, $$$$)
+ *   openNow  - "true" to filter by currently open
+ *   tags     - comma-separated tag filter
+ *   followed - "true" to show only followed businesses (requires userId)
+ *   userId   - current user ID (for followed filter)
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const sp = req.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(sp.get("limit") || "50", 10)));
+    const search = sp.get("search")?.trim() || "";
+    const category = sp.get("category") || "";
+    const price = sp.get("price") || "";
+    const openNow = sp.get("openNow") === "true";
+    const tags = sp.get("tags")?.split(",").filter(Boolean) || [];
+    const followed = sp.get("followed") === "true";
+    const userId = sp.get("userId") || "";
+
+    // Build the business query
+    let query = supabaseServer
+      .from("business")
+      .select(`
+        id, business_name, public_business_name,
+        contact_phone, website, street_address, city, state, zip,
+        phone_number, website_url, address_line1,
+        category_main, config, blurb,
+        payout_tiers, payout_preset,
+        billing_plan, claim_code, seeded_at,
+        mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
+        thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
+        sun_open, sun_close,
+        created_at
+      `, { count: "exact" })
+      .eq("is_active", true);
+
+    // Text search — match business name, address, or category
+    if (search) {
+      query = query.or(
+        `business_name.ilike.%${search}%,public_business_name.ilike.%${search}%,street_address.ilike.%${search}%,city.ilike.%${search}%`
+      );
+    }
+
+    // Category filter — match category_main or config subtype
+    if (category && category !== "All") {
+      const catLower = category.toLowerCase();
+      // Map filter names to category_main values
+      const categoryMainMap: Record<string, string> = {
+        restaurant: "restaurant_bar",
+        bar: "restaurant_bar",
+        coffee: "restaurant_bar",
+        bakery: "restaurant_bar",
+        deli: "restaurant_bar",
+        "ice cream": "restaurant_bar",
+        "juice bar": "restaurant_bar",
+        "food truck": "restaurant_bar",
+        brewery: "restaurant_bar",
+        winery: "restaurant_bar",
+        nightclub: "restaurant_bar",
+        lounge: "restaurant_bar",
+        pub: "restaurant_bar",
+        "sports bar": "restaurant_bar",
+        karaoke: "restaurant_bar",
+        spa: "salon_beauty",
+        gym: "activity",
+        "yoga studio": "activity",
+        "dance studio": "activity",
+        bowling: "activity",
+        arcade: "activity",
+        "mini golf": "activity",
+        "escape room": "activity",
+        theater: "activity",
+        "comedy club": "activity",
+        "art gallery": "activity",
+        museum: "activity",
+        entertainment: "activity",
+        activity: "activity",
+      };
+
+      const mainCat = categoryMainMap[catLower];
+      if (mainCat) {
+        // Filter by category_main AND check config->subtype via raw filter
+        query = query.eq("category_main", mainCat);
+      }
+    }
+
+    // Price filter
+    if (price && price !== "Any") {
+      query = query.filter("config->>priceLevel", "eq", price);
+    }
+
+    // Followed-only filter
+    if (followed && userId) {
+      const { data: followedBiz } = await supabaseServer
+        .from("user_followed_businesses")
+        .select("business_id")
+        .eq("user_id", userId);
+      const followedIds = (followedBiz ?? []).map(f => f.business_id);
+      if (followedIds.length > 0) {
+        query = query.in("id", followedIds);
+      } else {
+        return NextResponse.json({ businesses: [], media: [], tiers: [], total: 0, page, hasMore: false });
+      }
+    }
+
+    // Pagination
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    query = query.order("created_at", { ascending: false }).range(from, to);
+
+    const { data: bizRows, error: bizErr, count } = await query;
+
+    if (bizErr) {
+      console.error("[discover] Business query error:", bizErr);
+      return NextResponse.json({ error: bizErr.message }, { status: 500 });
+    }
+
+    const rows = bizRows ?? [];
+    const total = count ?? 0;
+
+    if (rows.length === 0) {
+      return NextResponse.json({ businesses: rows, media: [], tiers: [], total, page, hasMore: false });
+    }
+
+    // Fetch media + tiers for this page's businesses
+    const bizIds = rows.map((r: Record<string, unknown>) => r.id as string);
+    const [{ data: mediaRows }, { data: tierRows }] = await Promise.all([
+      supabaseServer
+        .from("business_media")
+        .select("business_id, bucket, path, sort_order, caption, meta")
+        .in("business_id", bizIds)
+        .eq("is_active", true)
+        .eq("media_type", "photo")
+        .order("sort_order", { ascending: true })
+        .limit(500),
+      supabaseServer
+        .from("business_payout_tiers")
+        .select("business_id, percent_bps, tier_index")
+        .in("business_id", bizIds)
+        .order("tier_index", { ascending: true })
+        .limit(500),
+    ]);
+
+    // Fetch sponsored campaigns
+    const today = new Date().toISOString().split("T")[0];
+    const { data: campaigns } = await supabaseServer
+      .from("business_ad_campaigns")
+      .select("business_id, price_cents")
+      .in("status", ["active", "purchased", "scheduled"])
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .order("price_cents", { ascending: false });
+
+    const sponsoredIds = [...new Set((campaigns ?? []).map(c => c.business_id).filter(Boolean))];
+
+    return NextResponse.json({
+      businesses: rows,
+      media: mediaRows ?? [],
+      tiers: tierRows ?? [],
+      sponsoredIds,
+      total,
+      page,
+      hasMore: from + rows.length < total,
+    });
+  } catch (err) {
+    console.error("[discover] Unexpected error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

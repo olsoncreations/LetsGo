@@ -1287,8 +1287,12 @@ function DiscoveryPage() {
   const spotlightId = searchParams.get("spotlight");
   const [businesses, setBusinesses] = useState<DiscoveryBusiness[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [error, setError] = useState("");
+  const [discoverPage, setDiscoverPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalBizCount, setTotalBizCount] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     search: "", category: "All", price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [],
@@ -1432,147 +1436,94 @@ function DiscoveryPage() {
     }
   }, [followedIds, getUserId, getAuthToken]);
 
-  // Fetch businesses + media on mount
-  useEffect(() => {
-    let alive = true;
+  // Fetch a page of businesses from the paginated API
+  const fetchDiscoverPage = useCallback(async (
+    pageNum: number,
+    currentFilters: FilterState,
+    append: boolean,
+    followedOnly: boolean,
+    currentUserId?: string,
+  ) => {
+    if (append) setLoadingMore(true);
+    else { setLoading(true); setError(""); }
 
-    (async () => {
-      setLoading(true);
-      setError("");
+    try {
+      const params = new URLSearchParams({ page: String(pageNum), limit: "50" });
+      if (currentFilters.search.trim()) params.set("search", currentFilters.search.trim());
+      if (currentFilters.category !== "All") params.set("category", currentFilters.category);
+      if (currentFilters.price !== "Any") params.set("price", currentFilters.price);
+      if (currentFilters.openNow) params.set("openNow", "true");
+      if (currentFilters.tags.length > 0) params.set("tags", currentFilters.tags.join(","));
+      if (followedOnly && currentUserId) {
+        params.set("followed", "true");
+        params.set("userId", currentUserId);
+      }
 
-      try {
-        // Query 1: Active businesses
-        // Supabase defaults to 1000 rows — must set higher limit for large catalogs
-        const { count: bizCount } = await supabaseBrowser
-          .from("business")
-          .select("id", { count: "exact", head: true })
-          .eq("is_active", true);
+      const res = await fetch(`/api/businesses/discover?${params}`);
+      if (!res.ok) throw new Error("Failed to load businesses");
+      const data = await res.json();
 
-        const totalBiz = bizCount ?? 1000;
-        const { data: bizRows, error: bizErr } = await supabaseBrowser
-          .from("business")
-          .select(`
-            id, business_name, public_business_name,
-            contact_phone, website, street_address, city, state, zip,
-            phone_number, website_url, address_line1,
-            category_main, config, blurb,
-            payout_tiers, payout_preset,
-            billing_plan, claim_code, seeded_at,
-            mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
-            thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
-            sun_open, sun_close
-          `)
-          .eq("is_active", true)
-          .order("created_at", { ascending: false })
-          .limit(Math.max(totalBiz, 1000));
+      const rows = (data.businesses ?? []) as BusinessRow[];
+      const mediaRows = (data.media ?? []) as MediaRow[];
+      const tierRows = (data.tiers ?? []) as { business_id: string; percent_bps: number }[];
+      const sponsoredIds = new Set<string>(data.sponsoredIds ?? []);
 
-        if (bizErr) throw bizErr;
-        if (!alive) return;
+      // Group media by business_id
+      const mediaMap = new Map<string, MediaRow[]>();
+      for (const m of mediaRows) {
+        const existing = mediaMap.get(m.business_id) ?? [];
+        existing.push(m);
+        mediaMap.set(m.business_id, existing);
+      }
 
-        const rows = (bizRows ?? []) as BusinessRow[];
-        if (rows.length === 0) {
-          setBusinesses([]);
-          return;
-        }
+      // Group payout tiers by business_id
+      const tierMap = new Map<string, number[]>();
+      for (const t of tierRows) {
+        if (!tierMap.has(t.business_id)) tierMap.set(t.business_id, []);
+        tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
+      }
 
-        // Query 2 & 3: Bulk-fetch media + payout tiers for all business IDs
-        // Batch .in() in chunks of 100 to stay within PostgREST URL length
-        // and row limits (100 biz × 7 tiers = 700 rows, well under 1000 default)
-        const bizIds = rows.map(r => r.id);
-        const CHUNK = 100;
-        const allMedia: MediaRow[] = [];
-        const allTiers: { business_id: string; percent_bps: number; tier_index: number }[] = [];
+      // Normalize
+      const normalized = rows.map(row =>
+        normalizeToDiscoveryBusiness(row, mediaMap.get(row.id) ?? [], tierMap.get(row.id))
+      );
 
-        for (let c = 0; c < bizIds.length; c += CHUNK) {
-          const chunk = bizIds.slice(c, c + CHUNK);
-          const [{ data: mRows }, { data: tRows }] = await Promise.all([
-            supabaseBrowser
-              .from("business_media")
-              .select("business_id, bucket, path, sort_order, caption, meta")
-              .in("business_id", chunk)
-              .eq("is_active", true)
-              .eq("media_type", "photo")
-              .order("sort_order", { ascending: true })
-              .limit(1000),
-            supabaseBrowser
-              .from("business_payout_tiers")
-              .select("business_id, percent_bps, tier_index")
-              .in("business_id", chunk)
-              .order("tier_index", { ascending: true })
-              .limit(1000),
-          ]);
-          if (mRows) allMedia.push(...(mRows as MediaRow[]));
-          if (tRows) allTiers.push(...(tRows as { business_id: string; percent_bps: number; tier_index: number }[]));
-        }
+      // Mark sponsored
+      for (const biz of normalized) {
+        if (sponsoredIds.has(biz.id)) biz.isSponsored = true;
+      }
 
-        if (!alive) return;
-
-        // Group media by business_id
-        const mediaMap = new Map<string, MediaRow[]>();
-        for (const m of allMedia) {
-          const existing = mediaMap.get(m.business_id) ?? [];
-          existing.push(m);
-          mediaMap.set(m.business_id, existing);
-        }
-
-        // Group payout tiers by business_id
-        const tierMap = new Map<string, number[]>();
-        for (const t of allTiers) {
-          if (!tierMap.has(t.business_id)) tierMap.set(t.business_id, []);
-          tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
-        }
-
-        // Normalize all businesses
-        const normalized = rows.map(row =>
-          normalizeToDiscoveryBusiness(row, mediaMap.get(row.id) ?? [], tierMap.get(row.id))
-        );
-
-        if (!alive) return;
-
-        // Query 3: Active ad campaigns (sponsored businesses go first)
-        const today = new Date().toISOString().split("T")[0];
-        const { data: campaigns } = await supabaseBrowser
-          .from("business_ad_campaigns")
-          .select("business_id, price_cents")
-          .in("status", ["active", "purchased", "scheduled"])
-          .lte("start_date", today)
-          .gte("end_date", today)
-          .order("price_cents", { ascending: false });
-
-        if (!alive) return;
-
-        // Build a set of sponsored business IDs (ordered by price_cents DESC)
-        const sponsoredIds = new Set<string>();
-        for (const c of (campaigns ?? [])) {
-          if (c.business_id) sponsoredIds.add(c.business_id);
-        }
-
-        // Mark sponsored businesses
-        for (const biz of normalized) {
-          if (sponsoredIds.has(biz.id)) biz.isSponsored = true;
-        }
-
-        // Split into sponsored (preserve priority order) and non-sponsored (shuffle)
-        const sponsoredOrder = [...sponsoredIds];
-        const sponsored = sponsoredOrder
-          .map(id => normalized.find(b => b.id === id))
-          .filter((b): b is DiscoveryBusiness => b !== undefined);
+      if (append) {
+        // Deduplicate when appending
+        setBusinesses(prev => {
+          const existingIds = new Set(prev.map(b => b.id));
+          const newBiz = normalized.filter(b => !existingIds.has(b.id));
+          return [...prev, ...newBiz];
+        });
+      } else {
+        // First page: sponsored first, then shuffle the rest
+        const sponsored = normalized.filter(b => sponsoredIds.has(b.id));
         const rest = normalized.filter(b => !sponsoredIds.has(b.id));
         shuffleArray(rest);
-
-        // Sponsored first, then random
         setBusinesses([...sponsored, ...rest]);
-      } catch (e: unknown) {
-        if (!alive) return;
-        const msg = e instanceof Error ? e.message : "Failed to load businesses.";
-        setError(msg);
-        setBusinesses([]);
-      } finally {
-        if (alive) setLoading(false);
       }
-    })();
 
-    return () => { alive = false; };
+      setHasMore(data.hasMore ?? false);
+      setTotalBizCount(data.total ?? 0);
+      setDiscoverPage(pageNum);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load businesses.";
+      if (!append) { setError(msg); setBusinesses([]); }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, []);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchDiscoverPage(1, filters, false, showFollowedOnly);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Geocode unknown business zip codes so distance works for all businesses
@@ -1607,7 +1558,34 @@ function DiscoveryPage() {
     geocodeNext();
   }, [businesses]);
 
-  // Client-side filtering
+  // Re-fetch from server when filters change (debounced for search input)
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const prevFiltersRef = useRef(filters);
+  const prevFollowedOnlyRef = useRef(showFollowedOnly);
+
+  useEffect(() => {
+    // Skip initial mount (handled by the mount useEffect)
+    const filtersChanged = JSON.stringify(filters) !== JSON.stringify(prevFiltersRef.current);
+    const followedChanged = showFollowedOnly !== prevFollowedOnlyRef.current;
+    if (!filtersChanged && !followedChanged) return;
+
+    prevFiltersRef.current = filters;
+    prevFollowedOnlyRef.current = showFollowedOnly;
+
+    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
+
+    // Debounce search input, instant for other filters
+    const delay = filtersChanged && filters.search !== prevFiltersRef.current.search ? 400 : 50;
+    filterDebounceRef.current = setTimeout(() => {
+      setCurrentBiz(0);
+      if (verticalRef.current) verticalRef.current.scrollTop = 0;
+      fetchDiscoverPage(1, filters, false, showFollowedOnly);
+    }, delay);
+
+    return () => { if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current); };
+  }, [filters, showFollowedOnly, fetchDiscoverPage]);
+
+  // Client-side filtering (only for things not handled server-side: openNow, sort, spotlight)
   const filteredBusinesses = useMemo(() => {
     // Spotlight mode: show only the spotlighted business
     if (spotlightId) {
@@ -1617,38 +1595,12 @@ function DiscoveryPage() {
 
     let result = businesses;
 
-    if (showFollowedOnly) {
-      result = result.filter(b => followedIds.has(b.id));
-    }
-
-    if (filters.search.trim()) {
-      const q = filters.search.trim().toLowerCase();
-      result = result.filter(b =>
-        b.name.toLowerCase().includes(q) ||
-        b.type.toLowerCase().includes(q) ||
-        b.tags.some(t => t.toLowerCase().includes(q)) ||
-        b.address.toLowerCase().includes(q)
-      );
-    }
-
-    if (filters.category !== "All") {
-      const cat = filters.category.toLowerCase();
-      result = result.filter(b =>
-        b.type.toLowerCase().includes(cat) ||
-        b.categoryMain.toLowerCase().includes(cat) ||
-        b.vibe.toLowerCase().includes(cat) ||
-        b.tags.some(t => t.toLowerCase() === cat)
-      );
-    }
-
-    if (filters.price !== "Any") {
-      result = result.filter(b => b.price === filters.price);
-    }
-
+    // Open now is real-time client-side (depends on current time + hours)
     if (filters.openNow) {
       result = result.filter(b => b.isOpen);
     }
 
+    // Tags are partially server-side but also refine client-side for subtype matching
     if (filters.tags.length > 0) {
       result = result.filter(b => {
         const hay = `${b.name} ${b.type} ${b.vibe} ${b.tags.join(" ")}`.toLowerCase();
@@ -1660,16 +1612,22 @@ function DiscoveryPage() {
     if (filters.sort === "Highest Payout") {
       result = [...result].sort((a, b) => (b.payout[6] ?? 0) - (a.payout[6] ?? 0));
     }
-    // Distance sort is UI-only for now (no geo data in DB)
 
     return result;
-  }, [businesses, filters, showFollowedOnly, followedIds]);
+  }, [businesses, filters, spotlightId]);
 
+  // Infinite scroll: load more when user swipes near the end
   const handleVerticalScroll = useCallback(() => {
     if (!verticalRef.current) return;
     const { scrollTop, clientHeight } = verticalRef.current;
-    setCurrentBiz(Math.round(scrollTop / clientHeight));
-  }, []);
+    const newBiz = Math.round(scrollTop / clientHeight);
+    setCurrentBiz(newBiz);
+
+    // Prefetch next page when within 10 businesses of the end
+    if (hasMore && !loadingMore && newBiz >= businesses.length - 10) {
+      fetchDiscoverPage(discoverPage + 1, filters, true, showFollowedOnly);
+    }
+  }, [hasMore, loadingMore, businesses.length, discoverPage, filters, showFollowedOnly, fetchDiscoverPage]);
 
   if (!authChecked) return <div style={{ minHeight: "100vh", background: COLORS.darkBg }} />;
 
