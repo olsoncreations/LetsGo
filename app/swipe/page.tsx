@@ -1442,6 +1442,13 @@ function DiscoveryPage() {
 
       try {
         // Query 1: Active businesses
+        // Supabase defaults to 1000 rows — must set higher limit for large catalogs
+        const { count: bizCount } = await supabaseBrowser
+          .from("business")
+          .select("id", { count: "exact", head: true })
+          .eq("is_active", true);
+
+        const totalBiz = bizCount ?? 1000;
         const { data: bizRows, error: bizErr } = await supabaseBrowser
           .from("business")
           .select(`
@@ -1456,7 +1463,8 @@ function DiscoveryPage() {
             sun_open, sun_close
           `)
           .eq("is_active", true)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(Math.max(totalBiz, 1000));
 
         if (bizErr) throw bizErr;
         if (!alive) return;
