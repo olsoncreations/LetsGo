@@ -12,6 +12,7 @@ import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips } from "@/lib/zip
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
+import { loadFilterPreferences } from "@/lib/filterPreferences";
 import {
   type BusinessRow, type MediaRow, type DiscoveryImage, type DiscoveryBusiness,
   buildMediaUrl, getBusinessGradient, getBusinessEmoji, formatBusinessType,
@@ -173,7 +174,7 @@ const PRICE_TOOLTIPS: Record<string, string> = {
 
 // ─── Filter Bar ───
 
-function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZip, onLocationZipChange, onLocationCoordsChange, showFollowedOnly, setShowFollowedOnly, followedCount }: {
+function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZip, onLocationZipChange, onLocationCoordsChange, showFollowedOnly, setShowFollowedOnly, followedCount, onApply }: {
   filtersOpen: boolean;
   setFiltersOpen: (v: boolean) => void;
   filters: FilterState;
@@ -184,6 +185,7 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
   showFollowedOnly: boolean;
   setShowFollowedOnly: (v: boolean) => void;
   followedCount: number;
+  onApply: () => void;
 }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const [editingZip, setEditingZip] = useState(false);
@@ -601,7 +603,7 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
             color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
             transition: "all 0.3s",
           }}>Clear All</button>
-          <button onClick={() => setFiltersOpen(false)} style={{
+          <button onClick={() => { onApply(); setFiltersOpen(false); }} style={{
             flex: 2, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
             border: "none", background: NEON,
             color: "#fff", cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
@@ -1590,9 +1592,19 @@ function DiscoveryPage() {
     }
   }, []);
 
-  // Initial fetch on mount
+  // Load saved filter preferences, then do initial fetch
   useEffect(() => {
-    fetchDiscoverPage(1, filters, false, showFollowedOnly);
+    (async () => {
+      const token = await getAuthToken();
+      const saved = await loadFilterPreferences(token);
+      if (saved) {
+        const merged = { ...filters, ...saved, search: "" };
+        setFilters(merged);
+        fetchDiscoverPage(1, merged, false, showFollowedOnly);
+      } else {
+        fetchDiscoverPage(1, filters, false, showFollowedOnly);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1628,32 +1640,27 @@ function DiscoveryPage() {
     geocodeNext();
   }, [businesses]);
 
-  // Re-fetch from server when filters change (debounced for search input)
-  const filterDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
-  const prevFiltersRef = useRef(filters);
-  const prevFollowedOnlyRef = useRef(showFollowedOnly);
+  // Apply filters: only re-fetch when user clicks "Apply Filters" (not on every click)
+  const handleApplyFilters = useCallback(() => {
+    setCurrentBiz(0);
+    if (verticalRef.current) verticalRef.current.scrollTop = 0;
+    fetchDiscoverPage(1, filters, false, showFollowedOnly);
+  }, [filters, showFollowedOnly, fetchDiscoverPage]);
 
+  // Debounced search: auto-fetch when user types in search (no Apply needed)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const prevSearchRef = useRef(filters.search);
   useEffect(() => {
-    // Skip initial mount (handled by the mount useEffect)
-    const filtersChanged = JSON.stringify(filters) !== JSON.stringify(prevFiltersRef.current);
-    const followedChanged = showFollowedOnly !== prevFollowedOnlyRef.current;
-    if (!filtersChanged && !followedChanged) return;
-
-    prevFiltersRef.current = filters;
-    prevFollowedOnlyRef.current = showFollowedOnly;
-
-    if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current);
-
-    // Debounce search input, instant for other filters
-    const delay = filtersChanged && filters.search !== prevFiltersRef.current.search ? 400 : 50;
-    filterDebounceRef.current = setTimeout(() => {
+    if (filters.search === prevSearchRef.current) return;
+    prevSearchRef.current = filters.search;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
       setCurrentBiz(0);
       if (verticalRef.current) verticalRef.current.scrollTop = 0;
       fetchDiscoverPage(1, filters, false, showFollowedOnly);
-    }, delay);
-
-    return () => { if (filterDebounceRef.current) clearTimeout(filterDebounceRef.current); };
-  }, [filters, showFollowedOnly, fetchDiscoverPage]);
+    }, 500);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [filters.search, filters, showFollowedOnly, fetchDiscoverPage]);
 
   // Client-side filtering (only for things not handled server-side: openNow, sort, spotlight)
   const filteredBusinesses = useMemo(() => {
@@ -1717,7 +1724,7 @@ function DiscoveryPage() {
         />
       )}
       <FloatingOrbs />
-      <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showFollowedOnly={showFollowedOnly} setShowFollowedOnly={setShowFollowedOnly} followedCount={followedIds.size} />
+      <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showFollowedOnly={showFollowedOnly} setShowFollowedOnly={setShowFollowedOnly} followedCount={followedIds.size} onApply={handleApplyFilters} />
 
       {/* LaunchBanner is rendered inside MainPhotoPage (page 1 only) */}
 

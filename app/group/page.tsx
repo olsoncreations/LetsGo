@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
+import { loadFilterPreferences } from "@/lib/filterPreferences";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -1598,6 +1599,25 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   // DB-driven tag categories
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
   useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+
+  // Load saved filter preferences
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) return;
+      const saved = await loadFilterPreferences(session.access_token);
+      if (saved) {
+        setFilters(prev => ({
+          ...prev,
+          category: saved.categories.length > 0 ? saved.categories : prev.category,
+          price: saved.price && saved.price !== "Any" ? [saved.price] : prev.price,
+          distance: saved.distance || prev.distance,
+          openNow: saved.openNow ?? prev.openNow,
+          tags: saved.tags.length > 0 ? saved.tags : prev.tags,
+        }));
+      }
+    })();
+  }, []);
   const FILTER_CATEGORIES = useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
     return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;

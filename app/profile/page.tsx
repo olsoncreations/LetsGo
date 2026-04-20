@@ -21,6 +21,7 @@ import { EarningsBannerAnim, ReceiptAnim, CashOutAnim, HeartAnim, TabSwitchAnim,
 import OpportunityCTA from "@/components/OpportunityCTA";
 import { LaunchBanner, CashoutBanner } from "@/components/LaunchBanner";
 import UserPaymentMethod from "@/components/profile/UserPaymentMethod";
+import FilterPreferencesModal from "@/components/profile/FilterPreferencesModal";
 
 // ═══════════════════════════════════════════════════
 // NEON PALETTE
@@ -865,6 +866,7 @@ export default function LetsGoProfile() {
 
   // UI state
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [filterPrefsOpen, setFilterPrefsOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [receiptFilter, setReceiptFilter] = useState("all");
   const [receiptBusinessFilter, setReceiptBusinessFilter] = useState("");
@@ -1757,6 +1759,7 @@ export default function LetsGoProfile() {
       `}</style>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} profile={profile} avatarUrl={avatarUrl} onAvatarChange={(url) => { setAvatarUrl(url); if (!url && token) { fetch("/api/users/profile", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ avatar_url: "" }) }); } }} onProfileSaved={(p) => setProfile(p)} token={token} />
+      <FilterPreferencesModal open={filterPrefsOpen} onClose={() => setFilterPrefsOpen(false)} token={token} />
       <ReceiptUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} token={token} userId={profile?.id||""} onSuccess={(r: ReceiptDisplay) => { setReceipts(prev => [r, ...prev]); setUploadOpen(false); }} />
       <ReceiptDetailModal receipt={viewingReceipt} open={!!viewingReceipt} onClose={() => setViewingReceipt(null)} />
       <LevelUpCelebration data={levelUpCelebration} onClose={() => setLevelUpCelebration(null)} />
@@ -1902,6 +1905,10 @@ export default function LetsGoProfile() {
 
                 <div className="hero-actions" style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
                   <button onClick={() => setSettingsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.primaryRGB},0.3)`, background: `rgba(${NEON.primaryRGB},0.08)`, color: NEON.primary, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>Edit Profile</button>
+                  <button onClick={() => setFilterPrefsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.3)`, background: `rgba(${NEON.yellowRGB},0.08)`, color: NEON.yellow, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={NEON.yellow} strokeWidth="2" strokeLinecap="round"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6M9 8h6M17 16h6"/></svg>
+                    Filter Preferences
+                  </button>
                   <button onClick={() => { const opening = !heroFriendsOpen; setHeroFriendsOpen(opening); if (opening) { setAddFriendOpen(true); setTimeout(() => friendsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); } }} style={{ position: "relative", padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${heroFriendsOpen ? 0.5 : 0.3})`, background: heroFriendsOpen ? `rgba(${NEON.purpleRGB},0.12)` : `rgba(${NEON.purpleRGB},0.06)`, color: NEON.purple, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all 0.2s ease" }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={NEON.purple} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8.5" cy="7" r="4" stroke={NEON.purple} strokeWidth="2"/></svg>
                     Friends

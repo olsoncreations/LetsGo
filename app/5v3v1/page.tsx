@@ -12,6 +12,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
+import { loadFilterPreferences } from "@/lib/filterPreferences";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { CategoryGridAnim, FilterAnim, FriendSelectAnim, PickFiveAnim, MiniGamesAnim, FunnelGameAnim, PickWinnerAnim, CelebrationAnim, GameHistoryAnim } from "@/components/TourIllustrations";
@@ -646,6 +647,18 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
         if (res.ok) {
           const data = await res.json();
           setFriends(data.friends ?? []);
+        }
+
+        // Load saved filter preferences
+        const savedPrefs = await loadFilterPreferences(token);
+        if (savedPrefs) {
+          setFilters(prev => ({
+            ...prev,
+            price: savedPrefs.price || prev.price,
+            distance: savedPrefs.distance || prev.distance,
+            openNow: savedPrefs.openNow ?? prev.openNow,
+            tags: savedPrefs.tags.length > 0 ? savedPrefs.tags : prev.tags,
+          }));
         }
 
         // Fetch completed game history
