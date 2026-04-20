@@ -1468,9 +1468,10 @@ function DiscoveryPage() {
         }
 
         // Query 2 & 3: Bulk-fetch media + payout tiers for all business IDs
-        // Batch .in() queries in chunks of 200 to avoid PostgREST URL length limits
+        // Batch .in() in chunks of 100 to stay within PostgREST URL length
+        // and row limits (100 biz × 7 tiers = 700 rows, well under 1000 default)
         const bizIds = rows.map(r => r.id);
-        const CHUNK = 200;
+        const CHUNK = 100;
         const allMedia: MediaRow[] = [];
         const allTiers: { business_id: string; percent_bps: number; tier_index: number }[] = [];
 
@@ -1483,12 +1484,14 @@ function DiscoveryPage() {
               .in("business_id", chunk)
               .eq("is_active", true)
               .eq("media_type", "photo")
-              .order("sort_order", { ascending: true }),
+              .order("sort_order", { ascending: true })
+              .limit(1000),
             supabaseBrowser
               .from("business_payout_tiers")
               .select("business_id, percent_bps, tier_index")
               .in("business_id", chunk)
-              .order("tier_index", { ascending: true }),
+              .order("tier_index", { ascending: true })
+              .limit(1000),
           ]);
           if (mRows) allMedia.push(...(mRows as MediaRow[]));
           if (tRows) allTiers.push(...(tRows as { business_id: string; percent_bps: number; tier_index: number }[]));

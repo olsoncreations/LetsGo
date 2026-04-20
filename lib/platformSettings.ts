@@ -42,6 +42,7 @@ export const DEFAULT_PRESET_BPS: Record<string, number[]> = {
   standard: [500, 750, 1000, 1250, 1500, 1750, 2000],
   conservative: [300, 400, 500, 600, 700, 800, 1000],
   aggressive: [800, 1000, 1200, 1400, 1600, 1800, 2000],
+  trial: [0, 0, 0, 0, 0, 0, 0],
 };
 
 export const DEFAULT_CASHBACK_BPS = [500, 750, 1000, 1250, 1500, 1750, 2000];
