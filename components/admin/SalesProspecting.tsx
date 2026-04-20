@@ -1108,9 +1108,6 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setSeedProgress({ current: 0, total: count, succeeded: 0, failed: 0, skipped: 0 });
 
     try {
-      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token;
-      if (!token) { alert("Not authenticated"); return; }
-
       const leadIds = Array.from(unseedLeadIds);
       const batchSize = 10;
       let totalSucceeded = 0;
@@ -1118,6 +1115,10 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       let totalSkipped = 0;
 
       for (let i = 0; i < leadIds.length; i += batchSize) {
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        const token = session?.access_token;
+        if (!token) { alert("Session expired. Please log in again."); break; }
+
         const batch = leadIds.slice(i, i + batchSize);
         const res = await fetch("/api/admin/sales/prospect/bulk-seed", {
           method: "DELETE",
@@ -1173,9 +1174,6 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setSeedProgress({ current: 0, total: count, succeeded: 0, failed: 0, skipped: 0 });
 
     try {
-      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token;
-      if (!token) { alert("Not authenticated"); return; }
-
       // Process in batches of 10 to get progress updates
       const leadIds = Array.from(selectedLeadIds);
       const batchSize = 10;
@@ -1184,6 +1182,11 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       let totalSkipped = 0;
 
       for (let i = 0; i < leadIds.length; i += batchSize) {
+        // Refresh token each batch to prevent expiration on long runs
+        const { data: { session } } = await supabaseBrowser.auth.getSession();
+        const token = session?.access_token;
+        if (!token) { alert("Session expired. Please log in again."); break; }
+
         const batch = leadIds.slice(i, i + batchSize);
         const res = await fetch("/api/admin/sales/prospect/bulk-seed", {
           method: "POST",
