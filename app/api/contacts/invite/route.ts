@@ -29,7 +29,7 @@ async function extractUserId(req: NextRequest): Promise<string | null> {
 //
 // Send invite emails to non-users via Resend.
 // Inserts rows into contact_invites table.
-// Rate limited: max 50 per request, 100 per user per day.
+// Rate limited: max 50 per request, 200 per user per day.
 //
 // Body: { invites: InviteInput[] }
 // Returns: { sent: number, skipped: number }
@@ -68,10 +68,10 @@ export async function POST(req: NextRequest): Promise<Response> {
       .eq("inviter_id", userId)
       .gte("created_at", dayAgo);
 
-    const remaining = 100 - (todayCount ?? 0);
+    const remaining = 200 - (todayCount ?? 0);
     if (remaining <= 0) {
       return NextResponse.json(
-        { error: "Daily invite limit reached (100/day). Try again tomorrow." },
+        { error: "Daily invite limit reached (200/day). Try again tomorrow." },
         { status: 429 }
       );
     }
