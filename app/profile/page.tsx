@@ -2026,7 +2026,61 @@ export default function LetsGoProfile() {
                         <div style={{ padding: "5px 12px", borderRadius: 3, background: "rgba(255,255,255,0.04)", border: `1px solid rgba(${NEON.purpleRGB},0.2)`, fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 12, fontWeight: 700, color: NEON.purple, letterSpacing: "0.1em", textShadow: `0 0 8px rgba(${NEON.purpleRGB},0.3)` }}>{referralCode}</div>
                         <button onClick={() => { navigator.clipboard?.writeText(referralCode); setReferralCopied(true); setTimeout(() => setReferralCopied(false), 2000); }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${referralCopied ? 0.5 : 0.25})`, background: referralCopied ? `rgba(${NEON.greenRGB},0.1)` : `rgba(${NEON.purpleRGB},0.06)`, color: referralCopied ? NEON.green : NEON.purple, fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s ease", whiteSpace: "nowrap" }}>{referralCopied ? "Copied!" : "Copy Code"}</button>
                         </>)}
-                        <button onClick={async () => { const url = `${window.location.origin}/profile?add=${profile?.id||""}`; if (navigator.share) { try { await navigator.share({ title: "Add me on LetsGo!", url }); } catch {} } else { navigator.clipboard?.writeText(url); setShareLinkCopied(true); setTimeout(() => setShareLinkCopied(false), 2000); } }} onMouseEnter={e => { if (!shareLinkCopied) { e.currentTarget.style.background = `rgba(${NEON.purpleRGB},0.1)`; e.currentTarget.style.color = NEON.purple; e.currentTarget.style.borderColor = `rgba(${NEON.purpleRGB},0.4)`; } }} onMouseLeave={e => { if (!shareLinkCopied) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.45)"; e.currentTarget.style.borderColor = `rgba(${NEON.purpleRGB},0.2)`; } }} onMouseDown={e => { e.currentTarget.style.background = `rgba(${NEON.purpleRGB},0.18)`; e.currentTarget.style.color = NEON.purple; }} onMouseUp={e => { e.currentTarget.style.background = `rgba(${NEON.purpleRGB},0.1)`; }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${shareLinkCopied ? 0.5 : 0.2})`, background: shareLinkCopied ? `rgba(${NEON.greenRGB},0.1)` : "transparent", color: shareLinkCopied ? NEON.green : "rgba(255,255,255,0.45)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", transition: "all 0.2s ease" }}>
+                        <button onClick={async () => {
+                          // Contact Picker API (mobile) or native share fallback
+                          const cp = (navigator as unknown as Record<string, unknown>).contacts as { select?: (props: string[], opts: Record<string, boolean>) => Promise<Array<{ name?: string[]; email?: string[]; tel?: string[] }>> } | undefined;
+                          if (cp?.select) {
+                            try {
+                              const contacts = await cp.select(["name", "email", "tel"], { multiple: true });
+                              if (contacts.length > 0) {
+                                const formatted = contacts.map(c => ({
+                                  name: c.name?.[0] || "",
+                                  email: c.email?.[0] || "",
+                                  phone: c.tel?.[0] || "",
+                                })).filter(c => c.email || c.phone);
+                                if (formatted.length === 0) return;
+                                // Send email invites
+                                const emailContacts = formatted.filter(c => c.email);
+                                if (emailContacts.length > 0) {
+                                  await fetch("/api/contacts/invite", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({
+                                      contacts: emailContacts.map(c => ({ name: c.name, email: c.email })),
+                                      referralCode: referralCode || "",
+                                    }),
+                                  });
+                                }
+                                // Send SMS invites
+                                const smsContacts = formatted.filter(c => c.phone && !c.email);
+                                if (smsContacts.length > 0) {
+                                  await fetch("/api/contacts/invite-sms", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({
+                                      contacts: smsContacts.map(c => ({ name: c.name, phone: c.phone })),
+                                      referralCode: referralCode || "",
+                                    }),
+                                  });
+                                }
+                                showToast(`Invites sent to ${formatted.length} contact${formatted.length > 1 ? "s" : ""}!`);
+                              }
+                            } catch { /* user cancelled */ }
+                          } else {
+                            // Fallback: native share
+                            const url = `${window.location.origin}/welcome${referralCode ? `?ref=${referralCode}` : ""}`;
+                            if (navigator.share) {
+                              try { await navigator.share({ title: "Join me on LetsGo!", text: "Discover restaurants & activities and earn cash-back rewards!", url }); } catch {}
+                            } else {
+                              navigator.clipboard?.writeText(url);
+                              showToast("Invite link copied!");
+                            }
+                          }
+                        }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.greenRGB},0.25)`, background: `rgba(${NEON.greenRGB},0.06)`, color: NEON.green, fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", transition: "all 0.2s ease" }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                          Invite Contacts
+                        </button>
+                        <button onClick={async () => { const url = `${window.location.origin}/profile?add=${profile?.id||""}`; if (navigator.share) { try { await navigator.share({ title: "Add me on LetsGo!", url }); } catch {} } else { navigator.clipboard?.writeText(url); setShareLinkCopied(true); setTimeout(() => setShareLinkCopied(false), 2000); } }} style={{ padding: "5px 10px", borderRadius: 3, border: `1px solid rgba(${NEON.purpleRGB},${shareLinkCopied ? 0.5 : 0.2})`, background: shareLinkCopied ? `rgba(${NEON.greenRGB},0.1)` : "transparent", color: shareLinkCopied ? NEON.green : "rgba(255,255,255,0.45)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", transition: "all 0.2s ease" }}>
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                           {shareLinkCopied ? "Copied!" : "Share Link"}
                         </button>
