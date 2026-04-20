@@ -1468,27 +1468,37 @@ function DiscoveryPage() {
         }
 
         // Query 2 & 3: Bulk-fetch media + payout tiers for all business IDs
+        // Batch .in() queries in chunks of 200 to avoid PostgREST URL length limits
         const bizIds = rows.map(r => r.id);
-        const [{ data: mediaRows }, { data: tierRows }] = await Promise.all([
-          supabaseBrowser
-            .from("business_media")
-            .select("business_id, bucket, path, sort_order, caption, meta")
-            .in("business_id", bizIds)
-            .eq("is_active", true)
-            .eq("media_type", "photo")
-            .order("sort_order", { ascending: true }),
-          supabaseBrowser
-            .from("business_payout_tiers")
-            .select("business_id, percent_bps, tier_index")
-            .in("business_id", bizIds)
-            .order("tier_index", { ascending: true }),
-        ]);
+        const CHUNK = 200;
+        const allMedia: MediaRow[] = [];
+        const allTiers: { business_id: string; percent_bps: number; tier_index: number }[] = [];
+
+        for (let c = 0; c < bizIds.length; c += CHUNK) {
+          const chunk = bizIds.slice(c, c + CHUNK);
+          const [{ data: mRows }, { data: tRows }] = await Promise.all([
+            supabaseBrowser
+              .from("business_media")
+              .select("business_id, bucket, path, sort_order, caption, meta")
+              .in("business_id", chunk)
+              .eq("is_active", true)
+              .eq("media_type", "photo")
+              .order("sort_order", { ascending: true }),
+            supabaseBrowser
+              .from("business_payout_tiers")
+              .select("business_id, percent_bps, tier_index")
+              .in("business_id", chunk)
+              .order("tier_index", { ascending: true }),
+          ]);
+          if (mRows) allMedia.push(...(mRows as MediaRow[]));
+          if (tRows) allTiers.push(...(tRows as { business_id: string; percent_bps: number; tier_index: number }[]));
+        }
 
         if (!alive) return;
 
         // Group media by business_id
         const mediaMap = new Map<string, MediaRow[]>();
-        for (const m of (mediaRows ?? []) as MediaRow[]) {
+        for (const m of allMedia) {
           const existing = mediaMap.get(m.business_id) ?? [];
           existing.push(m);
           mediaMap.set(m.business_id, existing);
@@ -1496,7 +1506,7 @@ function DiscoveryPage() {
 
         // Group payout tiers by business_id
         const tierMap = new Map<string, number[]>();
-        for (const t of (tierRows ?? []) as { business_id: string; percent_bps: number }[]) {
+        for (const t of allTiers) {
           if (!tierMap.has(t.business_id)) tierMap.set(t.business_id, []);
           tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
         }
@@ -1615,7 +1625,8 @@ function DiscoveryPage() {
       result = result.filter(b =>
         b.type.toLowerCase().includes(cat) ||
         b.categoryMain.toLowerCase().includes(cat) ||
-        b.vibe.toLowerCase().includes(cat)
+        b.vibe.toLowerCase().includes(cat) ||
+        b.tags.some(t => t.toLowerCase() === cat)
       );
     }
 

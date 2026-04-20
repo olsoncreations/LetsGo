@@ -158,11 +158,16 @@ export async function POST(req: NextRequest) {
         const businessId = `seed-${slug}-${Date.now().toString(36)}`;
 
         // Config
+        const googleType = lead.business_type || "Restaurant";
+        const subtype = mapBusinessSubtype(googleType);
         const config: Record<string, unknown> = {
-          businessType: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
+          businessType: mapBusinessTypeToCategory(googleType),
+          googleBusinessType: googleType,
+          subtype,
           priceLevel,
           payoutPreset: "trial",
           images: photos.map(p => p.url),
+          tags: [subtype],
         };
 
         // Insert business
@@ -456,4 +461,46 @@ function mapBusinessTypeToCategory(googleType: string): string {
   if (t.includes("salon") || t.includes("beauty") || t.includes("spa") || t.includes("barber") || t.includes("nail") || t.includes("yoga")) return "salon_beauty";
   if (t.includes("gym") || t.includes("fitness")) return "activity";
   return "activity";
+}
+
+/** Map Google business type to granular subtype matching the discovery filter options */
+function mapBusinessSubtype(googleType: string): string {
+  const t = googleType.toLowerCase();
+  // Bars & nightlife
+  if (t.includes("nightclub") || t.includes("night_club")) return "Nightclub";
+  if (t.includes("brewery")) return "Brewery";
+  if (t.includes("winery")) return "Winery";
+  if (t.includes("lounge")) return "Lounge";
+  if (t.includes("sports bar")) return "Sports Bar";
+  if (t.includes("pub")) return "Pub";
+  if (t.includes("karaoke")) return "Karaoke";
+  if (t.includes("bar")) return "Bar";
+  // Coffee & quick serve
+  if (t.includes("coffee") || t.includes("cafe")) return "Coffee";
+  if (t.includes("bakery")) return "Bakery";
+  if (t.includes("ice cream")) return "Ice Cream";
+  if (t.includes("juice")) return "Juice Bar";
+  if (t.includes("deli")) return "Deli";
+  if (t.includes("food truck")) return "Food Truck";
+  // Restaurant
+  if (t.includes("restaurant") || t.includes("food") || t.includes("diner")) return "Restaurant";
+  // Beauty
+  if (t.includes("spa")) return "Spa";
+  if (t.includes("salon") || t.includes("beauty") || t.includes("barber") || t.includes("nail")) return "Spa";
+  if (t.includes("yoga")) return "Yoga Studio";
+  // Fitness
+  if (t.includes("gym") || t.includes("fitness")) return "Gym";
+  if (t.includes("dance")) return "Dance Studio";
+  // Entertainment
+  if (t.includes("bowling")) return "Bowling";
+  if (t.includes("arcade")) return "Arcade";
+  if (t.includes("escape")) return "Escape Room";
+  if (t.includes("mini golf") || t.includes("miniature golf")) return "Mini Golf";
+  if (t.includes("theater") || t.includes("theatre") || t.includes("cinema") || t.includes("movie")) return "Theater";
+  if (t.includes("comedy")) return "Comedy Club";
+  if (t.includes("museum")) return "Museum";
+  if (t.includes("art gallery") || t.includes("gallery")) return "Art Gallery";
+  // Generic
+  if (t.includes("entertainment") || t.includes("amusement")) return "Entertainment";
+  return "Activity";
 }

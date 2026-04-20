@@ -313,7 +313,7 @@ export function normalizeToDiscoveryBusiness(
 
   const name = row.public_business_name || row.business_name || row.name || "Untitled";
   const rawType = String(cfg.businessType ?? row.category_main ?? "restaurant");
-  const type = formatBusinessType(rawType);
+  const type = cfg.subtype ? String(cfg.subtype) : formatBusinessType(rawType);
   const slogan = row.blurb || String(cfg.blurb ?? cfg.description ?? cfg.vibe ?? "");
 
   const street = row.street_address || row.address_line1 || "";
