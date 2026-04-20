@@ -274,6 +274,93 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/admin/sales/prospect/bulk-seed
+ * Unseeds businesses: deactivates them and clears trial state on the lead.
+ *
+ * Body: { leadIds: string[] }
+ */
+export async function DELETE(req: NextRequest) {
+  const staffResult = await requireStaff(req);
+  if (staffResult instanceof Response) return staffResult;
+  const { userId: staffId, userName: staffName } = staffResult;
+
+  try {
+    const body = await req.json();
+    const { leadIds } = body;
+
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return NextResponse.json({ error: "leadIds array is required" }, { status: 400 });
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const leadId of leadIds) {
+      try {
+        const { data: lead, error: leadErr } = await supabaseServer
+          .from("sales_leads")
+          .select("id, business_name, preview_business_id, seeded_at")
+          .eq("id", leadId)
+          .maybeSingle();
+
+        if (leadErr || !lead) {
+          failed++;
+          continue;
+        }
+
+        if (!lead.seeded_at) {
+          skipped++;
+          continue;
+        }
+
+        // Deactivate the business
+        if (lead.preview_business_id) {
+          await supabaseServer
+            .from("business")
+            .update({
+              is_active: false,
+              billing_plan: null,
+              seeded_at: null,
+              claim_code: null,
+              trial_expires_at: null,
+            })
+            .eq("id", lead.preview_business_id);
+        }
+
+        // Clear seeded state on the lead
+        await supabaseServer
+          .from("sales_leads")
+          .update({ seeded_at: null, preview_business_id: null })
+          .eq("id", leadId);
+
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+
+    // Audit log
+    await supabaseServer.from("audit_log").insert({
+      action: "bulk_unseed_businesses",
+      tab: "Sales",
+      target_type: "business",
+      details: `Removed ${succeeded} seeded businesses (${skipped} skipped, ${failed} failed) from ${leadIds.length} leads`,
+      staff_id: staffId,
+      staff_name: staffName,
+    }).then(() => {}, () => {});
+
+    return NextResponse.json({ total: leadIds.length, succeeded, skipped, failed });
+  } catch (err) {
+    console.error("[bulk-unseed] Unexpected error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
 // ─── Helpers (duplicated from preview/route.ts for independence) ───
 
 interface GoogleOpeningPeriod {

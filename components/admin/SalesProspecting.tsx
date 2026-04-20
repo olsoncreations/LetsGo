@@ -521,6 +521,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   // ---------- Seeding state ----------
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [unseedLeadIds, setUnseedLeadIds] = useState<Set<string>>(new Set());
   const [seedingInProgress, setSeedingInProgress] = useState(false);
   const [seedProgress, setSeedProgress] = useState<{ current: number; total: number; succeeded: number; failed: number; skipped: number } | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
@@ -1086,6 +1087,81 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   function deselectAll() {
     setSelectedLeadIds(new Set());
+    setUnseedLeadIds(new Set());
+  }
+
+  function toggleUnseedSelection(leadId: string) {
+    setUnseedLeadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
+  }
+
+  async function handleBulkUnseed() {
+    if (unseedLeadIds.size === 0) return;
+    const count = unseedLeadIds.size;
+    if (!confirm(`Remove ${count} seeded businesses from production?\n\nThey will be deactivated and removed from the discovery feed.`)) return;
+
+    setSeedingInProgress(true);
+    setSeedProgress({ current: 0, total: count, succeeded: 0, failed: 0, skipped: 0 });
+
+    try {
+      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token;
+      if (!token) { alert("Not authenticated"); return; }
+
+      const leadIds = Array.from(unseedLeadIds);
+      const batchSize = 10;
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+      let totalSkipped = 0;
+
+      for (let i = 0; i < leadIds.length; i += batchSize) {
+        const batch = leadIds.slice(i, i + batchSize);
+        const res = await fetch("/api/admin/sales/prospect/bulk-seed", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ leadIds: batch }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ error: "Unknown error" }));
+          alert(`Batch failed: ${errData.error}`);
+          totalFailed += batch.length;
+        } else {
+          const data = await res.json();
+          totalSucceeded += data.succeeded;
+          totalFailed += data.failed;
+          totalSkipped += data.skipped;
+        }
+
+        setSeedProgress({
+          current: Math.min(i + batchSize, leadIds.length),
+          total: count,
+          succeeded: totalSucceeded,
+          failed: totalFailed,
+          skipped: totalSkipped,
+        });
+      }
+
+      await logAudit({
+        action: "bulk_unseed_businesses",
+        tab: AUDIT_TABS.SALES,
+        targetType: "business",
+        details: `Removed ${totalSucceeded} seeded businesses from production (${totalSkipped} skipped, ${totalFailed} failed)`,
+      });
+
+      alert(`Unseed complete!\n\n✓ Removed: ${totalSucceeded}\n⊘ Skipped: ${totalSkipped}\n✕ Failed: ${totalFailed}`);
+      setUnseedLeadIds(new Set());
+      fetchLeads();
+    } catch (err) {
+      console.error("Bulk unseed error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setSeedingInProgress(false);
+      setSeedProgress(null);
+    }
   }
 
   async function handleBulkSeed() {
@@ -2125,24 +2201,20 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       align: "center" as const,
       render: (_v: unknown, row: Record<string, unknown>) => {
         const lead = row as unknown as SalesLead;
-        if (lead.seeded_at) {
-          return (
-            <span style={{
-              fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-              background: "rgba(57,255,20,0.15)", color: COLORS.neonGreen,
-              border: `1px solid rgba(57,255,20,0.3)`, whiteSpace: "nowrap",
-            }}>
-              SEEDED
-            </span>
-          );
-        }
         return (
           <input
             type="checkbox"
-            checked={selectedLeadIds.has(lead.id)}
-            onChange={(e) => { e.stopPropagation(); toggleLeadSelection(lead.id); }}
+            checked={lead.seeded_at ? !unseedLeadIds.has(lead.id) : selectedLeadIds.has(lead.id)}
+            onChange={(e) => {
+              e.stopPropagation();
+              if (lead.seeded_at) {
+                toggleUnseedSelection(lead.id);
+              } else {
+                toggleLeadSelection(lead.id);
+              }
+            }}
             onClick={(e) => e.stopPropagation()}
-            style={{ cursor: "pointer", width: 16, height: 16, accentColor: COLORS.neonGreen }}
+            style={{ cursor: "pointer", width: 16, height: 16, accentColor: lead.seeded_at ? COLORS.neonGreen : COLORS.neonBlue }}
           />
         );
       },
@@ -2821,14 +2893,14 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       {/* Seed Controls */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 12 }}>
         <button
-          onClick={() => selectedLeadIds.size > 0 ? deselectAll() : selectAllVisible()}
+          onClick={() => (selectedLeadIds.size > 0 || unseedLeadIds.size > 0) ? deselectAll() : selectAllVisible()}
           style={{
             ...btnSecondary,
             fontSize: 12,
           }}
         >
-          {selectedLeadIds.size > 0
-            ? `Deselect All (${selectedLeadIds.size})`
+          {(selectedLeadIds.size > 0 || unseedLeadIds.size > 0)
+            ? `Deselect All (${selectedLeadIds.size + unseedLeadIds.size})`
             : `Select All Seedable (${filteredLeads.filter(l => !l.seeded_at).length})`}
         </button>
         <button
@@ -2844,13 +2916,37 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
             opacity: selectedLeadIds.size === 0 || seedingInProgress ? 0.5 : 1,
           }}
         >
-          {seedingInProgress && seedProgress
+          {seedingInProgress && seedProgress && unseedLeadIds.size === 0
             ? `Seeding... ${seedProgress.current}/${seedProgress.total} (${seedProgress.succeeded} ok, ${seedProgress.failed} err)`
             : `Seed Selected (${selectedLeadIds.size})`}
         </button>
+        {unseedLeadIds.size > 0 && (
+          <button
+            onClick={handleBulkUnseed}
+            disabled={seedingInProgress}
+            style={{
+              ...btnPrimary,
+              background: seedingInProgress
+                ? COLORS.cardBorder
+                : `linear-gradient(135deg, ${COLORS.neonRed}, #cc2222)`,
+              color: "#fff",
+              fontWeight: 700,
+              opacity: seedingInProgress ? 0.5 : 1,
+            }}
+          >
+            {seedingInProgress && seedProgress && unseedLeadIds.size > 0
+              ? `Removing... ${seedProgress.current}/${seedProgress.total}`
+              : `Unseed Selected (${unseedLeadIds.size})`}
+          </button>
+        )}
         {selectedLeadIds.size > 0 && !seedingInProgress && (
           <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
             Selected businesses will appear in the discovery feed as unclaimed trial listings with 0% payouts
+          </span>
+        )}
+        {unseedLeadIds.size > 0 && !seedingInProgress && (
+          <span style={{ color: COLORS.neonRed, fontSize: 12 }}>
+            Unchecked businesses will be removed from the discovery feed
           </span>
         )}
       </div>
