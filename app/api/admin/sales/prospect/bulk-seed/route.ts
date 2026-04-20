@@ -221,6 +221,7 @@ export async function POST(req: NextRequest) {
           min_visits: idx === 0 ? 1 : idx * 10 + 1,
           max_visits: idx === 6 ? null : (idx + 1) * 10,
           label: ["Starter", "Regular", "Favorite", "VIP", "Elite", "Legend", "Ultimate"][idx],
+          is_active: true,
         }));
         await supabaseServer.from("business_payout_tiers").insert(tierRows);
 
