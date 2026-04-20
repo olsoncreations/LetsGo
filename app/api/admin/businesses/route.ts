@@ -3,6 +3,48 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 /**
+ * GET /api/admin/businesses
+ * Fetches ALL businesses for the admin page using service role (no RLS/row limits).
+ * Requires staff authentication.
+ */
+export async function GET(req: NextRequest): Promise<Response> {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const { data: { user }, error: authErr } = await supabaseServer.auth.getUser(token);
+  if (authErr || !user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const { data: staff } = await supabaseServer.from("staff_users").select("user_id").eq("user_id", user.id).maybeSingle();
+  if (!staff) return NextResponse.json({ error: "Staff access required" }, { status: 403 });
+
+  try {
+    const { count } = await supabaseServer
+      .from("business")
+      .select("id", { count: "exact", head: true })
+      .not("id", "like", "preview-%");
+
+    const total = count ?? 0;
+    const CHUNK = 1000;
+    const allRows: Record<string, unknown>[] = [];
+
+    for (let offset = 0; offset < total; offset += CHUNK) {
+      const { data, error } = await supabaseServer
+        .from("business")
+        .select("*")
+        .not("id", "like", "preview-%")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + CHUNK - 1);
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (data) allRows.push(...data);
+    }
+
+    return NextResponse.json({ businesses: allRows, total });
+  } catch (err) {
+    console.error("[admin/businesses GET] Error:", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal server error" }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/admin/businesses
  * Permanently deletes a business and all related data.
  * Removes media files from storage and cascades through all child tables.

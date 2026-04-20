@@ -609,22 +609,18 @@ function BusinessesPage() {
   async function fetchBusinesses() {
     setLoading(true);
     try {
-      // Sales previews live only in the Sales tab — they're stored in the `business`
-      // table with id `preview-<slug>-<timestamp>`, so exclude them from the admin list.
-      // Fetch count first to set proper limit (Supabase defaults to 1000)
-      const { count } = await supabaseBrowser
-        .from("business")
-        .select("id", { count: "exact", head: true })
-        .not("id", "like", "preview-%");
+      // Fetch ALL businesses via server-side API route (bypasses RLS/row limits)
+      const token = (await supabaseBrowser.auth.getSession()).data.session?.access_token;
+      if (!token) throw new Error("Not authenticated");
 
-      const { data, error } = await supabaseBrowser
-        .from("business")
-        .select("*")
-        .not("id", "like", "preview-%")
-        .order("created_at", { ascending: false })
-        .limit(Math.max(count ?? 1000, 1000));
-
-      if (error) throw error;
+      const res = await fetch("/api/admin/businesses", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: "Failed to load" }));
+        throw new Error(errData.error || "Failed to load businesses");
+      }
+      const { businesses: data } = await res.json();
       setBusinesses(data || []);
 
       if (!selectedId && data && data.length > 0) {
