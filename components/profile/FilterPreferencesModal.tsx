@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const COLORS = {
   darkBg: "#0a0a14",
@@ -41,30 +42,40 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
   const [saved, setSaved] = useState(false);
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [userZip, setUserZip] = useState<string | null>(null);
 
   // Load tag categories
   useEffect(() => {
     fetchTagsByCategory("business").then(setTagCats).catch(() => {});
   }, []);
 
-  // Load saved preferences
+  // Load saved preferences + user zip
   useEffect(() => {
     if (!open || !token) return;
     setLoading(true);
     setSaved(false);
-    fetch("/api/users/filter-preferences", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.preferences) {
+
+    Promise.all([
+      fetch("/api/users/filter-preferences", {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json()),
+      supabaseBrowser.auth.getUser().then(({ data: { user } }) => {
+        if (!user) return null;
+        return supabaseBrowser.from("profiles").select("zip_code").eq("id", user.id).maybeSingle();
+      }),
+    ])
+      .then(([prefsData, profileRes]) => {
+        if (prefsData?.preferences) {
           setPrefs({
-            categories: data.preferences.categories || [],
-            price: data.preferences.price || "Any",
-            distance: data.preferences.distance || 15,
-            openNow: data.preferences.openNow || false,
-            tags: data.preferences.tags || [],
+            categories: prefsData.preferences.categories || [],
+            price: prefsData.preferences.price || "Any",
+            distance: prefsData.preferences.distance || 15,
+            openNow: prefsData.preferences.openNow || false,
+            tags: prefsData.preferences.tags || [],
           });
+        }
+        if (profileRes?.data?.zip_code) {
+          setUserZip(profileRes.data.zip_code);
         }
       })
       .catch(() => {})
@@ -186,7 +197,15 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
             {/* Distance — always visible */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif" }}>Distance</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif" }}>Distance</span>
+                  {userZip && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Sans', sans-serif",
+                      padding: "2px 8px", borderRadius: 4, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                    }}>from {userZip}</span>
+                  )}
+                </span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.neonBlue, fontFamily: "'DM Sans', sans-serif" }}>{prefs.distance} mi</span>
               </div>
               <input type="range" min={1} max={50} value={prefs.distance} onChange={e => setPrefs(p => ({ ...p, distance: +e.target.value }))}
