@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Distance filter — bounding box on lat/lng
+    // Distance filter — bounding box on lat/lng, with same-zip safety net
     if (distance > 0) {
       // Resolve user coordinates: prefer explicit lat/lng, fall back to zip lookup
       let centerLat = userLat;
@@ -86,11 +86,20 @@ export async function GET(req: NextRequest) {
         // Use generous multiplier (1.2x) so the box is slightly larger than the circle
         const latDelta = (distance * 1.2) / 69;
         const lngDelta = (distance * 1.2) / 52;
-        query = query
-          .gte("latitude", centerLat - latDelta)
-          .lte("latitude", centerLat + latDelta)
-          .gte("longitude", centerLng - lngDelta)
-          .lte("longitude", centerLng + lngDelta);
+        const latMin = centerLat - latDelta;
+        const latMax = centerLat + latDelta;
+        const lngMin = centerLng - lngDelta;
+        const lngMax = centerLng + lngDelta;
+        // Include businesses within the bounding box OR sharing the user's zip code
+        // (same-zip safety net catches businesses with inaccurate GPS)
+        const boxFilter = `and(latitude.gte.${latMin},latitude.lte.${latMax},longitude.gte.${lngMin},longitude.lte.${lngMax})`;
+        if (userZip) {
+          query = query.or(`${boxFilter},zip.eq.${userZip}`);
+        } else {
+          query = query
+            .gte("latitude", latMin).lte("latitude", latMax)
+            .gte("longitude", lngMin).lte("longitude", lngMax);
+        }
       }
     }
 
