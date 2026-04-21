@@ -1320,6 +1320,7 @@ export default function EventsPage() {
   const [calendarMonth, setCalendarMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [userZip, setUserZip] = useState("");
+  const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
 
   // Track user votes per event: { eventId: "yes" | "maybe" | "no" }
   const [userVotes, setUserVotes] = useState<Record<string, string>>({});
@@ -1340,8 +1341,23 @@ export default function EventsPage() {
         const { data: { session } } = await supabaseBrowser.auth.getSession();
         if (!session) { router.replace("/welcome"); return; }
         setAuthChecked(true);
+        // Load user's zip from profile
+        const { data: profile } = await supabaseBrowser.from("profiles").select("zip_code").eq("id", session.user.id).maybeSingle();
+        if (profile?.zip_code) {
+          setUserZip(profile.zip_code);
+          const coords = ZIP_COORDS[profile.zip_code];
+          if (coords) setUserCoords(coords);
+        }
       } catch { router.replace("/welcome"); }
     })();
+    // Browser geolocation (overrides zip centroid if granted)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserCoords([pos.coords.latitude, pos.coords.longitude]),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
   }, [router]);
 
   // Dynamic payout levels from platform_settings
@@ -1457,7 +1473,7 @@ export default function EventsPage() {
   // ── Compute distances when userZip changes ─────────────
   const eventsWithDist = events.map(e => {
     if (!userZip || userZip.length !== 5) return e;
-    const d = getBusinessDistance(null, userZip, e.business.latitude, e.business.longitude, e.business.zip);
+    const d = getBusinessDistance(userCoords, userZip, e.business.latitude, e.business.longitude, e.business.zip);
     if (d === null) return e;
     return { ...e, dist: `${d.toFixed(1)} mi`, distMiles: d };
   });

@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import { loadFilterPreferences } from "@/lib/filterPreferences";
-import { getBusinessDistance } from "@/lib/zipUtils";
+import { getBusinessDistance, ZIP_COORDS } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -1592,13 +1592,26 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const [selectionTab, setSelectionTab] = useState<"explore" | "my-picks">("explore");
   const [activeCategory, setActiveCategory] = useState("all");
   const [userZip, setUserZip] = useState("68102");
+  const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabaseBrowser.auth.getSession();
       if (!session?.user) return;
       const { data: profile } = await supabaseBrowser.from("profiles").select("zip_code").eq("id", session.user.id).maybeSingle();
-      if (profile?.zip_code) setUserZip(profile.zip_code);
+      if (profile?.zip_code) {
+        setUserZip(profile.zip_code);
+        const coords = ZIP_COORDS[profile.zip_code];
+        if (coords) setUserCoords(coords);
+      }
     })();
+    // Browser geolocation (overrides zip centroid if granted)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserCoords([pos.coords.latitude, pos.coords.longitude]),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
   }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
@@ -1669,7 +1682,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
     const matchCat = activeCategory === "all" || b.category === activeCategory;
     const matchSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.type.toLowerCase().includes(searchQuery.toLowerCase()) || b.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
     // Distance filter — uses GPS coordinates when available, falls back to zip
-    const dist = getBusinessDistance(null, userZip, b.latitude, b.longitude, b.zip);
+    const dist = getBusinessDistance(userCoords, userZip, b.latitude, b.longitude, b.zip);
     if (dist !== null && dist > filters.distance) return false;
     return matchCat && matchSearch;
   });

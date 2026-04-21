@@ -7,7 +7,7 @@ import {
   type BusinessRow, type MediaRow, type DiscoveryBusiness,
   normalizeToDiscoveryBusiness, getBusinessGradient, getBusinessEmoji,
 } from "@/lib/businessNormalize";
-import { getDistanceBetweenZips, getBusinessDistance } from "@/lib/zipUtils";
+import { getDistanceBetweenZips, getBusinessDistance, ZIP_COORDS } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
@@ -1368,13 +1368,14 @@ function matchesCategory(biz: DiscoveryBusiness, categories: string[]): boolean 
   });
 }
 
-function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses, locationZip, filters }: {
+function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses, locationZip, locationCoords, filters }: {
   selectedIds: string[];
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   onSend: () => void;
   friend: GameFriend;
   businesses: DiscoveryBusiness[];
   locationZip: string;
+  locationCoords: [number, number] | null;
   filters: FilterState;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -1399,7 +1400,7 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
     if (filters.openNow && !biz.isOpen) return false;
 
     // Distance filter — uses GPS coordinates when available, falls back to zip
-    const dist = getBusinessDistance(null, locationZip, biz.latitude, biz.longitude, biz.businessZip);
+    const dist = getBusinessDistance(locationCoords, locationZip, biz.latitude, biz.longitude, biz.businessZip);
     if (dist !== null && dist > filters.distance) return false;
 
     // Tag filters (cuisine + vibe — match if ANY selected tag appears in biz tags)
@@ -1526,7 +1527,7 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, padding: "0 16px" }}>
           {filteredBiz.map(biz => {
-            const dist = getBusinessDistance(null, locationZip, biz.latitude, biz.longitude, biz.businessZip);
+            const dist = getBusinessDistance(locationCoords, locationZip, biz.latitude, biz.longitude, biz.businessZip);
             return (
               <BusinessMiniCard
                 key={biz.id}
@@ -3004,6 +3005,7 @@ function FiveThreeOne() {
 
   // Location state (lifted from SetupStep so PickFiveStep can use it)
   const [locationZip, setLocationZip] = useState("");
+  const [locationCoords, setLocationCoords] = useState<[number, number] | null>(null);
 
   // Real data state
   const [user, setUser] = useState<{ id: string } | null>(null);
@@ -3067,10 +3069,23 @@ function FiveThreeOne() {
           .select("zip_code")
           .eq("id", u.id)
           .maybeSingle();
-        if (profile?.zip_code) setLocationZip(profile.zip_code);
+        if (profile?.zip_code) {
+          setLocationZip(profile.zip_code);
+          const coords = ZIP_COORDS[profile.zip_code];
+          if (coords) setLocationCoords(coords);
+        }
       }
       setAuthLoading(false);
     })();
+
+    // Browser geolocation (overrides zip centroid if granted)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setLocationCoords([pos.coords.latitude, pos.coords.longitude]),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
   }, []);
 
   // ─── Fetch businesses ───
@@ -3491,6 +3506,7 @@ function FiveThreeOne() {
           friend={selectedFriend}
           businesses={businesses}
           locationZip={locationZip}
+          locationCoords={locationCoords}
           filters={filters}
         />
       )}
