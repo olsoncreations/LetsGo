@@ -301,7 +301,7 @@ export default function FindFriendsPage() {
         smsSent = 0;
         smsFailed = 0;
         const siteUrl = window.location.origin;
-        const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome`);
+        const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome\n\nReply STOP to opt out. Msg & data rates may apply.`);
 
         // Open first contact in SMS app
         window.open(`sms:${withPhone[0].phone}?body=${body}`, "_self");
