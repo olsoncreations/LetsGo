@@ -113,6 +113,9 @@ export default function FindFriendsPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // SMS consent checkbox
+  const [smsConsent, setSmsConsent] = useState(false);
+
   // Error state
   const [error, setError] = useState<string | null>(null);
 
@@ -727,13 +730,47 @@ export default function FindFriendsPage() {
                   })}
                 </div>
 
+                {/* SMS consent checkbox */}
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    marginTop: 16,
+                    padding: "12px 14px",
+                    background: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${smsConsent ? PINK : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    transition: "border-color 0.2s",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={smsConsent}
+                    onChange={(e) => setSmsConsent(e.target.checked)}
+                    style={{
+                      width: 18, height: 18, marginTop: 2,
+                      accentColor: PINK, cursor: "pointer", flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+                    I agree to send a one-time SMS invite to the selected contacts.
+                    Recipients can reply STOP to opt out. Msg &amp; data rates may apply.
+                    By sending, I agree to the{" "}
+                    <a href="/terms" target="_blank" style={{ color: PINK, textDecoration: "underline" }}>Terms of Service</a>
+                    {" "}and{" "}
+                    <a href="/privacy" target="_blank" style={{ color: PINK, textDecoration: "underline" }}>Privacy Policy</a>.
+                  </span>
+                </label>
+
                 {/* Send invites button */}
                 <button
                   onClick={handleSendInvites}
-                  disabled={sendingInvites || selectedInvites.size === 0}
+                  disabled={sendingInvites || selectedInvites.size === 0 || !smsConsent}
                   style={{
-                    ...btnPrimary, width: "100%", marginTop: 16,
-                    opacity: sendingInvites || selectedInvites.size === 0 ? 0.5 : 1,
+                    ...btnPrimary, width: "100%", marginTop: 12,
+                    opacity: sendingInvites || selectedInvites.size === 0 || !smsConsent ? 0.5 : 1,
                   }}
                 >
                   {sendingInvites
