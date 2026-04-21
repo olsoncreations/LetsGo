@@ -1475,8 +1475,9 @@ function DiscoveryPage() {
     return session?.access_token ?? null;
   }, []);
 
-  // Load user's saved home zip as default location
+  // Load user's location: try browser GPS first, fall back to profile zip centroid
   useEffect(() => {
+    // 1. Load profile zip as initial fallback
     (async () => {
       try {
         const { data: { user } } = await supabaseBrowser.auth.getUser();
@@ -1493,6 +1494,17 @@ function DiscoveryPage() {
         }
       } catch { /* not logged in or profile not found — keep default */ }
     })();
+
+    // 2. Request browser geolocation (overrides zip centroid if granted)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocationCoords([pos.coords.latitude, pos.coords.longitude]);
+        },
+        () => { /* denied or unavailable — keep zip centroid */ },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
   }, []);
 
   // Fetch platform settings (visit thresholds) on mount
