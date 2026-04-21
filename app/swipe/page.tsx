@@ -1663,7 +1663,7 @@ function DiscoveryPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, []);
+  }, [locationCoords, locationZip]);
 
   // Load saved filter preferences, then do initial fetch
   useEffect(() => {
