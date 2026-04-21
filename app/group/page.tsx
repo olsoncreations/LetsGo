@@ -2898,6 +2898,10 @@ export default function GroupVote() {
   const [token, setToken] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
 
+  // ── Location ──
+  const [parentZip, setParentZip] = useState("68102");
+  const [parentCoords, setParentCoords] = useState<[number, number] | null>(null);
+
   // ── Data ──
   const [games, setGames] = useState<Game[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -2953,7 +2957,22 @@ export default function GroupVote() {
       setUser({ id: session.user.id });
       setToken(session.access_token);
       setAuthLoading(false);
+      // Load user's zip from profile
+      const { data: profile } = await supabaseBrowser.from("profiles").select("zip_code").eq("id", session.user.id).maybeSingle();
+      if (profile?.zip_code) {
+        setParentZip(profile.zip_code);
+        const coords = ZIP_COORDS[profile.zip_code];
+        if (coords) setParentCoords(coords);
+      }
     })();
+    // Browser geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setParentCoords([pos.coords.latitude, pos.coords.longitude]),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
   }, [router]);
 
   // ── Fetch games ──
@@ -2980,67 +2999,80 @@ export default function GroupVote() {
     } catch { /* silent */ }
   }, [token]);
 
-  // ── Fetch businesses ──
+  // ── Fetch ALL nearby businesses via discover API ──
   const fetchBusinesses = useCallback(async () => {
-    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active, zip, latitude, longitude, tags").eq("is_active", true);
+    if (!parentCoords && !parentZip) return;
+    try {
+      const allBiz: Business[] = [];
+      let page = 1;
+      let hasMore = true;
 
-    // Also fetch business_media images
-    const bizIds = (data || []).map((b: Record<string, unknown>) => b.id as string);
-    const mediaMap = new Map<string, string[]>();
-    if (bizIds.length > 0) {
-      const { data: media } = await supabaseBrowser
-        .from("business_media")
-        .select("business_id, bucket, path")
-        .in("business_id", bizIds)
-        .order("sort_order", { ascending: true });
+      while (hasMore) {
+        const params = new URLSearchParams({ page: String(page), limit: "100" });
+        if (parentCoords) {
+          params.set("userLat", String(parentCoords[0]));
+          params.set("userLng", String(parentCoords[1]));
+        }
+        if (parentZip) params.set("userZip", parentZip);
+        params.set("distance", "50");
 
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-      for (const m of media ?? []) {
-        const bid = m.business_id as string;
-        if (!mediaMap.has(bid)) mediaMap.set(bid, []);
-        const url = `${supabaseUrl}/storage/v1/object/public/${m.bucket}/${m.path}`;
-        mediaMap.get(bid)!.push(url);
+        const res = await fetch(`/api/businesses/discover?${params}`);
+        if (!res.ok) break;
+        const data = await res.json();
+
+        const rows = (data.businesses ?? []) as Record<string, unknown>[];
+        const mediaRows = (data.media ?? []) as { business_id: string; bucket: string; path: string }[];
+
+        // Build media map for this page
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+        const mediaMap = new Map<string, string[]>();
+        for (const m of mediaRows) {
+          if (!mediaMap.has(m.business_id)) mediaMap.set(m.business_id, []);
+          const url = `${supabaseUrl}/storage/v1/object/public/${m.bucket}/${m.path}`;
+          mediaMap.get(m.business_id)!.push(url);
+        }
+
+        for (const b of rows) {
+          const cfg = (b.config as Record<string, unknown>) ?? {};
+          const subtype = (cfg.subtype as string) || "";
+          const type = subtype || (cfg.businessType as string) || (b.category_main as string) || "";
+          const dbTags = Array.isArray(b.tags) ? (b.tags as string[]) : [];
+          const tags = dbTags.length > 0 ? dbTags : (cfg.tags as string[]) || [];
+          const cfgImages = Array.isArray(cfg.images) ? (cfg.images as string[]).filter(Boolean) : [];
+          const mediaImages = mediaMap.get(b.id as string) || [];
+          const allImages = [...cfgImages];
+          for (const url of mediaImages) {
+            if (!allImages.includes(url)) allImages.push(url);
+          }
+          allBiz.push({
+            id: b.id as string,
+            name: ((b.public_business_name || b.business_name) as string) || "Unknown",
+            type,
+            category: type.toLowerCase().includes("bar") || type.toLowerCase().includes("brew") || type.toLowerCase().includes("lounge") ? "bars"
+              : type.toLowerCase().includes("club") ? "clubs"
+              : type.toLowerCase().includes("outdoor") || type.toLowerCase().includes("adventure") ? "outdoors"
+              : "restaurants",
+            vibe: (cfg.vibe as string) || "",
+            dist: "",
+            img: allImages[0] || "",
+            images: allImages,
+            rating: 0,
+            priceLevel: (cfg.priceLevel as string) || "$$",
+            tags,
+            zip: (b.zip as string) || "",
+            latitude: (b.latitude as number) ?? null,
+            longitude: (b.longitude as number) ?? null,
+            gradient: getBizGradient(b.id as string),
+          });
+        }
+
+        hasMore = data.hasMore ?? false;
+        page++;
       }
-    }
 
-    const biz: Business[] = (data || []).map((b: Record<string, unknown>) => {
-      const cfg = (b.config as Record<string, unknown>) ?? {};
-      const subtype = (cfg.subtype as string) || "";
-      const type = subtype || (cfg.businessType as string) || (b.category_main as string) || "";
-      const dbTags = Array.isArray(b.tags) ? (b.tags as string[]) : [];
-      const tags = dbTags.length > 0 ? dbTags : (cfg.tags as string[]) || [];
-      const cfgImages = Array.isArray(cfg.images) ? (cfg.images as string[]).filter(Boolean) : [];
-      const mediaImages = mediaMap.get(b.id as string) || [];
-      // Merge: config images first, then business_media (deduplicated)
-      const allImages = [...cfgImages];
-      for (const url of mediaImages) {
-        if (!allImages.includes(url)) allImages.push(url);
-      }
-      const vibe = (cfg.vibe as string) || "";
-      const priceLevel = (cfg.priceLevel as string) || "$$";
-      return {
-        id: b.id as string,
-        name: ((b.public_business_name || b.business_name) as string) || "Unknown",
-        type,
-        category: type.toLowerCase().includes("bar") || type.toLowerCase().includes("brew") || type.toLowerCase().includes("lounge") ? "bars"
-          : type.toLowerCase().includes("club") ? "clubs"
-          : type.toLowerCase().includes("outdoor") || type.toLowerCase().includes("adventure") ? "outdoors"
-          : "restaurants",
-        vibe,
-        dist: "",
-        img: allImages[0] || "",
-        images: allImages,
-        rating: 0,
-        priceLevel,
-        tags,
-        zip: (b.zip as string) || "",
-        latitude: (b.latitude as number) ?? null,
-        longitude: (b.longitude as number) ?? null,
-        gradient: getBizGradient(b.id as string),
-      };
-    });
-    setBusinesses(biz);
-  }, []);
+      setBusinesses(allBiz);
+    } catch { /* silent */ }
+  }, [parentCoords, parentZip]);
 
   // ── Initial fetch ──
   useEffect(() => {
