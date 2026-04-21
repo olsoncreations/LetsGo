@@ -1688,6 +1688,17 @@ function DiscoveryPage() {
     fetchDiscoverPage(1, filters, false, showFollowedOnly);
   }, [filters, showFollowedOnly, fetchDiscoverPage]);
 
+  // Re-fetch when browser geolocation resolves (coords changed from zip centroid to real GPS)
+  const prevCoordsRef = useRef(locationCoords);
+  useEffect(() => {
+    if (prevCoordsRef.current === locationCoords) return;
+    prevCoordsRef.current = locationCoords;
+    // Only re-fetch if we already have businesses loaded (not initial load)
+    if (businesses.length > 0) {
+      fetchDiscoverPage(1, filters, false, showFollowedOnly);
+    }
+  }, [locationCoords, businesses.length, filters, showFollowedOnly, fetchDiscoverPage]);
+
   // Debounced search: auto-fetch when user types in search (no Apply needed)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const prevSearchRef = useRef(filters.search);
