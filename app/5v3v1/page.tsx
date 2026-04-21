@@ -1359,7 +1359,9 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 
 function matchesCategory(biz: DiscoveryBusiness, categories: string[]): boolean {
   if (!categories.length || categories.includes("All") || categories.includes("anything")) return true;
-  const haystack = [biz.type, biz.categoryMain, biz.vibe, ...biz.tags].join(" ").toLowerCase();
+  // Only match against type and tags — NOT categoryMain/vibe which contain broad
+  // values like "restaurant_bar" that would make every food business match "Restaurant"
+  const haystack = [biz.type, ...biz.tags].join(" ").toLowerCase();
   return categories.some(cat => {
     const key = cat.toLowerCase();
     const keywords = CATEGORY_KEYWORDS[key];
