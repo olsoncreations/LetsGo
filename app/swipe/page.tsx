@@ -1731,13 +1731,12 @@ function DiscoveryPage() {
 
     let result = businesses;
 
-    // Distance filter — exclude businesses with unknown/missing zip
+    // Distance filter — only exclude when distance is calculable and too far
     if (locationZip) {
       result = result.filter(b => {
-        if (!b.businessZip) return false;
+        if (!b.businessZip) return true;
         const dist = getDistanceBetweenZips(locationZip, b.businessZip);
-        if (dist === null) return false;
-        if (dist > filters.distance) return false;
+        if (dist !== null && dist > filters.distance) return false;
         return true;
       });
     }

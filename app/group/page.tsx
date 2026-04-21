@@ -1666,12 +1666,10 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const filtered = businesses.filter((b) => {
     const matchCat = activeCategory === "all" || b.category === activeCategory;
     const matchSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.type.toLowerCase().includes(searchQuery.toLowerCase()) || b.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    // Distance filter — exclude businesses with unknown/missing zip
-    if (userZip) {
-      if (!b.zip) return false;
+    // Distance filter — only exclude when distance is calculable and too far
+    if (userZip && b.zip) {
       const dist = getDistanceBetweenZips(userZip, b.zip);
-      if (dist === null) return false;
-      if (dist > filters.distance) return false;
+      if (dist !== null && dist > filters.distance) return false;
     }
     return matchCat && matchSearch;
   });

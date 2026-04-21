@@ -83,12 +83,12 @@ function matchesLocation(row: BusinessRow, location: string): boolean {
   const loc = location.trim().toLowerCase();
 
   // Check zip code match or proximity
-  if (/^\d{5}$/.test(loc)) {
-    if (!row.zip) return false;
+  if (/^\d{5}$/.test(loc) && row.zip) {
     if (row.zip === loc) return true;
     const dist = getDistanceBetweenZips(loc, row.zip);
     if (dist !== null && dist <= LOCATION_RADIUS_MILES) return true;
-    return false;
+    if (dist !== null) return false;
+    // Unknown distance — fall through to city/state check
   }
 
   // City/state match

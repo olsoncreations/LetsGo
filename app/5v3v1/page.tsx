@@ -1398,12 +1398,10 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
     // Open now filter
     if (filters.openNow && !biz.isOpen) return false;
 
-    // Distance filter — exclude businesses with unknown/missing zip
-    if (locationZip) {
-      if (!biz.businessZip) return false;
+    // Distance filter — only exclude when distance is calculable and too far
+    if (locationZip && biz.businessZip) {
       const dist = getDistanceBetweenZips(locationZip, biz.businessZip);
-      if (dist === null) return false;
-      if (dist > filters.distance) return false;
+      if (dist !== null && dist > filters.distance) return false;
     }
 
     // Tag filters (cuisine + vibe — match if ANY selected tag appears in biz tags)
