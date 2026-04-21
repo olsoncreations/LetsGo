@@ -1476,7 +1476,7 @@ export default function WelcomePage() {
               </button>
               <button
                 className="signin-secondary"
-                onClick={() => setAuthModal({ open: true, type: "business", mode: "signup" })}
+                onClick={() => { setApplyRedirect("/apply/chain"); setAuthModal({ open: true, type: "business", mode: "signup" }); }}
                 style={{
                   fontWeight: 500,
                   background: "rgba(138, 43, 226, 0.08)",
@@ -1487,7 +1487,7 @@ export default function WelcomePage() {
                   width: "100%",
                 }}
               >
-                Multi-Location →
+                Multi-Location / Enterprise →
               </button>
             </div>
             <div className="welcome-apply-cta" style={{ marginTop: "6rem" }}>

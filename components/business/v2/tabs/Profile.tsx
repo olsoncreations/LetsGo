@@ -239,6 +239,16 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   const [teamActionLoading, setTeamActionLoading] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
+  // Chain affiliation state
+  const [chainId, setChainId] = useState<string | null>(null);
+  const [storeNumber, setStoreNumber] = useState<string | null>(null);
+  const [chainBrandName, setChainBrandName] = useState<string | null>(null);
+  const [chainCodeInput, setChainCodeInput] = useState("");
+  const [storeNumberInput, setStoreNumberInput] = useState("");
+  const [chainLinkStatus, setChainLinkStatus] = useState<string | null>(null);
+  const [chainLinkError, setChainLinkError] = useState<string | null>(null);
+  const [chainLinkLoading, setChainLinkLoading] = useState(false);
+
   // Store loaded data until form is ready to receive it
   const [loadedData, setLoadedData] = useState<LoadedData>(null);
 
@@ -422,6 +432,31 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
         }
 
         if (cancelled) return;
+
+        // Load chain affiliation
+        const bizChainId = row.chain_id as string | null;
+        const bizStoreNumber = row.store_number as string | null;
+        setChainId(bizChainId);
+        setStoreNumber(bizStoreNumber);
+        if (bizChainId) {
+          const { data: chainRow } = await supabaseBrowser
+            .from("chains")
+            .select("brand_name")
+            .eq("id", bizChainId)
+            .maybeSingle();
+          setChainBrandName(chainRow?.brand_name || bizChainId);
+        }
+
+        // Check for pending link requests
+        const { data: pendingLink } = await supabaseBrowser
+          .from("chain_link_requests")
+          .select("id, chain_id, store_number, status")
+          .eq("business_id", businessId)
+          .eq("status", "pending")
+          .maybeSingle();
+        if (pendingLink) {
+          setChainLinkStatus("pending");
+        }
 
         // Store data and set loading false - effect will apply when form renders
         setLoadedData({ fields: baseFields, hours: hoursFromDb, tags: tagsFromDb });
@@ -809,6 +844,37 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
       setTeamError("Something went wrong. Please try again.");
     } finally {
       setTeamActionLoading(false);
+    }
+  };
+
+  // Chain link request handler
+  const handleChainLinkRequest = async () => {
+    if (!chainCodeInput.trim() || !storeNumberInput.trim()) {
+      setChainLinkError("Both chain code and store number are required");
+      return;
+    }
+    setChainLinkLoading(true);
+    setChainLinkError(null);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch("/api/chains/link-request", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, chainCode: chainCodeInput.trim(), storeNumber: storeNumberInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setChainLinkError(data.error || "Failed to submit request");
+        return;
+      }
+      setChainLinkStatus("pending");
+      setChainCodeInput("");
+      setStoreNumberInput("");
+    } catch {
+      setChainLinkError("Something went wrong. Please try again.");
+    } finally {
+      setChainLinkLoading(false);
     }
   };
 
@@ -1304,6 +1370,90 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Chain Affiliation Card */}
+          <div style={cardStyle}>
+            <div style={cardTitleStyle}>
+              <Settings size={20} style={{ color: colors.accent }} />
+              Chain Affiliation
+            </div>
+
+            {chainId ? (
+              // Already linked to a chain
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "1rem", background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "12px" }}>
+                  <CheckCircle size={20} style={{ color: colors.success, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>Linked to {chainBrandName}</div>
+                    <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginTop: 2 }}>Store #{storeNumber} &bull; {chainId}</div>
+                  </div>
+                </div>
+              </div>
+            ) : chainLinkStatus === "pending" ? (
+              // Pending request
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "1rem", background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "12px" }}>
+                <AlertCircle size={20} style={{ color: colors.warning, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>Link request pending</div>
+                  <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginTop: 2 }}>Waiting for corporate approval</div>
+                </div>
+              </div>
+            ) : (
+              // No chain — show link form (owners only)
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.5)" }}>
+                  If your business belongs to a chain, enter the chain code provided by corporate to request linking.
+                </div>
+                {isOwner && (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                      <div>
+                        <label style={labelStyle}>Chain Code</label>
+                        <input
+                          value={chainCodeInput}
+                          onChange={(e) => setChainCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                          placeholder="e.g. SCOOTERS"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Store Number</label>
+                        <input
+                          value={storeNumberInput}
+                          onChange={(e) => setStoreNumberInput(e.target.value.replace(/[^0-9]/g, ""))}
+                          placeholder="e.g. 147"
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+                    {chainLinkError && (
+                      <div style={{ padding: "0.5rem 0.75rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, fontSize: "0.8rem", color: colors.danger }}>
+                        {chainLinkError}
+                      </div>
+                    )}
+                    <button
+                      onClick={handleChainLinkRequest}
+                      disabled={chainLinkLoading || !chainCodeInput || !storeNumberInput}
+                      style={{
+                        padding: "0.75rem 1.25rem", borderRadius: 10, border: "none", fontWeight: 700, fontSize: "0.85rem",
+                        background: chainCodeInput && storeNumberInput ? `linear-gradient(135deg, ${colors.accent}, ${colors.primary})` : "rgba(255,255,255,0.05)",
+                        color: chainCodeInput && storeNumberInput ? "#fff" : "rgba(255,255,255,0.3)",
+                        cursor: chainCodeInput && storeNumberInput ? "pointer" : "not-allowed",
+                        width: "fit-content",
+                      }}
+                    >
+                      {chainLinkLoading ? "Submitting..." : "Request Chain Link"}
+                    </button>
+                  </>
+                )}
+                {!isOwner && (
+                  <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.4)" }}>
+                    Only business owners can request chain linking.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Team Members Card */}

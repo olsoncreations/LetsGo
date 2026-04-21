@@ -961,6 +961,7 @@ export default function SettingsPage() {
           { key: "bonus_pool", label: "Bonus Pool" },
           { key: "extensions", label: "Tier Extensions" },
           { key: "maintenance", label: "Maintenance" },
+          { key: "chains", label: "Chains" },
         ].map(section => (
           <button
             key={section.key}
@@ -3353,6 +3354,107 @@ export default function SettingsPage() {
             >
               Reset to Defaults
             </button>
+          </Card>
+        </div>
+      )}
+
+      {/* ==================== CHAINS ==================== */}
+      {settingsSection === "chains" && (
+        <div style={{ display: "grid", gap: 24 }}>
+          <Card title="CHAIN PRICING TIERS">
+            <div style={{ marginBottom: 16, color: COLORS.textSecondary, fontSize: 13 }}>
+              Volume-based Premium pricing for multi-location chains. These tiers determine the per-location monthly rate.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+              {[
+                { tier: "Local", range: "1–10 locations", rate: 40000, color: COLORS.neonBlue },
+                { tier: "Regional", range: "11–100 locations", rate: 35000, color: COLORS.neonGreen },
+                { tier: "National", range: "101–1,000 locations", rate: 30000, color: COLORS.neonYellow },
+                { tier: "Enterprise", range: "1,000+ locations", rate: 0, color: COLORS.neonPurple },
+              ].map((t) => (
+                <div key={t.tier} style={{ padding: 20, borderRadius: 12, border: `1px solid ${t.color}30`, background: `${t.color}08`, textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: t.color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>{t.tier}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.textPrimary, marginBottom: 4 }}>
+                    {t.rate > 0 ? `$${(t.rate / 100).toFixed(0)}` : "Custom"}
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{t.range}</div>
+                  <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>per location / month</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: "rgba(255,255,255,0.03)", fontSize: 12, color: COLORS.textSecondary }}>
+              Tier thresholds auto-adjust when locations are added/removed. Rate changes apply on next billing cycle in both directions.
+              To modify these tiers, update the <code style={{ color: COLORS.neonBlue }}>TIER_THRESHOLDS</code> constant in the chain API routes.
+            </div>
+          </Card>
+
+          <Card title="CHAIN APPROVAL WORKFLOW">
+            <div style={{ display: "grid", gap: 16 }}>
+              {[
+                { step: "1", label: "Application Received", desc: "Chain submits application via /apply/chain or admin creates manually. Status: pending_review", color: COLORS.neonYellow },
+                { step: "2", label: "Admin Review", desc: "Admin reviews on the Chains page. Verify brand identity, location count, contact info.", color: COLORS.neonBlue },
+                { step: "3", label: "Activate Chain", desc: "Admin approves → status changes to 'active'. Chain code is generated and shared with corporate.", color: COLORS.neonGreen },
+                { step: "4", label: "Locations Link", desc: "Individual locations enter chain code + store number on their Profile Settings. Corporate approves each request.", color: COLORS.neonPurple },
+                { step: "5", label: "Pricing Auto-Adjusts", desc: "As locations link, the chain's pricing tier recalculates. All locations benefit from volume discounts.", color: COLORS.neonPink },
+              ].map((s) => (
+                <div key={s.step} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: `${s.color}20`, border: `1px solid ${s.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: s.color, flexShrink: 0 }}>
+                    {s.step}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{s.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card title="CHAIN LINK SECURITY">
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${COLORS.cardBorder}` }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Code-Based Linking</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                  Locations enter a chain code to request linking. The request goes to corporate (owner/manager of CHN-BRAND-0) for approval.
+                  No auto-linking — this prevents unauthorized businesses from attaching to a chain for discount rates.
+                </div>
+              </div>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${COLORS.cardBorder}` }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Unlink / Retag</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                  A location can remove its chain tag anytime (controlled at the business level). Rate adjusts on next billing cycle.
+                  Admin can also manually unlink businesses from the Chains page.
+                </div>
+              </div>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${COLORS.cardBorder}` }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>Store Number Uniqueness</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                  Each store number must be unique within a chain. Store #0 is always reserved for the corporate entity.
+                  Store numbers match the chain's internal numbering system.
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card title="CHAIN FEATURE RULES">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(0,212,255,0.05)", border: `1px solid ${COLORS.neonBlue}20` }}>
+                <div style={{ fontWeight: 700, color: COLORS.neonBlue, marginBottom: 6, fontSize: 13 }}>Visit Counting</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Chain-wide: visits at any location count toward the user's tier. The tier INDEX is shared, but the payout PERCENTAGE is location-specific.</div>
+              </div>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(57,255,20,0.05)", border: `1px solid ${COLORS.neonGreen}20` }}>
+                <div style={{ fontWeight: 700, color: COLORS.neonGreen, marginBottom: 6, fontSize: 13 }}>Protect the Tier</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>100% of Protect the Tier payments go to corporate (CHN-BRAND-0). Users protect brand loyalty, not a specific building.</div>
+              </div>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(191,95,255,0.05)", border: `1px solid ${COLORS.neonPurple}20` }}>
+                <div style={{ fontWeight: 700, color: COLORS.neonPurple, marginBottom: 6, fontSize: 13 }}>Feed Deduplication</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>One card per chain in the discovery feed. Shows nearest location with "X more locations" badge.</div>
+              </div>
+              <div style={{ padding: 16, borderRadius: 10, background: "rgba(255,45,146,0.05)", border: `1px solid ${COLORS.neonPink}20` }}>
+                <div style={{ fontWeight: 700, color: COLORS.neonPink, marginBottom: 6, fontSize: 13 }}>Access Hierarchy</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Admin → Chain Corporate → Store Owner → Manager → Staff. Corporate has full visibility; local managers retain autonomy.</div>
+              </div>
+            </div>
           </Card>
         </div>
       )}

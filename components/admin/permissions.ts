@@ -24,6 +24,7 @@ export const NAV_PERMISSIONS: Record<string, string | null> = {
   billing: "view_billing",
   onboarding: "view_onboarding",
   businesses: "view_businesses",
+  chains: "view_chains",
   events: "view_events",
   ugc: "view_ugc",
   users: "view_users",
@@ -51,8 +52,8 @@ export const NAV_PERMISSIONS: Record<string, string | null> = {
 const LEGACY_EXPANSIONS: Record<string, string[]> = {
   view_analytics: ["view_executive", "view_analytics", "view_health", "view_referrals", "view_fraud"],
   manage_settings: ["view_billing", "view_automation", "view_audit", "view_settings", "manage_billing", "manage_automation", "manage_settings"],
-  view_businesses: ["view_businesses", "view_onboarding", "view_events", "view_ugc"],
-  edit_businesses: ["manage_businesses", "manage_onboarding", "manage_events", "manage_ugc"],
+  view_businesses: ["view_businesses", "view_onboarding", "view_events", "view_ugc", "view_chains"],
+  edit_businesses: ["manage_businesses", "manage_onboarding", "manage_events", "manage_ugc", "manage_chains"],
   manage_advertising: ["view_sales", "view_advertising", "view_promotions", "manage_sales", "manage_advertising", "manage_promotions"],
   manage_support: ["view_support", "view_messaging", "manage_support", "manage_messaging"],
   approve_receipts: ["manage_receipts"],

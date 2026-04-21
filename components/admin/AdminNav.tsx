@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { key: "billing", icon: "💳", label: "Billing", href: "/admin/billing" },
   { key: "onboarding", icon: "📥", label: "Onboarding", href: "/admin/onboarding" },
   { key: "businesses", icon: "🏢", label: "Businesses", href: "/admin/businesses" },
+  { key: "chains", icon: "🔗", label: "Chains", href: "/admin/chains" },
   { key: "events", icon: "📅", label: "Events", href: "/admin/events" },
   { key: "ugc", icon: "📸", label: "UGC Moderation", href: "/admin/ugc" },
   { key: "users", icon: "👥", label: "Users", href: "/admin/users" },

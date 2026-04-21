@@ -19,6 +19,17 @@ import { logAudit } from "@/lib/auditLog";
 
 type ProductType = "silver_6" | "silver_12" | "gold_6" | "gold_12";
 
+/** Helper: resolve the credit recipient for a business — corporate if chained, otherwise the business itself */
+async function resolveCreditRecipient(db: typeof supabase, businessId: string): Promise<string> {
+  const { data: biz } = await db
+    .from("business")
+    .select("chain_id")
+    .eq("id", businessId)
+    .maybeSingle();
+  // If business belongs to a chain, 100% of Protect the Tier goes to corporate (chain_id = CHN-BRAND-0)
+  return biz?.chain_id || businessId;
+}
+
 /** Helper: create business credits + billing adjustments for an extension purchase */
 async function createBusinessCredits(
   db: typeof supabase, extensionId: string | undefined, businessCreditCents: number,
@@ -29,13 +40,16 @@ async function createBusinessCredits(
 ) {
   if (businessCreditCents <= 0) return;
   if (isSilver && businessId) {
+    // For chains, credit goes to corporate entity; for independent businesses, to themselves
+    const creditRecipient = await resolveCreditRecipient(db, businessId);
     const { data: adj } = await db.from("billing_adjustments").insert({
-      business_id: businessId, amount_cents: -businessCreditCents, type: "credit",
-      description: "Premium Tier Extension Purchase", status: "pending", created_by: userId,
+      business_id: creditRecipient, amount_cents: -businessCreditCents, type: "credit",
+      description: `Premium Tier Extension Purchase${creditRecipient !== businessId ? ` (via ${businessId})` : ""}`,
+      status: "pending", created_by: userId,
     }).select("id").single();
     if (adj && extensionId) {
       await db.from("tier_extension_business_credits").insert({
-        tier_extension_id: extensionId, business_id: businessId,
+        tier_extension_id: extensionId, business_id: creditRecipient,
         credit_cents: businessCreditCents, billing_adjustment_id: adj.id,
       });
     }
@@ -45,14 +59,17 @@ async function createBusinessCredits(
       config
     );
     const credits = splitGoldCredits(businessCreditCents, goldPricesForCredits.businessShares);
+    // For Gold, resolve each business's credit recipient (corporate if chained)
     for (const credit of credits) {
+      const creditRecipient = await resolveCreditRecipient(db, credit.businessId);
       const { data: adj } = await db.from("billing_adjustments").insert({
-        business_id: credit.businessId, amount_cents: -credit.creditCents, type: "credit",
-        description: "Premium Tier Extension Purchase", status: "pending", created_by: userId,
+        business_id: creditRecipient, amount_cents: -credit.creditCents, type: "credit",
+        description: `Premium Tier Extension Purchase${creditRecipient !== credit.businessId ? ` (via ${credit.businessId})` : ""}`,
+        status: "pending", created_by: userId,
       }).select("id").single();
       if (adj && extensionId) {
         await db.from("tier_extension_business_credits").insert({
-          tier_extension_id: extensionId, business_id: credit.businessId,
+          tier_extension_id: extensionId, business_id: creditRecipient,
           credit_cents: credit.creditCents, billing_adjustment_id: adj.id,
         });
       }

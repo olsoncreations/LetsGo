@@ -844,9 +844,82 @@ const SettingsModal = ({open,onClose,profile,avatarUrl,onAvatarChange,onProfileS
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════
 
-interface CalcBiz { id: string; name: string; type: string; visits: number; level: number; rates: number[]; earned: number; balance: number; }
+interface CalcBiz { id: string; name: string; type: string; visits: number; level: number; rates: number[]; earned: number; balance: number; chainId?: string | null; chainBrandName?: string | null; chainLocationCount?: number; isChainAggregate?: boolean; }
 interface CashoutDisplay { id: string; date: string; amount: number; method: string; status: string; fee_cents?: number; net_amount_cents?: number; breakdown?: { influencer_earnings_cents?: number; receipt_earnings_cents?: number; influencer_details?: { period: string; signups: number; amountCents: number }[] } | null; }
 interface ExperienceDisplay { id: string; businessId: string; businessName: string; mediaUrl: string; mediaType: string; caption: string; status: string; createdAt: string; storagePath: string; }
+
+/** Aggregate chain siblings in payout list — chain-wide visits, combined earnings, brand name */
+async function aggregateChainPayouts(bizList: CalcBiz[], tierCfg: PlatformTierConfig): Promise<CalcBiz[]> {
+  if (bizList.length === 0) return bizList;
+
+  // Look up chain_id for all businesses in one query
+  const bizIds = bizList.map((b) => b.id);
+  const { data: chainRows } = await supabaseBrowser
+    .from("business")
+    .select("id, chain_id")
+    .in("id", bizIds);
+
+  if (!chainRows || chainRows.length === 0) return bizList;
+
+  const bizChainMap = new Map<string, string | null>();
+  for (const r of chainRows) bizChainMap.set(r.id, r.chain_id);
+
+  // Group businesses by chain_id (null = independent)
+  const chainGroups = new Map<string, CalcBiz[]>();
+  const independent: CalcBiz[] = [];
+
+  for (const biz of bizList) {
+    const cid = bizChainMap.get(biz.id);
+    if (cid) {
+      const group = chainGroups.get(cid) || [];
+      group.push(biz);
+      chainGroups.set(cid, group);
+    } else {
+      independent.push(biz);
+    }
+  }
+
+  if (chainGroups.size === 0) return bizList;
+
+  // Fetch chain brand names
+  const chainIds = [...chainGroups.keys()];
+  const { data: chains } = await supabaseBrowser
+    .from("chains")
+    .select("id, brand_name, location_count")
+    .in("id", chainIds);
+
+  const chainNameMap = new Map<string, { name: string; count: number }>();
+  for (const c of chains || []) chainNameMap.set(c.id, { name: c.brand_name, count: c.location_count });
+
+  // Merge each chain group into one aggregate entry
+  const aggregated: CalcBiz[] = [];
+  for (const [cid, group] of chainGroups) {
+    const totalVisits = group.reduce((s, b) => s + b.visits, 0);
+    const totalEarned = group.reduce((s, b) => s + b.earned, 0);
+    const totalBalance = group.reduce((s, b) => s + b.balance, 0);
+    const chainInfo = chainNameMap.get(cid);
+
+    let level = 1;
+    for (const t of tierCfg.visitThresholds) { if (totalVisits >= t.min) level = t.level; }
+
+    aggregated.push({
+      id: cid, // Use chain_id as the aggregate ID
+      name: chainInfo?.name || group[0].name,
+      type: group[0].type,
+      visits: totalVisits,
+      level,
+      rates: group[0].rates, // Rates vary per location — display note in UI
+      earned: totalEarned,
+      balance: totalBalance,
+      chainId: cid,
+      chainBrandName: chainInfo?.name || null,
+      chainLocationCount: chainInfo?.count || group.length,
+      isChainAggregate: true,
+    });
+  }
+
+  return [...aggregated, ...independent];
+}
 
 export default function LetsGoProfile() {
   const router = useRouter();
@@ -1201,7 +1274,8 @@ export default function LetsGoProfile() {
           const rates = tierCfg.defaultCashbackBps.map((b: number) => b / 100);
           payoutBizList.push({ id: bizId, name: bizName, type: bizType, visits, level, rates, earned, balance });
         }
-        setPayoutBusinesses(payoutBizList);
+        const aggregatedList = await aggregateChainPayouts(payoutBizList, tierCfg);
+        setPayoutBusinesses(aggregatedList);
       } else {
         // Fallback: build from receipts
         const bizMap = new Map<string, { visits: number; earned: number; name: string; type: string }>();
@@ -1225,7 +1299,8 @@ export default function LetsGoProfile() {
           const rates = tierCfg.defaultCashbackBps.map((b: number) => b / 100);
           payoutBizList.push({ id: bizId, name: data.name, type: data.type, visits: data.visits, level, rates, earned: data.earned, balance: 0 });
         }
-        setPayoutBusinesses(payoutBizList);
+        const aggregatedList = await aggregateChainPayouts(payoutBizList, tierCfg);
+        setPayoutBusinesses(aggregatedList);
       }
 
       // Fetch influencer dashboard data (if user is an influencer)
@@ -2632,8 +2707,15 @@ export default function LetsGoProfile() {
                           <span style={{ fontFamily: "'Clash Display', 'DM Sans', sans-serif", fontSize: 16, fontWeight: 700, color: levelColor, textShadow: `0 0 8px ${levelColor}50`, lineHeight: 1.1 }}>{biz.level}</span>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: "'DM Sans', sans-serif" }}>{biz.name}</div>
-                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>{biz.type} {"\u00b7"} {biz.visits} visits {"\u00b7"} {biz.rates[biz.level - 1]}% back</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: "'DM Sans', sans-serif" }}>
+                            {biz.name}
+                            {biz.isChainAggregate && biz.chainLocationCount && biz.chainLocationCount > 1 && (
+                              <span style={{ marginLeft: 6, fontSize: 9, color: "rgba(191,95,255,0.7)", fontWeight: 700 }}>{biz.chainLocationCount} locations</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>
+                            {biz.type} {"\u00b7"} {biz.visits} visits{biz.isChainAggregate ? " across all locations" : ""} {"\u00b7"} {biz.isChainAggregate ? "varies per location" : `${biz.rates[biz.level - 1]}% back`}
+                          </div>
                         </div>
                         {/* Countdown to tier reset */}
                         {tierExtPricing && biz.level > 1 && (() => {

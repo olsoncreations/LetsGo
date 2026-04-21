@@ -87,6 +87,8 @@ type OnboardingData = {
   phone: string;
   role: Role;
   referredBy: string;
+  chainCode: string;      // Optional chain code if part of a multi-location chain
+  chainStoreNumber: string; // Store number within the chain
   password: string;
   confirmPassword: string;
 
@@ -205,6 +207,8 @@ function initialData(): OnboardingData {
     phone: "",
     role: "",
     referredBy: "",
+    chainCode: "",
+    chainStoreNumber: "",
     password: "",
     confirmPassword: "",
 
@@ -1383,6 +1387,36 @@ function Step1({
 
       <div className="form-section">
         <div className="section-title">
+          <div className="section-icon">🔗</div>
+          Chain Affiliation <span className="optional" style={{ fontWeight: 400, fontSize: "0.85rem" }}>(optional)</span>
+        </div>
+
+        <div className="helper-text" style={{ marginBottom: "1rem" }}>
+          If your business belongs to a multi-location chain and you were given a chain code by corporate, enter it here. Your location will be linked after corporate approval.
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+          <div className="form-group">
+            <label>Chain Code</label>
+            <input
+              value={data.chainCode}
+              onChange={(e) => setData((p) => ({ ...p, chainCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") }))}
+              placeholder="e.g. SCOOTERS"
+            />
+          </div>
+          <div className="form-group">
+            <label>Store Number</label>
+            <input
+              value={data.chainStoreNumber}
+              onChange={(e) => setData((p) => ({ ...p, chainStoreNumber: e.target.value.replace(/[^0-9]/g, "") }))}
+              placeholder="e.g. 147"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <div className="section-title">
           <div className="section-icon">🏷️</div>
           Referral Information
         </div>
@@ -1397,7 +1431,7 @@ function Step1({
             placeholder="Sales rep name or referral code"
           />
           <div className="helper-text">
-            If a Let’sGo sales rep helped you sign up, enter their name here for commission tracking
+            If a LetsGo sales rep helped you sign up, enter their name here for commission tracking
           </div>
         </div>
       </div>

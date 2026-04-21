@@ -117,6 +117,8 @@ interface Business {
   seeded_at: string | null;
   trial_expires_at: string | null;
   claim_code: string | null;
+  chain_id: string | null;
+  store_number: string | null;
 }
 
 type StatusFilter = "all" | "active" | "paused" | "suspended" | "submitted" | "trial";
@@ -1118,6 +1120,21 @@ function BusinessesPage() {
                           ⭐
                         </span>
                       )}
+                      {biz.chain_id && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            padding: "2px 6px",
+                            background: "rgba(191,95,255,0.2)",
+                            borderRadius: 4,
+                            color: COLORS.neonPurple,
+                            fontSize: 10,
+                          }}
+                          title={`Chain: ${biz.chain_id} / Store #${biz.store_number}`}
+                        >
+                          🔗 #{biz.store_number}
+                        </span>
+                      )}
                     </div>
                   )}
                 </button>
@@ -1342,7 +1359,18 @@ function BusinessesPage() {
                 {/* Business Information */}
                 <SectionTitle icon="🏢">Business Information</SectionTitle>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-                  <Card title="Basic Details">
+                  <Card title="Basic Details" actions={
+                    <button
+                      onClick={() => window.open(`/businessprofile-v2/${selected.id}`, "_blank")}
+                      style={{ padding: "4px 12px", background: "transparent", border: `1px solid ${COLORS.neonBlue}60`, borderRadius: 6, color: COLORS.neonBlue, cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+                    >
+                      Open Dashboard →
+                    </button>
+                  }>
+                    <div style={{ marginBottom: 12, padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11, color: COLORS.textSecondary }}>Business ID</span>
+                      <code style={{ fontSize: 11, color: COLORS.neonBlue, cursor: "pointer", fontFamily: "monospace" }} onClick={() => { navigator.clipboard.writeText(selected.id); }} title="Click to copy">{selected.id}</code>
+                    </div>
                     <EditField label="Legal Name" value={getValue("business_name") as string} editable={isEditing} onChange={(v) => updateField("business_name", v)} />
                     <EditField label="Public Name" value={getValue("public_business_name") as string} editable={isEditing} onChange={(v) => updateField("public_business_name", v)} />
                     <EditField
@@ -1408,6 +1436,28 @@ function BusinessesPage() {
                     <EditField label="Customer Email" value={getValue("customer_email") as string} editable={isEditing} onChange={(v) => updateField("customer_email", v)} />
                   </Card>
                 </div>
+
+                {/* Chain Affiliation */}
+                {(selected.chain_id || isEditing) && (
+                  <div style={{ marginBottom: 24 }}>
+                    <Card title="🔗 Chain Affiliation">
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                        <EditField label="Chain ID" value={getValue("chain_id") as string || "Not linked"} editable={isEditing} onChange={(v) => updateField("chain_id", v || null)} />
+                        <EditField label="Store Number" value={getValue("store_number") as string || "—"} editable={isEditing} onChange={(v) => updateField("store_number", v || null)} />
+                      </div>
+                      {selected.chain_id && !isEditing && (
+                        <div style={{ marginTop: 12 }}>
+                          <button
+                            onClick={() => window.open(`/admin/chains?selected=${selected.chain_id}`, "_blank")}
+                            style={{ padding: "6px 14px", background: "transparent", border: `1px solid ${COLORS.neonPurple}60`, borderRadius: 8, color: COLORS.neonPurple, cursor: "pointer", fontSize: 12 }}
+                          >
+                            View Chain →
+                          </button>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                )}
 
                 {/* Operating Hours */}
                 <SectionTitle icon="🕐">Operating Hours</SectionTitle>

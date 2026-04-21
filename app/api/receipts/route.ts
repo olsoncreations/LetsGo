@@ -297,16 +297,44 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
     }
 
-    // 2) Count approved visits in the current anniversary window for this business
+    // 2) Check if this business belongs to a chain (for chain-wide visit counting)
+    const { data: bizChain } = await supabase
+      .from("business")
+      .select("chain_id")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    const chainId = bizChain?.chain_id as string | null;
+
+    // If chained, get all sibling business IDs for visit counting
+    let chainBusinessIds: string[] = [businessId];
+    if (chainId) {
+      const { data: siblings } = await supabase
+        .from("business")
+        .select("id")
+        .eq("chain_id", chainId);
+      if (siblings && siblings.length > 0) {
+        chainBusinessIds = siblings.map((s) => s.id);
+      }
+    }
+
+    // 3) Count approved visits in the current anniversary window
+    // Chain businesses: count visits across ALL locations in the chain
+    // Independent businesses: count visits at this business only
     let windowStart = getAnniversaryWindowStart(profile.created_at);
 
-    // Check if user has an active tier extension for this business (or Gold for all)
+    // Check if user has an active tier extension for this business (or chain, or Gold for all)
+    // For chains, a tier extension on ANY sibling location protects the chain-wide tier
+    const extensionFilter = chainId
+      ? chainBusinessIds.map((id) => `business_id.eq.${id}`).join(",") + ",business_id.is.null"
+      : `business_id.eq.${businessId},business_id.is.null`;
+
     const { data: activeExtension } = await supabase
       .from("tier_extensions")
       .select("protected_tier_index, effective_until")
       .eq("user_id", userId)
       .eq("status", "active")
-      .or(`business_id.eq.${businessId},business_id.is.null`)
+      .or(extensionFilter)
       .gte("effective_until", todayStr)
       .order("effective_until", { ascending: false })
       .limit(1)
@@ -320,13 +348,33 @@ export async function POST(req: NextRequest): Promise<Response> {
         .toISOString().slice(0, 10);
     }
 
-    const { count: visitCount, error: visitError } = await supabase
-      .from("receipts")
-      .select("id", { count: "exact", head: true })
-      .eq("business_id", businessId)
-      .eq("user_id", userId)
-      .eq("status", "approved")
-      .gte("visit_date", windowStart);
+    // Count visits — chain-wide if chained, single-business otherwise
+    let visitCount: number | null = null;
+    let visitError: unknown = null;
+
+    if (chainId && chainBusinessIds.length > 1) {
+      // Chain-wide: count visits across all sibling locations
+      const { count, error } = await supabase
+        .from("receipts")
+        .select("id", { count: "exact", head: true })
+        .in("business_id", chainBusinessIds)
+        .eq("user_id", userId)
+        .eq("status", "approved")
+        .gte("visit_date", windowStart);
+      visitCount = count;
+      visitError = error;
+    } else {
+      // Single business
+      const { count, error } = await supabase
+        .from("receipts")
+        .select("id", { count: "exact", head: true })
+        .eq("business_id", businessId)
+        .eq("user_id", userId)
+        .eq("status", "approved")
+        .gte("visit_date", windowStart);
+      visitCount = count;
+      visitError = error;
+    }
 
     if (visitError) {
       return NextResponse.json(
@@ -337,7 +385,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const visitsThisWindow = (visitCount ?? 0) + 1; // include this new receipt
 
-    // 3) Load payout tiers for this business
+    // 4) Load payout tiers for this business (location-specific, NOT chain-wide)
     const { data: tiersRaw, error: tiersError } = await supabase
       .from("business_payout_tiers")
       .select("tier_index, min_visits, max_visits, percent_bps, label")
@@ -361,11 +409,11 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
     }
 
-    // 4) Compute payout — NO cap on progressive payout (business sets tier rates)
+    // 5) Compute payout — NO cap on progressive payout (business sets tier rates)
     const percent = currentTier.percent_bps / 10_000;
     let payoutCents = Math.round(receiptTotalCents * percent);
 
-    // 4.5) Apply active promotions
+    // 5.5) Apply active promotions
     const today = now.toISOString().slice(0, 10);
     const appliedPromoIds: string[] = [];
 

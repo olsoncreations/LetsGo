@@ -1086,7 +1086,7 @@ function PhotoPage({ image, label, liked, onToggle }: {
 
 // ─── Main Photo Page (hero - slide 1) ───
 
-function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, followed, onToggleFollow }: { biz: DiscoveryBusiness; liked: boolean; onToggle: () => void; userZip: string; userCoords: [number, number] | null; geoReady: number; followed: boolean; onToggleFollow: () => void }) {
+function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; liked: boolean; onToggle: () => void; userZip: string; userCoords: [number, number] | null; geoReady: number; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
   const distance = useMemo(() => {
     // Try coordinate-based distance first (more accurate with Google Places)
     if (userCoords && biz.businessZip) {
@@ -1162,16 +1162,19 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
             background: `${COLORS.neonPink}25`, color: COLORS.neonPink, border: `1px solid ${COLORS.neonPink}40`,
             fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1, backdropFilter: "blur(8px)",
           }}>{biz.type}</span>
-          {biz.chainLocationCount > 1 && (
-            <span style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 50,
-              fontSize: 10, fontWeight: 700,
-              background: "rgba(191,95,255,0.12)", color: COLORS.neonPurple, border: `1px solid ${COLORS.neonPurple}40`,
-              fontFamily: "'DM Sans', sans-serif", backdropFilter: "blur(8px)",
-            }}>
+          {biz.chainLocationCount > 1 && biz.chainId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenChainLocations?.(biz.chainId!, biz.chainBrandName || biz.name); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 50,
+                fontSize: 10, fontWeight: 700,
+                background: "rgba(191,95,255,0.12)", color: COLORS.neonPurple, border: `1px solid ${COLORS.neonPurple}40`,
+                fontFamily: "'DM Sans', sans-serif", backdropFilter: "blur(8px)", cursor: "pointer",
+              }}
+            >
               <svg width="11" height="11" viewBox="0 0 24 24" fill={COLORS.neonPurple} stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-              {biz.chainLocationCount - 1} more location{biz.chainLocationCount > 2 ? "s" : ""}
-            </span>
+              {biz.chainLocationCount - 1} more location{biz.chainLocationCount > 2 ? "s" : ""} →
+            </button>
           )}
           {biz.isTrial && (
             <span style={{
@@ -1249,7 +1252,7 @@ function PageDots({ total, current }: { total: number; current: number }) {
 
 // ─── Business Card (horizontal swipeable via touch) ───
 
-function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, followed, onToggleFollow }: { biz: DiscoveryBusiness; userZip: string; userCoords: [number, number] | null; geoReady: number; payoutLevels?: { level: number; name: string; visits: string }[]; followed: boolean; onToggleFollow: () => void }) {
+function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; userZip: string; userCoords: [number, number] | null; geoReady: number; payoutLevels?: { level: number; name: string; visits: string }[]; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -1334,7 +1337,7 @@ function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, follow
       }}>
         {/* Slide 1: Hero photo */}
         <div style={{ width: `${100 / totalPages}%`, height: "100%", flexShrink: 0, overflow: "hidden" }}>
-          <MainPhotoPage biz={biz} liked={liked} onToggle={toggleLike} userZip={userZip} userCoords={userCoords} geoReady={geoReady} followed={followed} onToggleFollow={onToggleFollow} />
+          <MainPhotoPage biz={biz} liked={liked} onToggle={toggleLike} userZip={userZip} userCoords={userCoords} geoReady={geoReady} followed={followed} onToggleFollow={onToggleFollow} onOpenChainLocations={onOpenChainLocations} />
         </div>
         {/* Slide 2: Detail page */}
         <div style={{ width: `${100 / totalPages}%`, height: "100%", flexShrink: 0, overflow: "hidden" }}>
@@ -1391,6 +1394,51 @@ function DiscoveryPage() {
   const [toast, setToast] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  // Chain locations panel
+  const [chainLocationsOpen, setChainLocationsOpen] = useState(false);
+  const [chainLocations, setChainLocations] = useState<{ id: string; name: string; storeNumber: string; address: string; zip: string }[]>([]);
+  const [chainLocationsLoading, setChainLocationsLoading] = useState(false);
+  const [chainLocationsBrand, setChainLocationsBrand] = useState("");
+  const [chainDetailBiz, setChainDetailBiz] = useState<DiscoveryBusiness | null>(null);
+  const [chainDetailLoading, setChainDetailLoading] = useState(false);
+  const [chainSort, setChainSort] = useState<"nearest" | "farthest" | "store">("nearest");
+
+  const openChainLocations = useCallback(async (chainId: string, brandName: string) => {
+    setChainLocationsBrand(brandName);
+    setChainLocationsOpen(true);
+    setChainLocationsLoading(true);
+    setChainDetailBiz(null);
+    try {
+      const res = await fetch(`/api/chains/${chainId}/locations`);
+      if (res.ok) {
+        const data = await res.json();
+        setChainLocations(data.locations || []);
+      }
+    } catch { /* silent */ }
+    setChainLocationsLoading(false);
+  }, []);
+
+  const openChainLocationDetail = useCallback(async (businessId: string) => {
+    setChainDetailLoading(true);
+    try {
+      const params = new URLSearchParams({ search: "", page: "1", limit: "1" });
+      // Fetch the specific business + its media/tiers
+      const [bizRes, mediaRes, tierRes] = await Promise.all([
+        supabaseBrowser.from("business").select("*").eq("id", businessId).maybeSingle(),
+        supabaseBrowser.from("business_media").select("business_id, bucket, path, sort_order, caption, meta").eq("business_id", businessId).eq("is_active", true).eq("media_type", "photo").order("sort_order", { ascending: true }).limit(20),
+        supabaseBrowser.from("business_payout_tiers").select("business_id, percent_bps, tier_index").eq("business_id", businessId).order("tier_index", { ascending: true }),
+      ]);
+      if (bizRes.data) {
+        const row = bizRes.data as BusinessRow;
+        const mediaRows = (mediaRes.data || []) as MediaRow[];
+        const tableBps = (tierRes.data || []).map((t: Record<string, unknown>) => t.percent_bps as number);
+        const normalized = normalizeToDiscoveryBusiness(row, mediaRows, tableBps);
+        setChainDetailBiz(normalized);
+      }
+    } catch { /* silent */ }
+    setChainDetailLoading(false);
+  }, []);
 
   // Onboarding tour
   const swipeTourSteps: TourStep[] = useMemo(() => [
@@ -1795,7 +1843,7 @@ function DiscoveryPage() {
         }}>
           {filteredBusinesses.map((biz) => (
             <div key={biz.id} style={{ width: "100%", height: "100dvh", scrollSnapAlign: "start", position: "relative" }}>
-              <BusinessCard biz={biz} userZip={locationZip} userCoords={locationCoords} geoReady={geoReady} payoutLevels={payoutLevels} followed={followedIds.has(biz.id)} onToggleFollow={() => handleToggleFollow(biz.id)} />
+              <BusinessCard biz={biz} userZip={locationZip} userCoords={locationCoords} geoReady={geoReady} payoutLevels={payoutLevels} followed={followedIds.has(biz.id)} onToggleFollow={() => handleToggleFollow(biz.id)} onOpenChainLocations={openChainLocations} />
             </div>
           ))}
         </div>
@@ -1831,6 +1879,111 @@ function DiscoveryPage() {
         />
       )}
 
+      {/* Chain Locations Panel */}
+      {chainLocationsOpen && (
+        <>
+          <div onClick={() => setChainLocationsOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 99990 }} />
+          <div style={{
+            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 99991,
+            maxHeight: "70vh", overflowY: "auto",
+            background: "linear-gradient(180deg, #12121f 0%, #0a0a14 100%)",
+            borderTop: `2px solid ${COLORS.neonPurple}40`,
+            borderRadius: "20px 20px 0 0",
+            padding: "20px 20px 32px",
+            animation: "chainPanelSlideUp 0.3s ease-out",
+          }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.15)", margin: "0 auto 16px" }} />
+
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {chainDetailBiz && (
+                  <button
+                    onClick={() => { setChainDetailBiz(null); }}
+                    style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}
+                  >
+                    ← All
+                  </button>
+                )}
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'DM Sans', sans-serif", color: "#fff" }}>
+                    {chainDetailBiz ? chainDetailBiz.name : chainLocationsBrand}
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+                    {chainDetailBiz ? chainDetailBiz.address : `${chainLocations.length} locations`}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => { setChainLocationsOpen(false); setChainDetailBiz(null); }} style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.4)", fontSize: 16 }}>
+                ✕
+              </button>
+            </div>
+
+            {/* Detail view for selected location */}
+            {chainDetailBiz ? (
+              <div style={{ marginLeft: -20, marginRight: -20, marginBottom: -32 }}>
+                <BusinessDetailPage biz={chainDetailBiz} payoutLevels={payoutLevels} />
+              </div>
+            ) : chainDetailLoading ? (
+              <div style={{ textAlign: "center", padding: 32, color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Loading location details...</div>
+            ) : chainLocationsLoading ? (
+              <div style={{ textAlign: "center", padding: 32, color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Loading locations...</div>
+            ) : (
+              <>
+                {/* Sort pills */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                  {([["nearest", "Nearest"], ["farthest", "Farthest"], ["store", "Store #"]] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setChainSort(key)}
+                      style={{
+                        padding: "6px 14px", borderRadius: 50, border: "none", cursor: "pointer",
+                        fontSize: 11, fontWeight: chainSort === key ? 700 : 500,
+                        background: chainSort === key ? `${COLORS.neonPurple}25` : "rgba(255,255,255,0.04)",
+                        color: chainSort === key ? COLORS.neonPurple : "rgba(255,255,255,0.35)",
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[...chainLocations].sort((a, b) => {
+                  if (chainSort === "store") return parseInt(a.storeNumber || "0") - parseInt(b.storeNumber || "0");
+                  const distA = locationCoords && a.zip ? (ZIP_COORDS[a.zip] ? haversineDistance(locationCoords[0], locationCoords[1], ZIP_COORDS[a.zip][0], ZIP_COORDS[a.zip][1]) : 9999) : 9999;
+                  const distB = locationCoords && b.zip ? (ZIP_COORDS[b.zip] ? haversineDistance(locationCoords[0], locationCoords[1], ZIP_COORDS[b.zip][0], ZIP_COORDS[b.zip][1]) : 9999) : 9999;
+                  return chainSort === "farthest" ? distB - distA : distA - distB;
+                }).map((loc) => {
+                  const dist = locationCoords && loc.zip ? (() => {
+                    const bizCoords = ZIP_COORDS[loc.zip];
+                    if (bizCoords) return haversineDistance(locationCoords[0], locationCoords[1], bizCoords[0], bizCoords[1]);
+                    if (locationZip && loc.zip) return getDistanceBetweenZips(locationZip, loc.zip);
+                    return null;
+                  })() : null;
+                  return (
+                    <button key={loc.id} onClick={() => openChainLocationDetail(loc.id)} style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left", width: "100%", transition: "background 0.15s", color: "inherit" }} onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.06)"} onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0, background: `${COLORS.neonPurple}15`, border: `1px solid ${COLORS.neonPurple}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: COLORS.neonPurple, fontFamily: "'DM Sans', sans-serif" }}>
+                        #{loc.storeNumber}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loc.address}</div>
+                      </div>
+                      {dist !== null && (
+                        <div style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 50, background: "rgba(0,212,255,0.08)", fontSize: 11, fontWeight: 700, color: COLORS.neonBlue, fontFamily: "'DM Sans', sans-serif" }}>
+                          {dist < 0.1 ? "<0.1" : dist.toFixed(1)} mi
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
       {toast && (
         <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "rgba(0,0,0,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 24px rgba(0,0,0,0.5)", fontSize: 14, whiteSpace: "nowrap" }}>
           {toast}
@@ -1841,6 +1994,7 @@ function DiscoveryPage() {
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { display: none; }
         @keyframes pulseGlow { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+        @keyframes chainPanelSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes logoGlow {
           0%, 100% { filter: drop-shadow(0 0 8px #FF2D78) drop-shadow(0 0 20px #FF2D7850); }
           50% { filter: drop-shadow(0 0 12px #FF2D78) drop-shadow(0 0 35px #FF2D7870); }

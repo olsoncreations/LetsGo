@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
         category_main, config, blurb,
         payout_tiers, payout_preset,
         billing_plan, claim_code, seeded_at,
+        chain_id, store_number,
         mon_open, mon_close, tue_open, tue_close, wed_open, wed_close,
         thu_open, thu_close, fri_open, fri_close, sat_open, sat_close,
         sun_open, sun_close,
@@ -129,11 +130,55 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: bizErr.message }, { status: 500 });
     }
 
-    const rows = bizRows ?? [];
+    const rawRows = bizRows ?? [];
     const total = count ?? 0;
 
-    if (rows.length === 0) {
-      return NextResponse.json({ businesses: rows, media: [], tiers: [], total, page, hasMore: false });
+    if (rawRows.length === 0) {
+      return NextResponse.json({ businesses: rawRows, media: [], tiers: [], total, page, hasMore: false });
+    }
+
+    // --- Chain deduplication: one card per chain, keep first occurrence ---
+    // For each chain_id group, we keep one representative business and annotate it
+    // with chain metadata so the frontend can show "X more locations near you"
+    const seenChains = new Set<string>();
+    const chainLocationCounts: Record<string, number> = {};
+    const chainBrandNames: Record<string, string> = {};
+
+    // First pass: count locations per chain in this result set
+    for (const r of rawRows) {
+      const row = r as Record<string, unknown>;
+      const cid = row.chain_id as string | null;
+      if (cid) {
+        chainLocationCounts[cid] = (chainLocationCounts[cid] || 0) + 1;
+      }
+    }
+
+    // If any chains found, fetch full location counts from DB
+    const chainIds = Object.keys(chainLocationCounts);
+    if (chainIds.length > 0) {
+      const { data: chainData } = await supabaseServer
+        .from("chains")
+        .select("id, brand_name, location_count")
+        .in("id", chainIds);
+      for (const c of chainData || []) {
+        chainLocationCounts[c.id] = c.location_count;
+        chainBrandNames[c.id] = c.brand_name;
+      }
+    }
+
+    // Second pass: deduplicate — keep first business per chain, skip rest
+    const rows: Record<string, unknown>[] = [];
+    for (const r of rawRows) {
+      const row = r as Record<string, unknown>;
+      const cid = row.chain_id as string | null;
+      if (cid) {
+        if (seenChains.has(cid)) continue; // skip duplicate chain locations
+        seenChains.add(cid);
+        // Annotate with chain info for frontend
+        (row as Record<string, unknown>).chain_brand_name = chainBrandNames[cid] || null;
+        (row as Record<string, unknown>).chain_location_count = chainLocationCounts[cid] || 1;
+      }
+      rows.push(row);
     }
 
     // Fetch media + tiers for this page's businesses

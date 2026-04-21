@@ -51,6 +51,11 @@ export type BusinessRow = {
   billing_plan?: string | null;
   claim_code?: string | null;
   seeded_at?: string | null;
+  // Chain fields
+  chain_id?: string | null;
+  store_number?: string | null;
+  chain_brand_name?: string | null;
+  chain_location_count?: number | null;
 };
 
 export type MediaRow = {
@@ -89,6 +94,10 @@ export type DiscoveryBusiness = {
   isSponsored: boolean;
   isTrial: boolean;
   claimCode: string | null;
+  // Chain deduplication
+  chainId: string | null;
+  chainBrandName: string | null;
+  chainLocationCount: number;
 };
 
 // ─── Constants ───
@@ -366,10 +375,15 @@ export function normalizeToDiscoveryBusiness(
   const isTrial = row.billing_plan === "trial" && !!row.seeded_at;
   const claimCode = row.claim_code || null;
 
+  const chainId = row.chain_id || null;
+  const chainBrandName = row.chain_brand_name || null;
+  const chainLocationCount = row.chain_location_count || 0;
+
   return {
     id: row.id, name, type, slogan, address, phone, website, price,
     isOpen, closesAt, hours, payout, tags, images, categoryMain, vibe, businessZip,
     isSponsored: false, isTrial, claimCode,
+    chainId, chainBrandName, chainLocationCount,
   };
 }
 

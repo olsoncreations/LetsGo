@@ -82,7 +82,7 @@ function PendingAdjustments({ businessId, colors }: { businessId: string; colors
     return () => { mounted = false; };
   }, [businessId]);
 
-  if (loading || adjustments.length === 0) return null;
+  if (loading) return null;
 
   const totalCredits = adjustments.filter(a => a.type === "credit").reduce((s, a) => s + Math.abs(a.amount_cents), 0);
   const totalCharges = adjustments.filter(a => a.type === "charge").reduce((s, a) => s + Math.abs(a.amount_cents), 0);
@@ -102,7 +102,7 @@ function PendingAdjustments({ businessId, colors }: { businessId: string; colors
         Pending Account Adjustments
       </div>
       <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginBottom: "1rem" }}>
-        These adjustments will be applied to your next invoice.
+        {adjustments.length === 0 ? "No pending adjustments." : "These adjustments will be applied to your next invoice."}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {adjustments.map(adj => (
@@ -760,7 +760,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
         { label: "Advertising & Add-ons", cents: advertisingAddOnsCents, color: colors.secondary },
         { label: "LetsGo Fees (10%)", cents: letsGoFeesCents, color: "#fb7185" },
         { label: `Credit Card Fees (${(ccFeeBps / 100).toFixed(1)}%)`, cents: ccFeeEstimateCents, color: colors.warning },
-        ...(pendingAdjTotalCents !== 0 ? [{ label: "Adjustments", cents: pendingAdjTotalCents, color: pendingAdjTotalCents < 0 ? colors.success : "rgba(255,255,255,0.6)" }] : []),
+        { label: "Adjustments", cents: pendingAdjTotalCents, color: pendingAdjTotalCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
       ];
 
   return (
@@ -835,9 +835,6 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
           </div>
         )}
       </div>
-
-      {/* Pending Account Adjustments (credits/charges) */}
-      <PendingAdjustments businessId={businessId} colors={colors} />
 
       {/* Choose Your Plan */}
       <div
