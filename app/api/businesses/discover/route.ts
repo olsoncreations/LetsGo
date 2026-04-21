@@ -94,6 +94,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Tag filters (Cuisine, Vibe, Amenities, Dietary, Popular, etc.)
+    // Business must contain ALL selected tags
+    if (tags.length > 0) {
+      query = query.contains("tags", tags);
+    }
+
     // Price filter
     if (price && price !== "Any") {
       query = query.filter("config->>priceLevel", "eq", price);
