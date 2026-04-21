@@ -3090,34 +3090,47 @@ function FiveThreeOne() {
     }
   }, []);
 
-  // ─── Fetch businesses via discover API (server-side distance filtering) ───
+  // ─── Fetch ALL businesses within max distance via discover API ───
+  // Server handles: distance bounding box → category → tags → pagination
+  // We fetch all pages so client has the full nearby set for filtering
   useEffect(() => {
     if (!user) return;
+    if (!locationCoords && !locationZip) return; // Wait for location
     (async () => {
       setBizLoading(true);
       try {
-        const params = new URLSearchParams({ page: "1", limit: "100" });
-        // Send location for server-side distance bounding box
-        if (locationCoords) {
-          params.set("userLat", String(locationCoords[0]));
-          params.set("userLng", String(locationCoords[1]));
+        const allRows: BusinessRow[] = [];
+        const allMedia: MediaRow[] = [];
+        const allTiers: { business_id: string; percent_bps: number }[] = [];
+        let page = 1;
+        let hasMore = true;
+
+        while (hasMore) {
+          const params = new URLSearchParams({ page: String(page), limit: "100" });
+          if (locationCoords) {
+            params.set("userLat", String(locationCoords[0]));
+            params.set("userLng", String(locationCoords[1]));
+          }
+          if (locationZip) params.set("userZip", locationZip);
+          params.set("distance", "50");
+
+          const res = await fetch(`/api/businesses/discover?${params}`);
+          if (!res.ok) break;
+          const data = await res.json();
+
+          allRows.push(...((data.businesses ?? []) as BusinessRow[]));
+          allMedia.push(...((data.media ?? []) as MediaRow[]));
+          allTiers.push(...((data.tiers ?? []) as { business_id: string; percent_bps: number }[]));
+
+          hasMore = data.hasMore ?? false;
+          page++;
         }
-        if (locationZip) params.set("userZip", locationZip);
-        params.set("distance", "50"); // Fetch within 50 miles, client filters more precisely
 
-        const res = await fetch(`/api/businesses/discover?${params}`);
-        if (!res.ok) { setBizLoading(false); return; }
-        const data = await res.json();
-
-        const rows = (data.businesses ?? []) as BusinessRow[];
-        const mediaRows = (data.media ?? []) as MediaRow[];
-        const tierRows = (data.tiers ?? []) as { business_id: string; percent_bps: number }[];
-
-        if (rows.length === 0) { setBizLoading(false); return; }
+        if (allRows.length === 0) { setBizLoading(false); return; }
 
         // Group media by business_id
         const mediaMap = new Map<string, MediaRow[]>();
-        for (const m of mediaRows) {
+        for (const m of allMedia) {
           const arr = mediaMap.get(m.business_id) ?? [];
           arr.push(m);
           mediaMap.set(m.business_id, arr);
@@ -3125,12 +3138,12 @@ function FiveThreeOne() {
 
         // Group payout tiers by business_id
         const tierMap = new Map<string, number[]>();
-        for (const t of tierRows) {
+        for (const t of allTiers) {
           if (!tierMap.has(t.business_id)) tierMap.set(t.business_id, []);
           tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
         }
 
-        const normalized = rows.map((r: BusinessRow) =>
+        const normalized = allRows.map((r: BusinessRow) =>
           normalizeToDiscoveryBusiness(r, mediaMap.get(r.id as string) ?? [], tierMap.get(r.id as string))
         );
         setBusinesses(normalized);
