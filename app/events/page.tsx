@@ -1721,8 +1721,9 @@ export default function EventsPage() {
     if (!matchTimeOfDay(e.startAt, filters.timeOfDay)) return false;
     if (!matchCapacity(e.capacity, filters.capacity)) return false;
 
-    // Distance filter
-    if (filters.distance !== "all" && e.distMiles !== undefined) {
+    // Distance filter — exclude events with unknown distance
+    if (filters.distance !== "all") {
+      if (e.distMiles === undefined) return false;
       const maxDist = parseFloat(filters.distance);
       if (e.distMiles > maxDist) return false;
     }

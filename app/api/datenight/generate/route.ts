@@ -83,7 +83,8 @@ function matchesLocation(row: BusinessRow, location: string): boolean {
   const loc = location.trim().toLowerCase();
 
   // Check zip code match or proximity
-  if (/^\d{5}$/.test(loc) && row.zip) {
+  if (/^\d{5}$/.test(loc)) {
+    if (!row.zip) return false;
     if (row.zip === loc) return true;
     const dist = getDistanceBetweenZips(loc, row.zip);
     if (dist !== null && dist <= LOCATION_RADIUS_MILES) return true;
@@ -224,7 +225,18 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const body = await req.json() as GenerateRequest;
-    const { vibes = [], budget = "$$", cuisines = [], location = "", timeSlot = "evening", exclude = [] } = body;
+    const { vibes = [], budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [] } = body;
+
+    // Fall back to user's profile zip code when no location provided
+    let location = bodyLocation;
+    if (!location && userId) {
+      const { data: profile } = await supabaseServer
+        .from("profiles")
+        .select("zip_code")
+        .eq("id", userId)
+        .maybeSingle();
+      if (profile?.zip_code) location = profile.zip_code;
+    }
 
     // 1. Query all active businesses
     const { data: businessRows, error: bizError } = await supabaseServer

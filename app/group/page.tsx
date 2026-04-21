@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import { loadFilterPreferences } from "@/lib/filterPreferences";
+import { getDistanceBetweenZips } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -97,6 +98,7 @@ interface Business {
   rating: number;
   priceLevel: string;
   tags: string[];
+  zip: string;
   gradient: string;
 }
 
@@ -1587,6 +1589,15 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const [selections, setSelections] = useState<Business[]>([]);
   const [selectionTab, setSelectionTab] = useState<"explore" | "my-picks">("explore");
   const [activeCategory, setActiveCategory] = useState("all");
+  const [userZip, setUserZip] = useState("68102");
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.user) return;
+      const { data: profile } = await supabaseBrowser.from("profiles").select("zip_code").eq("id", session.user.id).maybeSingle();
+      if (profile?.zip_code) setUserZip(profile.zip_code);
+    })();
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1655,6 +1666,13 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const filtered = businesses.filter((b) => {
     const matchCat = activeCategory === "all" || b.category === activeCategory;
     const matchSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.type.toLowerCase().includes(searchQuery.toLowerCase()) || b.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+    // Distance filter — exclude businesses with unknown/missing zip
+    if (userZip) {
+      if (!b.zip) return false;
+      const dist = getDistanceBetweenZips(userZip, b.zip);
+      if (dist === null) return false;
+      if (dist > filters.distance) return false;
+    }
     return matchCat && matchSearch;
   });
 
@@ -2953,7 +2971,7 @@ export default function GroupVote() {
 
   // ── Fetch businesses ──
   const fetchBusinesses = useCallback(async () => {
-    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active").eq("is_active", true).limit(100);
+    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active, zip").eq("is_active", true).limit(100);
 
     // Also fetch business_media images
     const bizIds = (data || []).map((b: Record<string, unknown>) => b.id as string);
@@ -3002,6 +3020,7 @@ export default function GroupVote() {
         rating: 0,
         priceLevel,
         tags,
+        zip: (b.zip as string) || "",
         gradient: getBizGradient(b.id as string),
       };
     });

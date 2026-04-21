@@ -1162,6 +1162,17 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
             background: `${COLORS.neonPink}25`, color: COLORS.neonPink, border: `1px solid ${COLORS.neonPink}40`,
             fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: 1, backdropFilter: "blur(8px)",
           }}>{biz.type}</span>
+          {biz.chainLocationCount > 1 && (
+            <span style={{
+              display: "flex", alignItems: "center", gap: 4, padding: "4px 12px", borderRadius: 50,
+              fontSize: 10, fontWeight: 700,
+              background: "rgba(191,95,255,0.12)", color: COLORS.neonPurple, border: `1px solid ${COLORS.neonPurple}40`,
+              fontFamily: "'DM Sans', sans-serif", backdropFilter: "blur(8px)",
+            }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill={COLORS.neonPurple} stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              {biz.chainLocationCount - 1} more location{biz.chainLocationCount > 2 ? "s" : ""}
+            </span>
+          )}
           {biz.isTrial && (
             <span style={{
               padding: "4px 10px", borderRadius: 50, fontSize: 9, fontWeight: 700,
@@ -1672,6 +1683,17 @@ function DiscoveryPage() {
 
     let result = businesses;
 
+    // Distance filter — exclude businesses with unknown/missing zip
+    if (locationZip) {
+      result = result.filter(b => {
+        if (!b.businessZip) return false;
+        const dist = getDistanceBetweenZips(locationZip, b.businessZip);
+        if (dist === null) return false;
+        if (dist > filters.distance) return false;
+        return true;
+      });
+    }
+
     // Open now is real-time client-side (depends on current time + hours)
     if (filters.openNow) {
       result = result.filter(b => b.isOpen);
@@ -1691,7 +1713,7 @@ function DiscoveryPage() {
     }
 
     return result;
-  }, [businesses, filters, spotlightId]);
+  }, [businesses, filters, spotlightId, locationZip]);
 
   // Infinite scroll: load more when user swipes near the end
   const handleVerticalScroll = useCallback(() => {
