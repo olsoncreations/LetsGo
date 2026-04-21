@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getDistanceBetweenZips, ZIP_COORDS, haversineDistance } from "@/lib/zipUtils";
+import { getDistanceBetweenZips, getBusinessDistance, ZIP_COORDS, haversineDistance } from "@/lib/zipUtils";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
@@ -44,6 +44,8 @@ type EventBusiness = {
   city: string;
   state: string;
   zip: string;
+  latitude: number | null;
+  longitude: number | null;
   phone: string;
   website: string;
   hours: BusinessHours[];
@@ -1455,9 +1457,7 @@ export default function EventsPage() {
   // ── Compute distances when userZip changes ─────────────
   const eventsWithDist = events.map(e => {
     if (!userZip || userZip.length !== 5) return e;
-    const bizZip = e.business.zip;
-    if (!bizZip) return e;
-    const d = getDistanceBetweenZips(userZip, bizZip);
+    const d = getBusinessDistance(null, userZip, e.business.latitude, e.business.longitude, e.business.zip);
     if (d === null) return e;
     return { ...e, dist: `${d.toFixed(1)} mi`, distMiles: d };
   });

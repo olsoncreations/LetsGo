@@ -24,7 +24,7 @@ export async function GET(): Promise<Response> {
       supabaseServer
         .from("business")
         .select(
-          "id, business_name, public_business_name, street_address, address_line1, city, state, zip, contact_phone, phone_number, website, website_url, blurb, category_main, price_level, config, payout_preset, " +
+          "id, business_name, public_business_name, street_address, address_line1, city, state, zip, latitude, longitude, contact_phone, phone_number, website, website_url, blurb, category_main, price_level, config, payout_preset, " +
           "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
         )
         .eq("is_active", true),
@@ -159,6 +159,8 @@ export async function GET(): Promise<Response> {
           city: String(biz.city || ""),
           state: String(biz.state || ""),
           zip: String(biz.zip || ""),
+          latitude: biz.latitude != null ? Number(biz.latitude) : null,
+          longitude: biz.longitude != null ? Number(biz.longitude) : null,
           phone: String(biz.contact_phone || biz.phone_number || ""),
           website: String(biz.website || biz.website_url || ""),
           hours: parseHours(biz),

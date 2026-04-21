@@ -7,7 +7,7 @@ import {
   type BusinessRow, type MediaRow, type DiscoveryBusiness,
   normalizeToDiscoveryBusiness, getBusinessGradient, getBusinessEmoji,
 } from "@/lib/businessNormalize";
-import { getDistanceBetweenZips } from "@/lib/zipUtils";
+import { getDistanceBetweenZips, getBusinessDistance } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
@@ -1398,11 +1398,9 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
     // Open now filter
     if (filters.openNow && !biz.isOpen) return false;
 
-    // Distance filter — only exclude when distance is calculable and too far
-    if (locationZip && biz.businessZip) {
-      const dist = getDistanceBetweenZips(locationZip, biz.businessZip);
-      if (dist !== null && dist > filters.distance) return false;
-    }
+    // Distance filter — uses GPS coordinates when available, falls back to zip
+    const dist = getBusinessDistance(null, locationZip, biz.latitude, biz.longitude, biz.businessZip);
+    if (dist !== null && dist > filters.distance) return false;
 
     // Tag filters (cuisine + vibe — match if ANY selected tag appears in biz tags)
     if (filters.tags.length > 0) {
@@ -1528,7 +1526,7 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, padding: "0 16px" }}>
           {filteredBiz.map(biz => {
-            const dist = locationZip && biz.businessZip ? getDistanceBetweenZips(locationZip, biz.businessZip) : null;
+            const dist = getBusinessDistance(null, locationZip, biz.latitude, biz.longitude, biz.businessZip);
             return (
               <BusinessMiniCard
                 key={biz.id}

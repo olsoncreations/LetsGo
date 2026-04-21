@@ -6,7 +6,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import { loadFilterPreferences } from "@/lib/filterPreferences";
-import { getDistanceBetweenZips } from "@/lib/zipUtils";
+import { getBusinessDistance } from "@/lib/zipUtils";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -99,6 +99,8 @@ interface Business {
   priceLevel: string;
   tags: string[];
   zip: string;
+  latitude: number | null;
+  longitude: number | null;
   gradient: string;
 }
 
@@ -1666,11 +1668,9 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const filtered = businesses.filter((b) => {
     const matchCat = activeCategory === "all" || b.category === activeCategory;
     const matchSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.type.toLowerCase().includes(searchQuery.toLowerCase()) || b.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    // Distance filter — only exclude when distance is calculable and too far
-    if (userZip && b.zip) {
-      const dist = getDistanceBetweenZips(userZip, b.zip);
-      if (dist !== null && dist > filters.distance) return false;
-    }
+    // Distance filter — uses GPS coordinates when available, falls back to zip
+    const dist = getBusinessDistance(null, userZip, b.latitude, b.longitude, b.zip);
+    if (dist !== null && dist > filters.distance) return false;
     return matchCat && matchSearch;
   });
 
@@ -2969,7 +2969,7 @@ export default function GroupVote() {
 
   // ── Fetch businesses ──
   const fetchBusinesses = useCallback(async () => {
-    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active, zip").eq("is_active", true).limit(100);
+    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active, zip, latitude, longitude").eq("is_active", true).limit(100);
 
     // Also fetch business_media images
     const bizIds = (data || []).map((b: Record<string, unknown>) => b.id as string);
@@ -3019,6 +3019,8 @@ export default function GroupVote() {
         priceLevel,
         tags,
         zip: (b.zip as string) || "",
+        latitude: (b.latitude as number) ?? null,
+        longitude: (b.longitude as number) ?? null,
         gradient: getBizGradient(b.id as string),
       };
     });

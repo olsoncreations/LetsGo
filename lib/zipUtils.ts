@@ -38,6 +38,36 @@ export function getDistanceBetweenZips(zipA: string, zipB: string): number | nul
   return haversineDistance(from[0], from[1], to[0], to[1]);
 }
 
+/**
+ * Calculate distance in miles between a user location and a business.
+ * Uses actual GPS coordinates when available, falls back to zip code lookup.
+ * Returns null only if neither method can determine distance.
+ */
+export function getBusinessDistance(
+  userCoords: [number, number] | null,
+  userZip: string,
+  bizLat: number | null,
+  bizLng: number | null,
+  bizZip: string,
+): number | null {
+  // Best case: both have coordinates
+  if (userCoords && bizLat != null && bizLng != null) {
+    return haversineDistance(userCoords[0], userCoords[1], bizLat, bizLng);
+  }
+  // Fallback: user coords + business zip lookup
+  if (userCoords && bizZip) {
+    const to = ZIP_COORDS[bizZip];
+    if (to) return haversineDistance(userCoords[0], userCoords[1], to[0], to[1]);
+  }
+  // Fallback: user zip lookup + business coords
+  if (userZip && bizLat != null && bizLng != null) {
+    const from = ZIP_COORDS[userZip];
+    if (from) return haversineDistance(from[0], from[1], bizLat, bizLng);
+  }
+  // Last resort: zip-to-zip lookup
+  return getDistanceBetweenZips(userZip, bizZip);
+}
+
 /** Campaign type → max radius in miles. null = nationwide (no limit). */
 export const CAMPAIGN_RADIUS: Record<string, number | null> = {
   ad_1day: 20,

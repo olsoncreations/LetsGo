@@ -51,6 +51,9 @@ export type BusinessRow = {
   billing_plan?: string | null;
   claim_code?: string | null;
   seeded_at?: string | null;
+  // Coordinates (from Google Places via sales_leads)
+  latitude?: number | null;
+  longitude?: number | null;
   // Chain fields
   chain_id?: string | null;
   store_number?: string | null;
@@ -91,6 +94,8 @@ export type DiscoveryBusiness = {
   categoryMain: string;
   vibe: string;
   businessZip: string;
+  latitude: number | null;
+  longitude: number | null;
   isSponsored: boolean;
   isTrial: boolean;
   claimCode: string | null;
@@ -338,7 +343,10 @@ export function normalizeToDiscoveryBusiness(
   const hours = resolveHoursFromColumns(row as unknown as Record<string, unknown>);
   const { isOpen, closesAt } = computeOpenStatus(hours);
   const payout = normalizePayoutFromBps(cfg, row as unknown as Record<string, unknown>, tableBps);
-  const tags: string[] = Array.isArray(cfg.tags) ? (cfg.tags as string[]).map(String) : [];
+  // Prefer standalone tags column, fall back to config.tags
+  const tags: string[] = Array.isArray(row.tags) && row.tags.length > 0
+    ? row.tags.map(t => String(t))
+    : Array.isArray(cfg.tags) ? (cfg.tags as string[]).map(String) : [];
   const vibe = String(cfg.vibe ?? cfg.businessType ?? row.category_main ?? "");
   const categoryMain = row.category_main || "";
 
@@ -371,6 +379,8 @@ export function normalizeToDiscoveryBusiness(
   }
 
   const businessZip = row.zip || "";
+  const latitude = row.latitude ?? null;
+  const longitude = row.longitude ?? null;
 
   const isTrial = row.billing_plan === "trial" && !!row.seeded_at;
   const claimCode = row.claim_code || null;
@@ -382,6 +392,7 @@ export function normalizeToDiscoveryBusiness(
   return {
     id: row.id, name, type, slogan, address, phone, website, price,
     isOpen, closesAt, hours, payout, tags, images, categoryMain, vibe, businessZip,
+    latitude, longitude,
     isSponsored: false, isTrial, claimCode,
     chainId, chainBrandName, chainLocationCount,
   };

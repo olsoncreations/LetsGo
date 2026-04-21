@@ -43,7 +43,7 @@ export async function GET(request: Request): Promise<Response> {
     const { data: businesses, error: bizErr } = await supabaseServer
       .from("business")
       .select(
-        "id, business_name, public_business_name, business_type, category_main, business_phone, contact_phone, street_address, city, state, zip, blurb, description, website, config"
+        "id, business_name, public_business_name, business_type, category_main, business_phone, contact_phone, street_address, city, state, zip, latitude, longitude, blurb, description, website, config"
       )
       .in("id", bizIds);
 
@@ -82,19 +82,25 @@ export async function GET(request: Request): Promise<Response> {
       const biz = bizMap.get(campaign.business_id);
       if (!biz) continue;
 
-      // Distance filtering: only apply when user zip is known
+      // Distance filtering: only apply when user location is known
       if (userCoords) {
         const maxRadius = CAMPAIGN_RADIUS[campaign.campaign_type as string] ?? null;
         if (maxRadius !== null) {
-          const bizZip = biz.zip as string | null;
-          const bizCoords = bizZip ? ZIP_COORDS[bizZip] || null : null;
-          if (bizCoords) {
-            const distance = haversineDistance(userCoords[0], userCoords[1], bizCoords[0], bizCoords[1]);
-            if (distance > maxRadius) continue; // outside campaign radius
+          // Use business GPS coordinates first, fall back to zip lookup
+          const bizLat = biz.latitude as number | null;
+          const bizLng = biz.longitude as number | null;
+          if (bizLat != null && bizLng != null) {
+            const distance = haversineDistance(userCoords[0], userCoords[1], bizLat, bizLng);
+            if (distance > maxRadius) continue;
+          } else {
+            const bizZip = biz.zip as string | null;
+            const bizCoords = bizZip ? ZIP_COORDS[bizZip] || null : null;
+            if (bizCoords) {
+              const distance = haversineDistance(userCoords[0], userCoords[1], bizCoords[0], bizCoords[1]);
+              if (distance > maxRadius) continue;
+            }
           }
-          // If bizCoords unknown, include campaign (permissive)
         }
-        // Tour-wide (maxRadius null) always passes
       }
 
       const meta = (campaign.meta ?? {}) as Record<string, unknown>;

@@ -8,7 +8,7 @@ import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { SwipeVerticalAnim, SwipeLeftAnim, FilterAnim, HeartAnim, ScrollIndicatorAnim } from "@/components/TourIllustrations";
-import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips } from "@/lib/zipUtils";
+import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips, getBusinessDistance } from "@/lib/zipUtils";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
@@ -1088,16 +1088,9 @@ function PhotoPage({ image, label, liked, onToggle }: {
 
 function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; liked: boolean; onToggle: () => void; userZip: string; userCoords: [number, number] | null; geoReady: number; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
   const distance = useMemo(() => {
-    // Try coordinate-based distance first (more accurate with Google Places)
-    if (userCoords && biz.businessZip) {
-      const bizCoords = ZIP_COORDS[biz.businessZip];
-      if (bizCoords) return haversineDistance(userCoords[0], userCoords[1], bizCoords[0], bizCoords[1]);
-    }
-    // Fall back to zip-to-zip lookup
-    if (userZip && biz.businessZip) return getDistanceBetweenZips(userZip, biz.businessZip);
-    return null;
+    return getBusinessDistance(userCoords, userZip, biz.latitude, biz.longitude, biz.businessZip);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userZip, userCoords, biz.businessZip, geoReady]);
+  }, [userZip, userCoords, biz.latitude, biz.longitude, biz.businessZip, geoReady]);
   const heroImage = biz.images[0] ?? null;
 
   return (
@@ -1667,38 +1660,6 @@ function DiscoveryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Geocode unknown business zip codes so distance works for all businesses
-  useEffect(() => {
-    if (businesses.length === 0) return;
-    const google = (window as unknown as Record<string, unknown>).google as { maps?: { Geocoder?: new () => { geocode: (req: Record<string, unknown>, cb: (results: Array<{ geometry: { location: { lat: () => number; lng: () => number } } }> | null, status: string) => void) => void } } } | undefined;
-    if (!google?.maps?.Geocoder) return;
-
-    const unknownZips = [...new Set(businesses.map(b => b.businessZip).filter(z => z && z.length === 5 && !ZIP_COORDS[z]))];
-    if (unknownZips.length === 0) return;
-
-    const geocoder = new google.maps.Geocoder();
-    let idx = 0;
-
-    // Geocode one at a time with a small delay to avoid rate limits
-    function geocodeNext() {
-      if (idx >= unknownZips.length) {
-        // All done — trigger distance recalc
-        setGeoReady(g => g + 1);
-        return;
-      }
-      const zip = unknownZips[idx++];
-      geocoder.geocode({ address: zip + ", USA" }, (results, status) => {
-        if (status === "OK" && results && results[0]) {
-          const loc = results[0].geometry.location;
-          ZIP_COORDS[zip] = [loc.lat(), loc.lng()];
-        }
-        // Small delay between requests
-        setTimeout(geocodeNext, 100);
-      });
-    }
-    geocodeNext();
-  }, [businesses]);
-
   // Apply filters: only re-fetch when user clicks "Apply Filters" (not on every click)
   const handleApplyFilters = useCallback(() => {
     setCurrentBiz(0);
@@ -1731,11 +1692,10 @@ function DiscoveryPage() {
 
     let result = businesses;
 
-    // Distance filter — only exclude when distance is calculable and too far
-    if (locationZip) {
+    // Distance filter — uses GPS coordinates when available, falls back to zip lookup
+    if (locationZip || locationCoords) {
       result = result.filter(b => {
-        if (!b.businessZip) return true;
-        const dist = getDistanceBetweenZips(locationZip, b.businessZip);
+        const dist = getBusinessDistance(locationCoords, locationZip, b.latitude, b.longitude, b.businessZip);
         if (dist !== null && dist > filters.distance) return false;
         return true;
       });
@@ -1769,7 +1729,7 @@ function DiscoveryPage() {
     }
 
     return result;
-  }, [businesses, filters, spotlightId, locationZip, geoReady]);
+  }, [businesses, filters, spotlightId, locationZip, locationCoords]);
 
   // Infinite scroll: load more when user swipes near the end
   const handleVerticalScroll = useCallback(() => {

@@ -11,7 +11,7 @@ import {
   getCentralTime,
   buildMediaUrl,
 } from "@/lib/businessNormalize";
-import { getDistanceBetweenZips } from "@/lib/zipUtils";
+import { getDistanceBetweenZips, haversineDistance, ZIP_COORDS } from "@/lib/zipUtils";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -83,11 +83,23 @@ function matchesLocation(row: BusinessRow, location: string): boolean {
   const loc = location.trim().toLowerCase();
 
   // Check zip code match or proximity
-  if (/^\d{5}$/.test(loc) && row.zip) {
+  if (/^\d{5}$/.test(loc)) {
+    // Exact zip match
     if (row.zip === loc) return true;
-    const dist = getDistanceBetweenZips(loc, row.zip);
-    if (dist !== null && dist <= LOCATION_RADIUS_MILES) return true;
-    if (dist !== null) return false;
+
+    // Try GPS coordinates first (most accurate)
+    const fromCoords = ZIP_COORDS[loc];
+    if (fromCoords && row.latitude != null && row.longitude != null) {
+      const dist = haversineDistance(fromCoords[0], fromCoords[1], row.latitude, row.longitude);
+      return dist <= LOCATION_RADIUS_MILES;
+    }
+
+    // Fall back to zip-to-zip lookup
+    if (row.zip) {
+      const dist = getDistanceBetweenZips(loc, row.zip);
+      if (dist !== null) return dist <= LOCATION_RADIUS_MILES;
+    }
+
     // Unknown distance — fall through to city/state check
   }
 
@@ -243,7 +255,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       .from("business")
       .select(
         "id, business_name, public_business_name, contact_phone, website, " +
-        "street_address, city, state, zip, category_main, business_type, " +
+        "street_address, city, state, zip, latitude, longitude, category_main, business_type, " +
         "config, blurb, payout_tiers, payout_preset, is_active, tags, description, " +
         "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, " +
         "thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"

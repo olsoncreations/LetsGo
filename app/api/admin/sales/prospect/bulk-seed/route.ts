@@ -193,8 +193,12 @@ export async function POST(req: NextRequest) {
             website: lead.website || "",
             website_url: lead.website || "",
             category_main: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
+            business_type: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
             config,
+            tags: [subtype],
             payout_preset: "trial",
+            latitude: lead.latitude || null,
+            longitude: lead.longitude || null,
             ...hourColumns,
           });
 
