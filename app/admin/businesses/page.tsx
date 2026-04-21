@@ -117,6 +117,8 @@ interface Business {
   seeded_at: string | null;
   trial_expires_at: string | null;
   claim_code: string | null;
+  latitude: number | null;
+  longitude: number | null;
   chain_id: string | null;
   store_number: string | null;
 }
@@ -1434,6 +1436,22 @@ function BusinessesPage() {
                     <EditField label="Email" value={getValue("contact_email") as string} editable={isEditing} onChange={(v) => updateField("contact_email", v)} />
                     <EditField label="Website" value={getValue("website") as string} editable={isEditing} onChange={(v) => updateField("website", v)} />
                     <EditField label="Customer Email" value={getValue("customer_email") as string} editable={isEditing} onChange={(v) => updateField("customer_email", v)} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 8 }}>
+                      <EditField label="Latitude" value={getValue("latitude") != null ? String(getValue("latitude")) : ""} editable={isEditing} onChange={(v) => updateField("latitude", v ? parseFloat(v) : null)} />
+                      <EditField label="Longitude" value={getValue("longitude") != null ? String(getValue("longitude")) : ""} editable={isEditing} onChange={(v) => updateField("longitude", v ? parseFloat(v) : null)} />
+                    </div>
+                    {!isEditing && getValue("latitude") != null && (
+                      <div style={{ marginTop: 8 }}>
+                        <a
+                          href={`https://www.google.com/maps?q=${getValue("latitude")},${getValue("longitude")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: COLORS.neonBlue, textDecoration: "none" }}
+                        >
+                          View on Google Maps ↗
+                        </a>
+                      </div>
+                    )}
                   </Card>
                 </div>
 

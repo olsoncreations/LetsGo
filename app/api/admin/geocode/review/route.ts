@@ -156,3 +156,60 @@ export async function PATCH(req: NextRequest) {
     );
   }
 }
+
+/**
+ * PUT /api/admin/geocode/review
+ * Bulk approve all mismatches as Google coordinates.
+ * Body: { action: "bulk_approve_google" }
+ */
+export async function PUT(req: NextRequest) {
+  const staffResult = await requireStaff(req);
+  if (staffResult instanceof Response) return staffResult;
+  const { userId: staffId, userName: staffName } = staffResult;
+
+  try {
+    const body = await req.json();
+    if (body.action !== "bulk_approve_google") {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    }
+
+    // Count how many we'll update
+    const { count } = await supabaseServer
+      .from("business")
+      .select("id", { count: "exact", head: true })
+      .eq("geocode_status", "mismatch")
+      .eq("is_active", true);
+
+    // Bulk update all mismatches to approved_google (keep existing coordinates)
+    const { error: updateErr } = await supabaseServer
+      .from("business")
+      .update({
+        geocode_status: "approved_google",
+        geocode_reviewed_by: staffId,
+        geocode_reviewed_at: new Date().toISOString(),
+      })
+      .eq("geocode_status", "mismatch")
+      .eq("is_active", true);
+
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    // Audit log
+    await supabaseServer.from("audit_log").insert({
+      action: "geocode_bulk_approve_google",
+      tab: "Businesses",
+      target_type: "business",
+      details: `Bulk approved ${count || 0} mismatched businesses with Google coordinates`,
+      staff_id: staffId,
+      staff_name: staffName,
+    }).then(() => {}, () => {});
+
+    return NextResponse.json({ success: true, updated: count || 0 });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Internal error" },
+      { status: 500 }
+    );
+  }
+}

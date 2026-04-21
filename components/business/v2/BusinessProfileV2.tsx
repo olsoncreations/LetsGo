@@ -16,6 +16,7 @@ import AdvertisingAddons from "@/components/business/v2/tabs/AdvertisingAddons";
 import Billing from "@/components/business/v2/tabs/Billing";
 import Profile from "@/components/business/v2/tabs/Profile";
 import Support from "@/components/business/v2/tabs/Support";
+import Location from "@/components/business/v2/tabs/Location";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -32,6 +33,7 @@ import {
   Settings,
   TrendingUp,
   LogOut,
+  MapPin,
   UploadCloud,
   FileText,
   X,
@@ -45,6 +47,7 @@ type TabId =
   | "events"
   | "advertising"
   | "billing"
+  | "location"
   | "profile"
   | "support";
 
@@ -71,6 +74,7 @@ const EventsTab = Events as unknown as React.ComponentType<BusinessTabProps>;
 const AdvertisingAddonsTab = AdvertisingAddons as unknown as React.ComponentType<BusinessTabProps>;
 const BillingTab = Billing as unknown as React.ComponentType<BusinessTabProps>;
 const ProfileTab = Profile as unknown as React.ComponentType<BusinessTabProps>;
+const LocationTab = Location as unknown as React.ComponentType<BusinessTabProps>;
 const SupportTab = Support as unknown as React.ComponentType<BusinessTabProps>;
 
 type ProfileSnapshot = {
@@ -237,6 +241,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
       { id: "events" as const, label: "Events", icon: <Calendar size={16} /> },
       { id: "advertising" as const, label: "Advertising & Add-ons", icon: <TrendingUp size={16} /> },
       { id: "billing" as const, label: "Plans & Billing", icon: <DollarSign size={16} /> },
+      { id: "location" as const, label: "Location", icon: <MapPin size={16} /> },
       { id: "profile" as const, label: "Profile Settings", icon: <Settings size={16} /> },
       { id: "support" as const, label: "Support & Help", icon: <AlertCircle size={16} /> },
     ],
@@ -573,6 +578,7 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
         {activeTab === "events" && <EventsTab {...tabProps} />}
         {activeTab === "advertising" && <AdvertisingAddonsTab {...tabProps} />}
         {activeTab === "billing" && <BillingTab {...tabProps} />}
+        {activeTab === "location" && <LocationTab {...tabProps} />}
         {activeTab === "profile" && <ProfileTab {...tabProps} />}
         {activeTab === "support" && <SupportTab {...tabProps} />}
       </div>

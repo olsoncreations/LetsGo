@@ -86,6 +86,7 @@ export default function GeocodeQAPage() {
   const [manualModal, setManualModal] = useState<{ id: string; name: string } | null>(null);
   const [manualLat, setManualLat] = useState("");
   const [manualLng, setManualLng] = useState("");
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -160,6 +161,28 @@ export default function GeocodeQAPage() {
   const stopBatch = useCallback(() => {
     stopRef.current = true;
   }, []);
+
+  // ── Bulk Approve ──
+
+  const handleBulkApproveGoogle = useCallback(async () => {
+    if (!confirm(`Approve Google coordinates for all ${stats?.mismatch || 0} mismatched businesses?`)) return;
+    setBulkApproving(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/admin/geocode/review", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ action: "bulk_approve_google" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`Approved ${data.updated} businesses with Google coordinates.`);
+        await fetchStats();
+        await fetchReview();
+      }
+    } catch { /* silent */ }
+    setBulkApproving(false);
+  }, [stats, fetchStats, fetchReview]);
 
   // ── Review Actions ──
 
@@ -305,6 +328,37 @@ export default function GeocodeQAPage() {
           </div>
         )}
       </Card>
+
+      {/* Bulk Actions */}
+      {(stats?.mismatch || 0) > 0 && (
+        <Card style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Bulk Resolve Mismatches</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                Keep Google coordinates for all {stats?.mismatch || 0} mismatched businesses. Business owners can correct their pin later.
+              </div>
+            </div>
+            <button
+              onClick={handleBulkApproveGoogle}
+              disabled={bulkApproving}
+              style={{
+                padding: "10px 24px",
+                borderRadius: 8,
+                border: "none",
+                background: bulkApproving ? COLORS.cardBorder : COLORS.gradient2,
+                color: "#000",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: bulkApproving ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {bulkApproving ? "Processing..." : `✓ Approve All Google (${stats?.mismatch || 0})`}
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Review Table */}
       <Card
