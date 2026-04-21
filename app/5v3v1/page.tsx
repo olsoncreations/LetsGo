@@ -3090,44 +3090,54 @@ function FiveThreeOne() {
     }
   }, []);
 
-  // ─── Fetch businesses ───
+  // ─── Fetch businesses via discover API (server-side distance filtering) ───
   useEffect(() => {
     if (!user) return;
     (async () => {
       setBizLoading(true);
-      const { data: rows } = await supabaseBrowser
-        .from("business")
-        .select("*")
-        .eq("is_active", true)
-        .limit(200);
+      try {
+        const params = new URLSearchParams({ page: "1", limit: "100" });
+        // Send location for server-side distance bounding box
+        if (locationCoords) {
+          params.set("userLat", String(locationCoords[0]));
+          params.set("userLng", String(locationCoords[1]));
+        }
+        if (locationZip) params.set("userZip", locationZip);
+        params.set("distance", "50"); // Fetch within 50 miles, client filters more precisely
 
-      if (!rows || rows.length === 0) { setBizLoading(false); return; }
+        const res = await fetch(`/api/businesses/discover?${params}`);
+        if (!res.ok) { setBizLoading(false); return; }
+        const data = await res.json();
 
-      const bizIds = rows.map((r: BusinessRow) => r.id);
-      const [{ data: mediaRows }, { data: tierRows }] = await Promise.all([
-        supabaseBrowser.from("business_media").select("business_id, bucket, path, sort_order, caption, meta").in("business_id", bizIds).eq("is_active", true).eq("media_type", "photo").order("sort_order", { ascending: true }),
-        supabaseBrowser
-          .from("business_payout_tiers")
-          .select("business_id, percent_bps, tier_index")
-          .in("business_id", bizIds)
-          .order("tier_index", { ascending: true }),
-      ]);
+        const rows = (data.businesses ?? []) as BusinessRow[];
+        const mediaRows = (data.media ?? []) as MediaRow[];
+        const tierRows = (data.tiers ?? []) as { business_id: string; percent_bps: number }[];
 
-      // Group payout tiers by business_id
-      const tierMap = new Map<string, number[]>();
-      for (const t of (tierRows ?? []) as { business_id: string; percent_bps: number }[]) {
-        if (!tierMap.has(t.business_id)) tierMap.set(t.business_id, []);
-        tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
-      }
+        if (rows.length === 0) { setBizLoading(false); return; }
 
-      const normalized = rows.map((r: BusinessRow) => {
-        const media = (mediaRows ?? []).filter((m: MediaRow) => m.business_id === r.id);
-        return normalizeToDiscoveryBusiness(r, media, tierMap.get(r.id));
-      });
-      setBusinesses(normalized);
+        // Group media by business_id
+        const mediaMap = new Map<string, MediaRow[]>();
+        for (const m of mediaRows) {
+          const arr = mediaMap.get(m.business_id) ?? [];
+          arr.push(m);
+          mediaMap.set(m.business_id, arr);
+        }
+
+        // Group payout tiers by business_id
+        const tierMap = new Map<string, number[]>();
+        for (const t of tierRows) {
+          if (!tierMap.has(t.business_id)) tierMap.set(t.business_id, []);
+          tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
+        }
+
+        const normalized = rows.map((r: BusinessRow) =>
+          normalizeToDiscoveryBusiness(r, mediaMap.get(r.id as string) ?? [], tierMap.get(r.id as string))
+        );
+        setBusinesses(normalized);
+      } catch { /* silent */ }
       setBizLoading(false);
     })();
-  }, [user]);
+  }, [user, locationCoords, locationZip]);
 
   // ─── Fetch active (in-progress) games for rejoin/incoming banner ───
   useEffect(() => {

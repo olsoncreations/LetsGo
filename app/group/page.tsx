@@ -2982,7 +2982,7 @@ export default function GroupVote() {
 
   // ── Fetch businesses ──
   const fetchBusinesses = useCallback(async () => {
-    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active, zip, latitude, longitude").eq("is_active", true).limit(100);
+    const { data } = await supabaseBrowser.from("business").select("id, business_name, public_business_name, category_main, config, is_active, zip, latitude, longitude, tags").eq("is_active", true);
 
     // Also fetch business_media images
     const bizIds = (data || []).map((b: Record<string, unknown>) => b.id as string);
@@ -3005,8 +3005,10 @@ export default function GroupVote() {
 
     const biz: Business[] = (data || []).map((b: Record<string, unknown>) => {
       const cfg = (b.config as Record<string, unknown>) ?? {};
-      const type = (cfg.businessType as string) || (b.category_main as string) || "";
-      const tags = (cfg.tags as string[]) || [];
+      const subtype = (cfg.subtype as string) || "";
+      const type = subtype || (cfg.businessType as string) || (b.category_main as string) || "";
+      const dbTags = Array.isArray(b.tags) ? (b.tags as string[]) : [];
+      const tags = dbTags.length > 0 ? dbTags : (cfg.tags as string[]) || [];
       const cfgImages = Array.isArray(cfg.images) ? (cfg.images as string[]).filter(Boolean) : [];
       const mediaImages = mediaMap.get(b.id as string) || [];
       // Merge: config images first, then business_media (deduplicated)
