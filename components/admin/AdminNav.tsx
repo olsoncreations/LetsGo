@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { key: "onboarding", icon: "📥", label: "Onboarding", href: "/admin/onboarding" },
   { key: "businesses", icon: "🏢", label: "Businesses", href: "/admin/businesses" },
   { key: "chains", icon: "🔗", label: "Chains", href: "/admin/chains" },
+  { key: "geocode", icon: "📍", label: "Geocode QA", href: "/admin/geocode" },
   { key: "events", icon: "📅", label: "Events", href: "/admin/events" },
   { key: "ugc", icon: "📸", label: "UGC Moderation", href: "/admin/ugc" },
   { key: "users", icon: "👥", label: "Users", href: "/admin/users" },

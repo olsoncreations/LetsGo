@@ -25,6 +25,7 @@ export const NAV_PERMISSIONS: Record<string, string | null> = {
   onboarding: "view_onboarding",
   businesses: "view_businesses",
   chains: "view_chains",
+  geocode: "view_businesses",
   events: "view_events",
   ugc: "view_ugc",
   users: "view_users",

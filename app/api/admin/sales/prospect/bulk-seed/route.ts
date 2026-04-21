@@ -199,6 +199,7 @@ export async function POST(req: NextRequest) {
             payout_preset: "trial",
             latitude: lead.latitude || null,
             longitude: lead.longitude || null,
+            geocode_status: "pending",
             ...hourColumns,
           });
 
