@@ -22,6 +22,8 @@ type GenerateRequest = {
   location: string;
   timeSlot: "afternoon" | "evening" | "latenight";
   exclude: string[];
+  userLat?: number;
+  userLng?: number;
 };
 
 type ScoredBusiness = {
@@ -78,7 +80,12 @@ function isRestaurantType(businessType: string, categoryMain: string, tags: stri
 }
 
 
-function matchesLocation(row: BusinessRow, location: string): boolean {
+function matchesLocation(row: BusinessRow, location: string, userLat?: number, userLng?: number): boolean {
+  // Best case: use actual GPS coordinates from browser
+  if (userLat && userLng && row.latitude != null && row.longitude != null) {
+    return haversineDistance(userLat, userLng, row.latitude, row.longitude) <= LOCATION_RADIUS_MILES;
+  }
+
   if (!location) return true;
   const loc = location.trim().toLowerCase();
 
@@ -87,11 +94,10 @@ function matchesLocation(row: BusinessRow, location: string): boolean {
     // Exact zip match
     if (row.zip === loc) return true;
 
-    // Try GPS coordinates first (most accurate)
+    // Try GPS coordinates with zip centroid
     const fromCoords = ZIP_COORDS[loc];
     if (fromCoords && row.latitude != null && row.longitude != null) {
-      const dist = haversineDistance(fromCoords[0], fromCoords[1], row.latitude, row.longitude);
-      return dist <= LOCATION_RADIUS_MILES;
+      return haversineDistance(fromCoords[0], fromCoords[1], row.latitude, row.longitude) <= LOCATION_RADIUS_MILES;
     }
 
     // Fall back to zip-to-zip lookup
@@ -237,7 +243,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const body = await req.json() as GenerateRequest;
-    const { vibes = [], budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [] } = body;
+    const { vibes = [], budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [], userLat, userLng } = body;
 
     // Fall back to user's profile zip code when no location provided
     let location = bodyLocation;
@@ -297,7 +303,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     // 4. Filter businesses by location and currently open
     const allBusinesses = (businessRows as unknown as BusinessRow[]).filter(row => {
-      if (!matchesLocation(row, location)) return false;
+      if (!matchesLocation(row, location, userLat, userLng)) return false;
       if (!isBusinessOpenNow(row as Record<string, unknown>)) return false;
       return true;
     });

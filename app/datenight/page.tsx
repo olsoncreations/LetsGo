@@ -373,15 +373,21 @@ async function getAuthToken(): Promise<string | null> {
 
 // ── API Helpers ───────────────────────────────────────────────
 
-async function callGenerate(exclude: string[] = []): Promise<GenerateResponse> {
+async function callGenerate(exclude: string[] = [], userLat?: number, userLng?: number): Promise<GenerateResponse> {
   const token = await getAuthToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
+  const body: Record<string, unknown> = { vibes: [], budget: "$$", cuisines: [], location: "", exclude };
+  if (userLat != null && userLng != null) {
+    body.userLat = userLat;
+    body.userLng = userLng;
+  }
+
   const res = await fetch("/api/datenight/generate", {
     method: "POST",
     headers,
-    body: JSON.stringify({ vibes: [], budget: "$$", cuisines: [], location: "", exclude }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -598,6 +604,18 @@ function TheShow({ onBack }: { onBack: () => void }) {
   const [showCards, setShowCards] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
+  // User location
+  const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserCoords([pos.coords.latitude, pos.coords.longitude]),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    }
+  }, []);
+
   // API state
   const [restaurant, setRestaurant] = useState<PickResult | null>(null);
   const [activity, setActivity] = useState<PickResult | null>(null);
@@ -674,7 +692,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
     apiResultRef.current = null;
     animationDoneRef.current = false;
 
-    callGenerate(excludedIds)
+    callGenerate(excludedIds, userCoords?.[0], userCoords?.[1])
       .then(result => {
         apiResultRef.current = result;
         if (animationDoneRef.current) {
@@ -742,7 +760,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
     setExcludedIds(newExclude);
 
     try {
-      const result = await callGenerate(newExclude);
+      const result = await callGenerate(newExclude, userCoords?.[0], userCoords?.[1]);
       setTimeout(() => {
         if (target === "restaurant" && result.restaurant) {
           setRestaurant(result.restaurant);
