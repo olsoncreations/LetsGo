@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
 
         // Update sales lead
         await supabaseServer.from("sales_leads")
-          .update({ preview_business_id: businessId, seeded_at: new Date().toISOString() })
+          .update({ preview_business_id: businessId, seeded_at: new Date().toISOString(), unseeded_at: null })
           .eq("id", leadId);
 
         results.push({
@@ -340,10 +340,10 @@ export async function DELETE(req: NextRequest) {
             .eq("id", lead.preview_business_id);
         }
 
-        // Clear seeded state on the lead
+        // Clear seeded state on the lead and mark as unseeded
         await supabaseServer
           .from("sales_leads")
-          .update({ seeded_at: null, preview_business_id: null })
+          .update({ seeded_at: null, preview_business_id: null, unseeded_at: new Date().toISOString() })
           .eq("id", leadId);
 
         succeeded++;

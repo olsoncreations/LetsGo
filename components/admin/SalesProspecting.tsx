@@ -49,6 +49,7 @@ interface SalesLead {
   outreach_clicked_at: string | null;
   outreach_count: number;
   seeded_at: string | null;
+  unseeded_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -498,6 +499,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [filterContactFrom, setFilterContactFrom] = useState("");
   const [filterContactTo, setFilterContactTo] = useState("");
   const [filterOnApp, setFilterOnApp] = useState("all");
+  const [filterSeeded, setFilterSeeded] = useState("all");
 
   // ---------- Modal state ----------
   const [selectedLead, setSelectedLead] = useState<SalesLead | null>(null);
@@ -1959,6 +1961,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       if (filterHasPreview === "no" && l.preview_business_id) return false;
       if (filterOnApp === "yes" && !isLeadOnApp(l)) return false;
       if (filterOnApp === "no" && isLeadOnApp(l)) return false;
+      if (filterSeeded === "seeded" && !l.seeded_at) return false;
+      if (filterSeeded === "unseeded" && (l.seeded_at || !l.unseeded_at)) return false;
+      if (filterSeeded === "never" && (l.seeded_at || l.unseeded_at)) return false;
       if (filterHasEmail === "yes" && !l.email) return false;
       if (filterHasEmail === "no" && l.email) return false;
       if (filterOutreach === "not_sent" && l.outreach_count > 0) return false;
@@ -1986,7 +1991,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       }
       return true;
     });
-  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp, filterHasEmail, filterOutreach]);
+  }, [leads, filterStatus, filterRep, filterType, filterCity, filterState, filterSearch, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterContactFrom, filterContactTo, filterOnApp, isLeadOnApp, filterSeeded, filterHasEmail, filterOutreach]);
 
   // City options for filter (derived from leads data)
   const cityOptions = useMemo(() => {
@@ -2033,13 +2038,14 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     if (filterHasPhone !== "all") count++;
     if (filterHasPreview !== "all") count++;
     if (filterOnApp !== "all") count++;
+    if (filterSeeded !== "all") count++;
     if (filterHasEmail !== "all") count++;
     if (filterOutreach !== "all") count++;
     if (filterContactFrom) count++;
     if (filterContactTo) count++;
     if (filterSearch) count++;
     return count;
-  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterHasEmail, filterOutreach, filterContactFrom, filterContactTo, filterSearch]);
+  }, [filterStatus, filterRep, filterType, filterCity, filterState, filterRating, filterHasWebsite, filterHasPhone, filterHasPreview, filterOnApp, filterSeeded, filterHasEmail, filterOutreach, filterContactFrom, filterContactTo, filterSearch]);
 
   const clearAllFilters = () => {
     setFilterStatus("all");
@@ -2052,6 +2058,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     setFilterHasPhone("all");
     setFilterHasPreview("all");
     setFilterOnApp("all");
+    setFilterSeeded("all");
     setFilterHasEmail("all");
     setFilterOutreach("all");
     setFilterContactFrom("");
@@ -2226,7 +2233,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
       key: "business_name",
       label: "Business",
       render: (v: unknown, row: Record<string, unknown>) => {
-        const onApp = isLeadOnApp(row as unknown as SalesLead);
+        const lead = row as unknown as SalesLead;
+        const onApp = isLeadOnApp(lead);
+        const unseeded = !lead.seeded_at && !!lead.unseeded_at;
         return (
           <span style={{ fontWeight: 600, color: COLORS.textPrimary, display: "flex", alignItems: "center", gap: 6 }}>
             {String(v)}
@@ -2237,6 +2246,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 border: `1px solid rgba(57,255,20,0.3)`, whiteSpace: "nowrap",
               }}>
                 ON APP
+              </span>
+            )}
+            {unseeded && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                background: "rgba(255,107,53,0.15)", color: COLORS.neonOrange,
+                border: `1px solid rgba(255,107,53,0.3)`, whiteSpace: "nowrap",
+              }}>
+                UNSEEDED
               </span>
             )}
           </span>
@@ -2769,6 +2787,15 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               <option value="all">Any</option>
               <option value="yes">Yes</option>
               <option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", fontWeight: 600 }}>Seeded</label>
+            <select value={filterSeeded} onChange={(e) => setFilterSeeded(e.target.value)} style={{ ...selectStyle, minWidth: 120 }}>
+              <option value="all">Any</option>
+              <option value="seeded">Seeded</option>
+              <option value="unseeded">Unseeded</option>
+              <option value="never">Never Seeded</option>
             </select>
           </div>
           <div>
@@ -3434,6 +3461,23 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
                 </div>
                 <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
                   Seeded on {new Date(selectedLead.seeded_at).toLocaleDateString()} — This business is live in the discovery feed as an unclaimed trial listing with 0% payouts.
+                </div>
+              </div>
+            )}
+
+            {/* Unseeded Status */}
+            {!selectedLead.seeded_at && selectedLead.unseeded_at && (
+              <div style={{
+                marginBottom: 24, padding: 16,
+                background: `rgba(255,107,53,0.05)`,
+                border: `1px solid rgba(255,107,53,0.2)`,
+                borderRadius: 12,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.neonOrange, marginBottom: 6 }}>
+                  Unseeded
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  Unseeded on {new Date(selectedLead.unseeded_at).toLocaleDateString()} — This business was previously seeded and can be re-seeded if needed.
                 </div>
               </div>
             )}
