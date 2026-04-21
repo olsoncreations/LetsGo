@@ -1742,6 +1742,15 @@ function DiscoveryPage() {
       });
     }
 
+    // Category subtype filter — server filters by broad category_main,
+    // client narrows to the specific subtype (e.g. "Coffee" within "restaurant_bar")
+    if (filters.categories.length > 0 && !filters.categories.includes("All")) {
+      result = result.filter(b => {
+        const hay = `${b.type} ${b.tags.join(" ")} ${b.vibe}`.toLowerCase();
+        return filters.categories.some(cat => hay.includes(cat.toLowerCase()));
+      });
+    }
+
     // Open now is real-time client-side (depends on current time + hours)
     if (filters.openNow) {
       result = result.filter(b => b.isOpen);
@@ -1761,7 +1770,7 @@ function DiscoveryPage() {
     }
 
     return result;
-  }, [businesses, filters, spotlightId, locationZip]);
+  }, [businesses, filters, spotlightId, locationZip, geoReady]);
 
   // Infinite scroll: load more when user swipes near the end
   const handleVerticalScroll = useCallback(() => {
