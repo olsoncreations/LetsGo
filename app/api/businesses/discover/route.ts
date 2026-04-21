@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { ZIP_COORDS } from "@/lib/zipUtils";
 
 /**
  * GET /api/businesses/discover
@@ -29,6 +30,10 @@ export async function GET(req: NextRequest) {
     const tags = sp.get("tags")?.split(",").filter(Boolean) || [];
     const followed = sp.get("followed") === "true";
     const userId = sp.get("userId") || "";
+    const distance = parseFloat(sp.get("distance") || "0");
+    const userLat = parseFloat(sp.get("userLat") || "0");
+    const userLng = parseFloat(sp.get("userLng") || "0");
+    const userZip = sp.get("userZip") || "";
 
     // Build the business query
     let query = supabaseServer
@@ -64,6 +69,28 @@ export async function GET(req: NextRequest) {
       } else if (categories.length > 1) {
         // OR across multiple selected categories: business must match at least one
         query = query.or(categories.map(c => `tags.cs.{${c}}`).join(","));
+      }
+    }
+
+    // Distance filter — bounding box on lat/lng
+    if (distance > 0) {
+      // Resolve user coordinates: prefer explicit lat/lng, fall back to zip lookup
+      let centerLat = userLat;
+      let centerLng = userLng;
+      if ((!centerLat || !centerLng) && userZip) {
+        const coords = ZIP_COORDS[userZip];
+        if (coords) { centerLat = coords[0]; centerLng = coords[1]; }
+      }
+      if (centerLat && centerLng) {
+        // At ~41° latitude (Omaha): 1° lat ≈ 69 mi, 1° lng ≈ 52 mi
+        // Use generous multiplier (1.2x) so the box is slightly larger than the circle
+        const latDelta = (distance * 1.2) / 69;
+        const lngDelta = (distance * 1.2) / 52;
+        query = query
+          .gte("latitude", centerLat - latDelta)
+          .lte("latitude", centerLat + latDelta)
+          .gte("longitude", centerLng - lngDelta)
+          .lte("longitude", centerLng + lngDelta);
       }
     }
 

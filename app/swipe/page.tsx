@@ -1578,6 +1578,15 @@ function DiscoveryPage() {
       if (currentFilters.price !== "Any") params.set("price", currentFilters.price);
       if (currentFilters.openNow) params.set("openNow", "true");
       if (currentFilters.tags.length > 0) params.set("tags", currentFilters.tags.join(","));
+      // Distance filtering — server-side bounding box
+      if (currentFilters.distance > 0) {
+        params.set("distance", String(currentFilters.distance));
+        if (locationCoords) {
+          params.set("userLat", String(locationCoords[0]));
+          params.set("userLng", String(locationCoords[1]));
+        }
+        if (locationZip) params.set("userZip", locationZip);
+      }
       if (followedOnly && currentUserId) {
         params.set("followed", "true");
         params.set("userId", currentUserId);
