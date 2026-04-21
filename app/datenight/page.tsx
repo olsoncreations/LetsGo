@@ -296,6 +296,7 @@ const GlobalStyles = () => (
     .dn-page ::-webkit-scrollbar { width: 4px; height: 4px; }
     .dn-page ::-webkit-scrollbar-track { background: transparent; }
     .dn-page ::-webkit-scrollbar-thumb { background: rgba(${NEON_RGB}, 0.2); border-radius: 4px; }
+
   `}</style>
 );
 
@@ -573,7 +574,7 @@ function ImageCarousel({ images, alt, accentColor, accentRGB }: {
       </div>
       {/* Dot indicators */}
       <div style={{
-        position: "absolute", bottom: 44, left: "50%", transform: "translateX(-50%)",
+        position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
         display: "flex", gap: 5, zIndex: 10, padding: "4px 10px", borderRadius: 20,
         background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)",
       }}>
@@ -954,11 +955,11 @@ function TheShow({ onBack }: { onBack: () => void }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20, textAlign: "left" }}>
         {/* Restaurant card */}
-        <div data-tour="datenight-restaurant" style={{ display: "flex", flexDirection: "column" }}>
+        <div data-tour="datenight-restaurant" style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
           {recalcTarget === "restaurant" ? (
             /* Sad robot inline for restaurant */
             <div style={{
-              borderRadius: 6, flex: 1, display: "flex", flexDirection: "column",
+              borderRadius: 6, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", textAlign: "center",
               marginBottom: 12, padding: "24px 14px",
               border: `1px solid rgba(${NEON_RGB}, 0.15)`,
@@ -988,17 +989,16 @@ function TheShow({ onBack }: { onBack: () => void }) {
           ) : restaurant ? (
             /* Normal restaurant card — image + name only */
             <div key={`r-${cardFlipKey.restaurant}`} style={{
-              borderRadius: 6, overflow: "hidden", marginBottom: 12, flex: 1,
+              borderRadius: 6, overflow: "hidden", marginBottom: 12,
               animation: showCards ? "staggerReveal1 1.6s cubic-bezier(0.23,1,0.32,1) both" : "none",
               opacity: showCards ? 1 : 0,
               border: `1px solid rgba(${NEON_RGB}, 0.2)`,
               boxShadow: `0 0 24px rgba(${NEON_RGB}, 0.08)`,
             }}>
-              <div style={{ position: "relative", height: "100%", minHeight: 180, background: restaurant.images.length > 0 ? undefined : restaurant.gradient }}>
+              <div style={{ position: "relative", height: 220, background: restaurant.images.length > 0 ? undefined : restaurant.gradient }}>
                 {restaurant.images.length > 0 && (
                   <ImageCarousel images={restaurant.images} alt={restaurant.name} accentColor={NEON} accentRGB={NEON_RGB} />
                 )}
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 30%, rgba(12,12,20,0.95) 100%)", pointerEvents: "none" }} />
                 <div style={{
                   position: "absolute", top: 12, left: 12, padding: "4px 10px", borderRadius: 3,
                   background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
@@ -1008,15 +1008,15 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 }}>🍽️ Restaurant</div>
                 {!restaurant.images.length && (
                   <div style={{
-                    position: "absolute", top: "38%", left: "50%", transform: "translate(-50%, -50%)",
+                    position: "absolute", top: "40%", left: "50%", transform: "translate(-50%, -50%)",
                     fontSize: 56, animation: showCards ? "floatUp 4s ease 1s infinite" : "none",
                     filter: `drop-shadow(0 0 20px rgba(${NEON_RGB}, 0.4))`,
                   }}>{restaurant.emoji}</div>
                 )}
-                <div style={{ position: "absolute", bottom: 14, left: 14, right: 14, zIndex: 2, textAlign: "center", pointerEvents: "none" }}>
-                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.15 }}>
-                    {restaurant.name}
-                  </div>
+              </div>
+              <div style={{ padding: "10px 12px", background: CARD_BG, textAlign: "center", height: 72, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 16, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.2, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+                  {restaurant.name}
                 </div>
               </div>
             </div>
@@ -1041,6 +1041,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 background: "#0c0c14",
                 fontFamily: FONT_BODY, fontSize: 9, fontWeight: 700, color: TEXT_PRIMARY,
                 letterSpacing: "0.1em", textTransform: "uppercase",
+                height: 36, display: "flex", alignItems: "center", justifyContent: "center",
               }}>🔄 Recalculate Restaurant</div>
             </div>
           </div>
@@ -1061,6 +1062,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 <a href={`https://maps.google.com/?q=${encodeURIComponent(restaurant.address)}`} target="_blank" rel="noopener noreferrer" style={{
                   display: "block", fontFamily: FONT_BODY, fontSize: 10, color: NEON, marginBottom: 2,
                   textDecoration: "none", cursor: "pointer",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>📍 {restaurant.address}</a>
               )}
               {restaurant.hours && restaurant.hours !== "Closed" && (
@@ -1078,7 +1080,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 <a href={restaurant.website.startsWith("http") ? restaurant.website : `https://${restaurant.website}`} target="_blank" rel="noopener noreferrer" style={{
                   display: "block", fontFamily: FONT_BODY, fontSize: 10, color: NEON, marginBottom: 8,
                   textDecoration: "none", cursor: "pointer",
-                }}>🌐 {restaurant.website}</a>
+                }}>🌐 Website</a>
               )}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 <span style={{
@@ -1092,11 +1094,11 @@ function TheShow({ onBack }: { onBack: () => void }) {
         </div>
 
         {/* Activity card */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
           {recalcTarget === "activity" ? (
             /* Sad robot inline for activity */
             <div style={{
-              borderRadius: 6, flex: 1, display: "flex", flexDirection: "column",
+              borderRadius: 6, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", textAlign: "center",
               marginBottom: 12, padding: "24px 14px",
               border: `1px solid rgba(${PINK_RGB}, 0.15)`,
@@ -1126,17 +1128,16 @@ function TheShow({ onBack }: { onBack: () => void }) {
           ) : activity ? (
             /* Normal activity card — image + name only */
             <div key={`a-${cardFlipKey.activity}`} style={{
-              borderRadius: 6, overflow: "hidden", marginBottom: 12, flex: 1,
+              borderRadius: 6, overflow: "hidden", marginBottom: 12,
               animation: showCards ? "staggerReveal2 2s cubic-bezier(0.23,1,0.32,1) both" : "none",
               opacity: showCards ? 1 : 0,
               border: `1px solid rgba(${PINK_RGB}, 0.2)`,
               boxShadow: `0 0 24px rgba(${PINK_RGB}, 0.08)`,
             }}>
-              <div style={{ position: "relative", height: "100%", minHeight: 180, background: activity.images.length > 0 ? undefined : activity.gradient }}>
+              <div style={{ position: "relative", height: 220, background: activity.images.length > 0 ? undefined : activity.gradient }}>
                 {activity.images.length > 0 && (
                   <ImageCarousel images={activity.images} alt={activity.name} accentColor={PINK} accentRGB={PINK_RGB} />
                 )}
-                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 30%, rgba(12,12,20,0.95) 100%)", pointerEvents: "none" }} />
                 <div style={{
                   position: "absolute", top: 12, left: 12, padding: "4px 10px", borderRadius: 3,
                   background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
@@ -1146,21 +1147,21 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 }}>✨ Activity</div>
                 {!activity.images.length && (
                   <div style={{
-                    position: "absolute", top: "38%", left: "50%", transform: "translate(-50%, -50%)",
+                    position: "absolute", top: "40%", left: "50%", transform: "translate(-50%, -50%)",
                     fontSize: 56, animation: showCards ? "floatUp 4s ease 1.4s infinite" : "none",
                     filter: `drop-shadow(0 0 20px rgba(${PINK_RGB}, 0.4))`,
                   }}>{activity.emoji}</div>
                 )}
-                <div style={{ position: "absolute", bottom: 14, left: 14, right: 14, zIndex: 2, textAlign: "center", pointerEvents: "none" }}>
-                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.15 }}>
-                    {activity.name}
-                  </div>
+              </div>
+              <div style={{ padding: "10px 12px", background: CARD_BG, textAlign: "center", height: 72, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 16, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.2, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+                  {activity.name}
                 </div>
               </div>
             </div>
           ) : (
             <div style={{
-              borderRadius: 6, flex: 1, display: "flex", flexDirection: "column",
+              borderRadius: 6, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", textAlign: "center",
               marginBottom: 12, padding: "24px 14px",
               border: `1px solid rgba(${PINK_RGB}, 0.1)`, background: CARD_BG,
@@ -1190,6 +1191,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 background: "#0c0c14",
                 fontFamily: FONT_BODY, fontSize: 9, fontWeight: 700, color: TEXT_PRIMARY,
                 letterSpacing: "0.1em", textTransform: "uppercase",
+                height: 36, display: "flex", alignItems: "center", justifyContent: "center",
               }}>🔄 Recalculate Activity</div>
             </div>
           </div>
@@ -1210,6 +1212,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 <a href={`https://maps.google.com/?q=${encodeURIComponent(activity.address)}`} target="_blank" rel="noopener noreferrer" style={{
                   display: "block", fontFamily: FONT_BODY, fontSize: 10, color: PINK, marginBottom: 2,
                   textDecoration: "none", cursor: "pointer",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}>📍 {activity.address}</a>
               )}
               {activity.hours && activity.hours !== "Closed" && (
@@ -1227,7 +1230,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
                 <a href={activity.website.startsWith("http") ? activity.website : `https://${activity.website}`} target="_blank" rel="noopener noreferrer" style={{
                   display: "block", fontFamily: FONT_BODY, fontSize: 10, color: PINK, marginBottom: 8,
                   textDecoration: "none", cursor: "pointer",
-                }}>🌐 {activity.website}</a>
+                }}>🌐 Website</a>
               )}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 <span style={{
