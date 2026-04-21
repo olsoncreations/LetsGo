@@ -56,47 +56,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Category filter — supports comma-separated multi-select
+    // Category filter — filter by the business subtype stored in the tags column
     if (category && category !== "All") {
       const categories = category.split(",").map(c => c.trim()).filter(Boolean);
-      const categoryMainMap: Record<string, string> = {
-        restaurant: "restaurant_bar",
-        bar: "restaurant_bar",
-        coffee: "restaurant_bar",
-        bakery: "restaurant_bar",
-        deli: "restaurant_bar",
-        "ice cream": "restaurant_bar",
-        "juice bar": "restaurant_bar",
-        "food truck": "restaurant_bar",
-        brewery: "restaurant_bar",
-        winery: "restaurant_bar",
-        nightclub: "restaurant_bar",
-        lounge: "restaurant_bar",
-        pub: "restaurant_bar",
-        "sports bar": "restaurant_bar",
-        karaoke: "restaurant_bar",
-        spa: "salon_beauty",
-        gym: "activity",
-        "yoga studio": "activity",
-        "dance studio": "activity",
-        bowling: "activity",
-        arcade: "activity",
-        "mini golf": "activity",
-        "escape room": "activity",
-        theater: "activity",
-        "comedy club": "activity",
-        "art gallery": "activity",
-        museum: "activity",
-        entertainment: "activity",
-        activity: "activity",
-      };
-
-      // Map selected categories to unique category_main values
-      const mainCats = [...new Set(categories.map(c => categoryMainMap[c.toLowerCase()]).filter(Boolean))];
-      if (mainCats.length === 1) {
-        query = query.eq("category_main", mainCats[0]);
-      } else if (mainCats.length > 1) {
-        query = query.in("category_main", mainCats);
+      if (categories.length === 1) {
+        query = query.contains("tags", [categories[0]]);
+      } else if (categories.length > 1) {
+        // OR across multiple selected categories: business must match at least one
+        query = query.or(categories.map(c => `tags.cs.{${c}}`).join(","));
       }
     }
 
