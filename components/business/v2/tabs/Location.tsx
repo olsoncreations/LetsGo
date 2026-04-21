@@ -33,6 +33,7 @@ export default function Location({ businessId }: BusinessTabProps) {
   const [editLat, setEditLat] = useState("");
   const [editLng, setEditLng] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markerRef = useRef<any>(null);
@@ -59,9 +60,34 @@ export default function Location({ businessId }: BusinessTabProps) {
     })();
   }, [businessId]);
 
+  // ── Load Google Maps script ──
+  useEffect(() => {
+    if (loading) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).google?.maps) { setMapReady(true); return; }
+
+    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!key) return;
+
+    // Check if script is already being loaded
+    if (document.querySelector('script[src*="maps.googleapis.com"]')) {
+      const check = setInterval(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window as any).google?.maps) { setMapReady(true); clearInterval(check); }
+      }, 200);
+      return () => clearInterval(check);
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
+    script.async = true;
+    script.onload = () => setMapReady(true);
+    document.head.appendChild(script);
+  }, [loading]);
+
   // ── Initialize Google Map ──
   useEffect(() => {
-    if (loading || !location || !mapRef.current) return;
+    if (!mapReady || !location || !mapRef.current) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const google = (window as any).google;
     if (!google?.maps) return;
@@ -72,40 +98,28 @@ export default function Location({ businessId }: BusinessTabProps) {
     const map = new google.maps.Map(mapRef.current, {
       center: { lat, lng },
       zoom: 16,
-      mapId: "location-picker",
       disableDefaultUI: false,
       zoomControl: true,
       mapTypeControl: false,
       streetViewControl: true,
       fullscreenControl: true,
-      styles: [
-        { elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
-        { elementType: "labels.text.fill", stylers: [{ color: "#8a8a9a" }] },
-        { elementType: "labels.text.stroke", stylers: [{ color: "#0f0f1a" }] },
-        { featureType: "road", elementType: "geometry", stylers: [{ color: "#2d2d44" }] },
-        { featureType: "water", elementType: "geometry", stylers: [{ color: "#0a0a1a" }] },
-      ],
     });
 
     mapInstanceRef.current = map;
 
     // Create draggable marker
-    const markerDiv = document.createElement("div");
-    markerDiv.innerHTML = `<div style="background:${TEAL};width:32px;height:32px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;cursor:grab;"><svg width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="${TEAL}"/></svg></div>`;
-
-    const marker = new google.maps.marker.AdvancedMarkerElement({
+    const marker = new google.maps.Marker({
       map,
       position: { lat, lng },
-      gmpDraggable: true,
-      content: markerDiv,
+      draggable: true,
+      title: "Drag to your business location",
     });
 
     marker.addListener("dragend", () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pos = marker.position as any;
+      const pos = marker.getPosition();
       if (pos) {
-        setEditLat(pos.lat.toFixed(6));
-        setEditLng(pos.lng.toFixed(6));
+        setEditLat(pos.lat().toFixed(6));
+        setEditLng(pos.lng().toFixed(6));
         setHasChanges(true);
       }
     });
@@ -116,15 +130,14 @@ export default function Location({ businessId }: BusinessTabProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     map.addListener("click", (e: any) => {
       if (e.latLng) {
-        const pos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-        marker.position = pos;
-        setEditLat(pos.lat.toFixed(6));
-        setEditLng(pos.lng.toFixed(6));
+        marker.setPosition(e.latLng);
+        setEditLat(e.latLng.lat().toFixed(6));
+        setEditLng(e.latLng.lng().toFixed(6));
         setHasChanges(true);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, location]);
+  }, [mapReady, location]);
 
   // ── Update marker when manual coords change ──
   const handleCoordsChange = useCallback((lat: string, lng: string) => {
@@ -136,7 +149,7 @@ export default function Location({ businessId }: BusinessTabProps) {
     const parsedLng = parseFloat(lng);
     if (!isNaN(parsedLat) && !isNaN(parsedLng) && markerRef.current && mapInstanceRef.current) {
       const pos = { lat: parsedLat, lng: parsedLng };
-      markerRef.current.position = pos;
+      markerRef.current.setPosition(pos);
       mapInstanceRef.current.panTo(pos);
     }
   }, []);
@@ -190,7 +203,7 @@ export default function Location({ businessId }: BusinessTabProps) {
 
     if (markerRef.current && mapInstanceRef.current && location.latitude && location.longitude) {
       const pos = { lat: location.latitude, lng: location.longitude };
-      markerRef.current.position = pos;
+      markerRef.current.setPosition(pos);
       mapInstanceRef.current.panTo(pos);
     }
   }, [location]);
