@@ -1370,10 +1370,11 @@ function matchesCategory(biz: DiscoveryBusiness, categories: string[]): boolean 
   });
 }
 
-function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses, locationZip, locationCoords, filters }: {
+function PickFiveStep({ selectedIds, setSelectedIds, onSend, onBack, friend, businesses, locationZip, locationCoords, filters }: {
   selectedIds: string[];
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   onSend: () => void;
+  onBack: () => void;
   friend: GameFriend;
   businesses: DiscoveryBusiness[];
   locationZip: string;
@@ -1558,6 +1559,13 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, friend, businesses,
         <NeonButton onClick={onSend} disabled={selectedIds.length !== 5} size="large" style={{ width: "100%", maxWidth: 360 }}>
           {selectedIds.length === 5 ? `SEND TO ${friend.name.toUpperCase()} →` : `Select ${5 - selectedIds.length} more`}
         </NeonButton>
+        <button onClick={onBack} style={{
+          background: "none", border: "none", color: COLORS.textSecondary,
+          fontSize: 13, fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+          padding: "4px 12px", marginTop: 2,
+        }}>
+          ← Back to Setup
+        </button>
       </div>
     </div>
   );
@@ -3516,6 +3524,10 @@ function FiveThreeOne() {
       {viewMode === "player1" && step === 1 && selectedFriend && (
         <PickFiveStep
           selectedIds={selectedFive} setSelectedIds={setSelectedFive}
+          onBack={() => {
+            setStep(0);
+            setSelectedFive([]);
+          }}
           onSend={async () => {
             // Create game session if not already created
             let session = gameSession;
