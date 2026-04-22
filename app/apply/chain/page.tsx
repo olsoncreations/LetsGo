@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Building2, Users, DollarSign, Shield, CreditCard, FileText, CheckCircle, ArrowLeft, ArrowRight } from "lucide-react";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 // ── Types ──
 type ChainApplicationData = {
@@ -32,6 +38,11 @@ type ChainApplicationData = {
   billingAddress: string;
   advertisingInterest: string[];
 
+  // Stripe
+  stripeCustomerId: string;
+  stripePaymentMethodId: string;
+  stripeSetupComplete: boolean;
+
   // Step 6: Terms
   agreeTerms: boolean;
   agreeChainTerms: boolean;
@@ -54,6 +65,9 @@ const DEFAULT_DATA: ChainApplicationData = {
   billingEmail: "",
   billingAddress: "",
   advertisingInterest: [],
+  stripeCustomerId: "",
+  stripePaymentMethodId: "",
+  stripeSetupComplete: false,
   agreeTerms: false,
   agreeChainTerms: false,
 };
@@ -114,7 +128,7 @@ export default function ChainApplicationPage() {
       case 2: return !!data.contactName && !!data.contactEmail;
       case 3: return true;
       case 4: return true;
-      case 5: return !!data.billingEmail;
+      case 5: return !!data.billingEmail && data.stripeSetupComplete;
       case 6: return data.agreeTerms && data.agreeChainTerms;
       case 7: return true;
       default: return true;
@@ -127,31 +141,40 @@ export default function ChainApplicationPage() {
     setError("");
 
     try {
-      const { error: insertErr } = await supabaseBrowser
-        .from("chains")
-        .insert({
-          id: `CHN-${data.brandName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)}-0`,
-          brand_name: data.brandName,
-          chain_code: data.brandName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20),
-          status: "pending_review",
-          franchise_model: data.franchiseModel || "corporate",
-          contact_name: data.contactName,
-          contact_title: data.contactTitle,
-          contact_email: data.contactEmail,
-          contact_phone: data.contactPhone,
-          billing_email: data.billingEmail,
-          billing_address: data.billingAddress,
-          payment_method: data.paymentMethod || null,
-          advertising_interests: data.advertisingInterest,
-          internal_notes: `Application: ${data.locationCount} locations, markets: ${data.markets}, HQ: ${data.headquartersCity}, ${data.headquartersState}`,
-        });
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      if (!session?.access_token) {
+        setError("Session expired. Please refresh and try again.");
+        return;
+      }
 
-      if (insertErr) {
-        if (insertErr.code === "23505") {
-          setError("A chain application with this brand name already exists. Contact support if this is your brand.");
-        } else {
-          setError(insertErr.message);
-        }
+      const res = await fetch("/api/chains/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          brandName: data.brandName,
+          locationCount: data.locationCount,
+          markets: data.markets,
+          franchiseModel: data.franchiseModel,
+          headquartersCity: data.headquartersCity,
+          headquartersState: data.headquartersState,
+          contactName: data.contactName,
+          contactTitle: data.contactTitle,
+          contactEmail: data.contactEmail,
+          contactPhone: data.contactPhone,
+          paymentMethod: data.paymentMethod,
+          billingEmail: data.billingEmail,
+          billingAddress: data.billingAddress,
+          advertisingInterest: data.advertisingInterest,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setError(result.error || "Something went wrong. Please try again.");
         return;
       }
 
@@ -350,61 +373,7 @@ export default function ChainApplicationPage() {
 
         {/* Step 5: Financial */}
         {step === 5 && (
-          <div>
-            <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Financial Details</h2>
-            <p style={{ color: "rgba(255,255,255,0.4)", marginBottom: 32 }}>Billing and advertising preferences for corporate.</p>
-
-            <Field label="Billing Email *" value={data.billingEmail} onChange={(v) => setData((d) => ({ ...d, billingEmail: v }))} placeholder="billing@brand.com" type="email" />
-            <Field label="Billing Address" value={data.billingAddress} onChange={(v) => setData((d) => ({ ...d, billingAddress: v }))} placeholder="123 Corporate Way, Suite 100" />
-
-            <div style={{ marginBottom: 24 }}>
-              <label style={labelStyle}>Preferred Payment Method</label>
-              <div style={{ display: "flex", gap: 12 }}>
-                {(["bank", "card"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setData((d) => ({ ...d, paymentMethod: m }))}
-                    style={{
-                      flex: 1,
-                      padding: "14px 16px",
-                      borderRadius: 10,
-                      border: `1px solid ${data.paymentMethod === m ? "#a855f7" : "rgba(255,255,255,0.1)"}`,
-                      background: data.paymentMethod === m ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.03)",
-                      color: data.paymentMethod === m ? "#a855f7" : "rgba(255,255,255,0.6)",
-                      cursor: "pointer",
-                      fontSize: 14,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {m === "bank" ? "🏦 Bank Account" : "💳 Credit Card"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 24 }}>
-              <label style={labelStyle}>Advertising Interest (optional)</label>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>Select any advertising options you'd like to discuss.</p>
-              {["Spotlight Campaigns", "Push Notifications", "Video Add-on", "Live Streaming"].map((opt) => (
-                <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={data.advertisingInterest.includes(opt)}
-                    onChange={() => {
-                      setData((d) => ({
-                        ...d,
-                        advertisingInterest: d.advertisingInterest.includes(opt)
-                          ? d.advertisingInterest.filter((i) => i !== opt)
-                          : [...d.advertisingInterest, opt],
-                      }));
-                    }}
-                    style={{ accentColor: "#a855f7" }}
-                  />
-                  <span style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{opt}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <ChainPaymentStep data={data} setData={setData} />
         )}
 
         {/* Step 6: Terms */}
@@ -557,6 +526,221 @@ export default function ChainApplicationPage() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Chain Payment Step (Step 5) ──
+function ChainPaymentStep({ data, setData }: { data: ChainApplicationData; setData: React.Dispatch<React.SetStateAction<ChainApplicationData>> }) {
+  const bankActive = data.paymentMethod === "bank";
+  const cardActive = data.paymentMethod === "card";
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState("");
+  const billingAddressRef = React.useRef<HTMLInputElement>(null);
+
+  // Google address autocomplete for billing address
+  useEffect(() => {
+    if (!billingAddressRef.current) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = (window as any).google;
+    if (!g?.maps?.places?.Autocomplete) return;
+
+    const autocomplete = new g.maps.places.Autocomplete(billingAddressRef.current, { types: ["address"], fields: ["formatted_address"] });
+    const listener = autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place?.formatted_address) {
+        setData((p) => ({ ...p, billingAddress: place.formatted_address as string }));
+      }
+    });
+    return () => { if (listener?.remove) listener.remove(); };
+  }, [setData]);
+
+  const fetchSetupIntent = useCallback(async () => {
+    if (!data.contactEmail && !data.brandName) return;
+    if (!data.paymentMethod) return;
+    setStripeLoading(true);
+    setStripeError("");
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setStripeError("Session expired. Please refresh."); return; }
+      const res = await fetch("/api/stripe/create-setup-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          businessName: data.brandName,
+          email: data.contactEmail,
+          paymentMethodType: bankActive ? "us_bank_account" : "card",
+        }),
+      });
+      if (!res.ok) { const err = await res.json(); setStripeError(err.error || "Failed to initialize payment setup."); return; }
+      const { clientSecret: cs, customerId } = await res.json();
+      setClientSecret(cs);
+      setData((p) => ({ ...p, stripeCustomerId: customerId, stripeSetupComplete: false, stripePaymentMethodId: "" }));
+    } catch { setStripeError("Failed to connect to payment provider."); }
+    finally { setStripeLoading(false); }
+  }, [data.contactEmail, data.brandName, data.paymentMethod, bankActive, setData]);
+
+  useEffect(() => { fetchSetupIntent(); }, [fetchSetupIntent]);
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Financial Details</h2>
+      <p style={{ color: "rgba(255,255,255,0.4)", marginBottom: 32 }}>Set up corporate billing and payment method.</p>
+
+      {/* Security badge */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 24, fontSize: 13, color: "rgba(255,255,255,0.6)" }}>
+        <span style={{ fontSize: 18 }}>🔒</span>
+        Your payment information is securely handled by Stripe. We never see or store your card details.
+      </div>
+
+      <Field label="Billing Email *" value={data.billingEmail} onChange={(v) => setData((d) => ({ ...d, billingEmail: v }))} placeholder="billing@brand.com" type="email" />
+
+      <div style={{ marginBottom: 20 }}>
+        <label style={labelStyle}>Billing Address</label>
+        <input
+          ref={billingAddressRef}
+          value={data.billingAddress}
+          onChange={(e) => setData((d) => ({ ...d, billingAddress: e.target.value }))}
+          placeholder="123 Corporate Way, Suite 100"
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Payment method selector */}
+      <div style={{ marginBottom: 24 }}>
+        <label style={labelStyle}>Payment Method *</label>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button
+            onClick={() => setData((d) => ({ ...d, paymentMethod: "bank", stripeSetupComplete: false, stripePaymentMethodId: "" }))}
+            style={{
+              flex: 1, padding: "16px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600, textAlign: "center",
+              border: `1px solid ${bankActive ? "#a855f7" : "rgba(255,255,255,0.1)"}`,
+              background: bankActive ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.03)",
+              color: bankActive ? "#a855f7" : "rgba(255,255,255,0.6)",
+            }}
+          >
+            <div style={{ fontSize: 24, marginBottom: 4 }}>🏦</div>
+            Bank Account
+            <div style={{ fontSize: 11, color: bankActive ? "rgba(168,85,247,0.7)" : "rgba(255,255,255,0.3)", marginTop: 4 }}>No processing fees</div>
+          </button>
+          <button
+            onClick={() => setData((d) => ({ ...d, paymentMethod: "card", stripeSetupComplete: false, stripePaymentMethodId: "" }))}
+            style={{
+              flex: 1, padding: "16px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600, textAlign: "center",
+              border: `1px solid ${cardActive ? "#a855f7" : "rgba(255,255,255,0.1)"}`,
+              background: cardActive ? "rgba(168,85,247,0.15)" : "rgba(255,255,255,0.03)",
+              color: cardActive ? "#a855f7" : "rgba(255,255,255,0.6)",
+            }}
+          >
+            <div style={{ fontSize: 24, marginBottom: 4 }}>💳</div>
+            Credit/Debit Card
+            <div style={{ fontSize: 11, color: cardActive ? "rgba(168,85,247,0.7)" : "rgba(255,255,255,0.3)", marginTop: 4 }}>3.5% processing fee</div>
+          </button>
+        </div>
+      </div>
+
+      {/* Stripe form */}
+      {data.paymentMethod && (
+        <div style={{ marginBottom: 24 }}>
+          <label style={labelStyle}>{bankActive ? "Bank Account Setup" : "Card Setup"}</label>
+          {stripeError && (
+            <div style={{ padding: 12, borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", fontSize: 13, marginBottom: 12 }}>
+              {stripeError}
+            </div>
+          )}
+          {stripeLoading && <div style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Loading payment form...</div>}
+          {clientSecret && stripePromise && !stripeLoading && (
+            <Elements
+              stripe={stripePromise}
+              options={{
+                clientSecret,
+                appearance: {
+                  theme: "night",
+                  variables: { colorPrimary: "#a855f7", colorBackground: "#1a1a2e", colorText: "#ffffff", colorDanger: "#ef4444", borderRadius: "10px", fontFamily: "Inter, system-ui, sans-serif" },
+                },
+              }}
+            >
+              <ChainStripeForm data={data} setData={setData} bankActive={bankActive} />
+            </Elements>
+          )}
+          {!stripePromise && <div style={{ textAlign: "center", padding: 24, color: "rgba(255,255,255,0.3)" }}>Payment setup is not configured. Please contact support.</div>}
+        </div>
+      )}
+
+      {data.stripeSetupComplete && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 10, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", marginBottom: 24 }}>
+          <CheckCircle size={18} style={{ color: "#10b981" }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#10b981" }}>Payment method saved</span>
+        </div>
+      )}
+
+      {/* Advertising interest */}
+      <div style={{ marginBottom: 24 }}>
+        <label style={labelStyle}>Advertising Interest (optional)</label>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 12 }}>Select any advertising options you'd like to discuss.</p>
+        {["Spotlight Campaigns", "Push Notifications", "Video Add-on", "Live Streaming"].map((opt) => (
+          <label key={opt} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={data.advertisingInterest.includes(opt)}
+              onChange={() => setData((d) => ({ ...d, advertisingInterest: d.advertisingInterest.includes(opt) ? d.advertisingInterest.filter((i) => i !== opt) : [...d.advertisingInterest, opt] }))}
+              style={{ accentColor: "#a855f7" }}
+            />
+            <span style={{ fontSize: 14, color: "rgba(255,255,255,0.7)" }}>{opt}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Stripe confirm form (inside Elements provider) ──
+function ChainStripeForm({ data, setData, bankActive }: { data: ChainApplicationData; setData: React.Dispatch<React.SetStateAction<ChainApplicationData>>; bankActive: boolean }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleConfirm = async () => {
+    if (!stripe || !elements) return;
+    setConfirming(true);
+    setError("");
+    try {
+      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+        confirmParams: { return_url: window.location.href },
+      });
+      if (confirmError) {
+        setError(confirmError.message || "Payment setup failed.");
+      } else if (setupIntent?.status === "succeeded") {
+        const pmId = typeof setupIntent.payment_method === "string" ? setupIntent.payment_method : setupIntent.payment_method?.id || "";
+        setData((p) => ({ ...p, stripePaymentMethodId: pmId, stripeSetupComplete: true, paymentMethod: bankActive ? "bank" : "card" }));
+      } else if (setupIntent?.status === "requires_action") {
+        setError("Additional verification required. Please follow the prompts.");
+      }
+    } catch { setError("An unexpected error occurred."); }
+    finally { setConfirming(false); }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}><PaymentElement options={{ layout: "tabs" }} /></div>
+      {error && <div style={{ padding: 10, borderRadius: 8, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      {!data.stripeSetupComplete && (
+        <button
+          onClick={handleConfirm}
+          disabled={confirming || !stripe}
+          style={{
+            width: "100%", padding: "14px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: confirming ? "not-allowed" : "pointer",
+            background: "linear-gradient(135deg, #a855f7, #6366f1)", color: "#fff", opacity: confirming ? 0.5 : 1,
+          }}
+        >
+          {confirming ? "Verifying..." : bankActive ? "Verify Bank Account" : "Save Card"}
+        </button>
+      )}
     </div>
   );
 }
