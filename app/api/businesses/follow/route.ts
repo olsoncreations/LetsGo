@@ -13,7 +13,8 @@ async function authenticate(req: NextRequest): Promise<{ id: string } | null> {
 
 /**
  * GET /api/businesses/follow
- * Returns the list of business IDs the authenticated user follows.
+ * Returns the list of saved and followed business IDs for the authenticated user.
+ * Every row = saved. Rows with is_following = true = also following.
  */
 export async function GET(req: NextRequest): Promise<Response> {
   const authUser = await authenticate(req);
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     const { data, error } = await supabaseServer
       .from("user_followed_businesses")
-      .select("business_id")
+      .select("business_id, is_following")
       .eq("user_id", userId);
 
     if (error) {
@@ -34,22 +35,29 @@ export async function GET(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const followedBusinessIds = (data ?? []).map((r) => String(r.business_id));
-    return NextResponse.json({ followedBusinessIds });
+    const rows = data ?? [];
+    const savedBusinessIds = rows.map((r) => String(r.business_id));
+    const followedBusinessIds = rows
+      .filter((r) => r.is_following)
+      .map((r) => String(r.business_id));
+
+    return NextResponse.json({ savedBusinessIds, followedBusinessIds });
   } catch (err) {
     console.error("[businesses/follow] GET unexpected error:", err);
     return NextResponse.json(
       { error: String(err instanceof Error ? err.message : err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 /**
  * POST /api/businesses/follow
- * Toggle follow/unfollow a business for a user.
- * Body: { businessId: string, userId: string }
- * If already followed → delete (unfollow). Otherwise → insert (follow).
+ * Toggle follow/unfollow a business for the authenticated user.
+ * Body: { businessId: string }
+ *
+ * Follow: upsert row with is_following = true (auto-saves).
+ * Unfollow: set is_following = false (keeps row = still saved).
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const authUser = await authenticate(req);
@@ -60,46 +68,59 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = await req.json();
     const { businessId } = body as { businessId: string };
-    // Use authenticated user ID
     const userId = authUser.id;
 
     if (!businessId) {
       return NextResponse.json(
         { error: "businessId is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Check if already followed
+    // Check current state
     const { data: existing } = await supabaseServer
       .from("user_followed_businesses")
-      .select("id")
+      .select("id, is_following")
       .eq("business_id", businessId)
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (existing) {
-      // Already followed → unfollow (delete)
+    if (existing?.is_following) {
+      // Currently following → unfollow (keep row = still saved)
       const { error } = await supabaseServer
         .from("user_followed_businesses")
-        .delete()
+        .update({ is_following: false })
         .eq("id", existing.id);
 
       if (error) {
-        console.error("[businesses/follow] DELETE error:", error);
+        console.error("[businesses/follow] UPDATE error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
       return NextResponse.json({ action: "unfollowed" });
     }
 
-    // Not followed → follow (insert)
+    if (existing) {
+      // Row exists but not following → follow
+      const { error } = await supabaseServer
+        .from("user_followed_businesses")
+        .update({ is_following: true })
+        .eq("id", existing.id);
+
+      if (error) {
+        console.error("[businesses/follow] UPDATE error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ action: "followed" });
+    }
+
+    // No row → insert with is_following = true (follow auto-saves)
     const { error } = await supabaseServer
       .from("user_followed_businesses")
-      .insert({ business_id: businessId, user_id: userId });
+      .insert({ business_id: businessId, user_id: userId, is_following: true });
 
     if (error) {
-      // Handle unique constraint violation gracefully
       if (error.code === "23505") {
         return NextResponse.json({ action: "already_followed" });
       }
@@ -112,7 +133,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     console.error("[businesses/follow] POST unexpected error:", err);
     return NextResponse.json(
       { error: String(err instanceof Error ? err.message : err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

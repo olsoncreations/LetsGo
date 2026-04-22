@@ -104,7 +104,8 @@ export async function GET(req: NextRequest): Promise<Response> {
       const { data: followRows } = await supabaseServer
         .from("user_followed_businesses")
         .select("business_id")
-        .eq("user_id", currentUserId);
+        .eq("user_id", currentUserId)
+        .eq("is_following", true);
       const followedBizIds = (followRows ?? []).map((r) => String(r.business_id));
       if (followedBizIds.length === 0) {
         return NextResponse.json({ posts: [], nextCursor: null, hint: "no_follows" });

@@ -61,7 +61,7 @@ interface ReceiptDisplay {
   amount: number; cashback: number; status: string; level: number; visitNum: number;
   photoUrl: string | null;
 }
-interface SavedPlace { id: string; name: string; type: string; neon: string; businessId: string; }
+interface SavedPlace { id: string; name: string; type: string; neon: string; businessId: string; isFollowing: boolean; }
 interface FriendData {
   friendshipId: string; id: string; name: string; username: string | null;
   avatarUrl: string | null; status: string; kind: "friend" | "pending" | "sent";
@@ -959,6 +959,7 @@ export default function LetsGoProfile() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [experiencesOpen, setExperiencesOpen] = useState(false);
   const [savedPlacesOpen, setSavedPlacesOpen] = useState(false);
+  const [myPlacesFilter, setMyPlacesFilter] = useState<"all" | "saved" | "following">("all");
   const [progressiveOpen, setProgressiveOpen] = useState(false);
   const [cashOutModal, setCashOutModal] = useState<"confirm" | "noPayment" | null>(null);
   const [levelUpCelebration, setLevelUpCelebration] = useState<{business: string; newLevel: number; rate: number} | null>(null);
@@ -1045,7 +1046,7 @@ export default function LetsGoProfile() {
     { target: '[data-tour="earnings-banner"]', title: "Your Earnings at a Glance", description: "See how much you've earned and what's available to cash out. You earn cashback every time you visit a partner business.", position: "bottom" },
     { target: '[data-tour="upload-receipt-btn"]', title: "Upload Your Receipts", description: "Visited a partner spot? Tap here to snap a photo of your receipt and start earning cashback. Takes about 10 seconds.", position: "left" },
     { target: '[data-tour="cashout-btn"]', title: "Cash Out Anytime", description: "Once you hit the minimum, you can cash out directly to Venmo or PayPal. Your money, your way.", position: "top" },
-    { target: '[data-tour="saved-places"]', title: "Your Saved Places", description: "All the spots you've hearted from the Explore feed show up here. Quick access to your favorites.", position: "top" },
+    { target: '[data-tour="saved-places"]', title: "My Places", description: "Businesses you've saved or followed show up here. Saved places are your bookmarks, followed places send you event notifications.", position: "top" },
     { target: '[data-tour="ratings-section"]', title: "Would Go Again", description: "Comment and rate the places you've visited to help with future visits. Your comments are private and not shared with anyone.", position: "top" },
     { target: '[data-tour="payout-calc"]', title: "Payout Calculator", description: "Curious how much you'd earn? Enter a receipt amount and business to see your cashback before you visit.", position: "top" },
     { target: '[data-tour="level-progress"]', title: "Level Up for Bigger Rewards", description: "The more you visit a place, the higher your cashback goes — from 5% up to 20%. Each business tracks separately.", position: "top" },
@@ -1181,18 +1182,22 @@ export default function LetsGoProfile() {
       // Fetch saved/followed businesses
       const { data: followedRows } = await supabaseBrowser
         .from("user_followed_businesses")
-        .select("business_id, business:business(id, business_name, public_business_name, category_main)")
+        .select("business_id, is_following, business:business(id, business_name, public_business_name, config)")
         .eq("user_id", uid);
       if (cancelled) return;
       if (followedRows) {
         setSavedPlaces(followedRows.map((f: Record<string, unknown>, idx: number) => {
           const biz = f.business as Record<string, unknown> | null;
+          const cfg = (biz?.config as Record<string, unknown>) || {};
+          const subtype = cfg.subtype ? String(cfg.subtype) : null;
+          const bizType = cfg.businessType ? String(cfg.businessType) : null;
           return {
             id: (f.business_id as string) || String(idx),
             name: (biz?.public_business_name as string) || (biz?.business_name as string) || "Unknown",
-            type: (biz?.category_main as string) || "Business",
+            type: subtype || bizType || "Business",
             neon: NEON_CYCLE[idx % NEON_CYCLE.length],
             businessId: f.business_id as string,
+            isFollowing: (f.is_following as boolean) || false,
           };
         }));
       }
@@ -1965,7 +1970,7 @@ export default function LetsGoProfile() {
                     {[
                       { label: "Zip", value: profile?.zip_code || "--", icon: "\uD83D\uDCCD" },
                       { label: "Receipts", value: receipts.length, icon: "\uD83E\uDDFE" },
-                      { label: "Saved", value: savedPlaces.length, icon: "\u2661" },
+                      { label: "Places", value: savedPlaces.length, icon: "\u2661" },
                       { label: "Friends", value: friends.filter(f => f.kind === "friend").length, icon: "\uD83D\uDC65" },
                       { label: "Rated", value: ratings.length, icon: "\u2B50" },
                     ].map((s) => (
@@ -1980,7 +1985,7 @@ export default function LetsGoProfile() {
 
                 <div className="hero-actions" style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
                   <button onClick={() => setSettingsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.primaryRGB},0.3)`, background: `rgba(${NEON.primaryRGB},0.08)`, color: NEON.primary, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>Edit Profile</button>
-                  <button onClick={() => setFilterPrefsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.3)`, background: `rgba(${NEON.yellowRGB},0.08)`, color: NEON.yellow, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => setFilterPrefsOpen(true)} style={{ padding: "7px 16px", borderRadius: 3, border: `1px solid rgba(${NEON.yellowRGB},0.3)`, background: `rgba(${NEON.yellowRGB},0.08)`, color: NEON.yellow, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={NEON.yellow} strokeWidth="2" strokeLinecap="round"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6M9 8h6M17 16h6"/></svg>
                     Filter Preferences
                   </button>
@@ -2338,19 +2343,33 @@ export default function LetsGoProfile() {
             </div>
           )}
 
-          {/* SAVED PLACES */}
+          {/* MY PLACES — SAVED & FOLLOWING */}
           <div data-tour="saved-places" style={{ marginBottom: 36, animation: "cardSlideUp 0.7s cubic-bezier(0.23, 1, 0.32, 1) 0.35s both" }}>
             <div onClick={() => setSavedPlacesOpen(!savedPlacesOpen)} style={{ cursor: "pointer" }}>
-              <SectionHeader icon={"\u2661"} label="Saved Places" neon={NEON.pink} neonRGB={NEON.pinkRGB} count={savedPlaces.length} rightElement={
+              <SectionHeader icon={"\u2661"} label="My Places — Saved & Following" neon={NEON.pink} neonRGB={NEON.pinkRGB} count={savedPlaces.length} rightElement={
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ transition: "transform 0.2s ease", transform: savedPlacesOpen ? "rotate(180deg)" : "rotate(0deg)" }}><path d="M6 9l6 6 6-6" stroke={NEON.pink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               } />
             </div>
             {savedPlacesOpen && (<>
             {savedPlaces.length === 0 ? (
-              <div style={{ padding: "30px 0", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>No saved places yet. Heart businesses on the Discovery page to save them here.</div>
-            ) : (
+              <div style={{ padding: "30px 0", textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.15)" }}>No places yet. Heart businesses on Discovery to save them, or follow them for event updates.</div>
+            ) : (<>
+              {/* Filter pills */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                {([["all", "All"], ["saved", "Saved"], ["following", "Following"]] as const).map(([key, label]) => (
+                  <button key={key} onClick={() => setMyPlacesFilter(key)} style={{
+                    padding: "6px 14px", borderRadius: 50, fontSize: 11, fontWeight: 700,
+                    border: `1px solid ${myPlacesFilter === key ? NEON.pink : "rgba(255,255,255,0.12)"}`,
+                    background: myPlacesFilter === key ? `${NEON.pink}20` : "rgba(255,255,255,0.05)",
+                    color: myPlacesFilter === key ? NEON.pink : "rgba(255,255,255,0.4)",
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s",
+                  }}>{label}</button>
+                ))}
+              </div>
               <div className="saved-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                {savedPlaces.map((place) => {
+                {savedPlaces
+                  .filter(place => myPlacesFilter === "all" ? true : myPlacesFilter === "following" ? place.isFollowing : !place.isFollowing)
+                  .map((place) => {
                   const neonRGBVal = place.neon === NEON.yellow ? NEON.yellowRGB : place.neon === NEON.orange ? NEON.orangeRGB : place.neon === NEON.green ? NEON.greenRGB : place.neon === NEON.purple ? NEON.purpleRGB : place.neon === NEON.pink ? NEON.pinkRGB : NEON.primaryRGB;
                   return (
                     <NeonBorderCard key={place.id} neon={place.neon} neonRGB={neonRGBVal} borderWidth={2} onClick={() => {}}>
@@ -2358,13 +2377,55 @@ export default function LetsGoProfile() {
                         <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginBottom: 4, fontFamily: "'DM Sans', sans-serif" }}>{place.name}</div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>{place.type}</span>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {place.isFollowing && (
+                              <button onClick={async (e) => {
+                                e.stopPropagation();
+                                const token = await getAuthToken();
+                                if (!token) return;
+                                const res = await fetch("/api/businesses/follow", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ businessId: place.businessId }),
+                                });
+                                if (res.ok) {
+                                  setSavedPlaces(prev => prev.map(p => p.id === place.id ? { ...p, isFollowing: false } : p));
+                                }
+                              }} style={{
+                                fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 50, cursor: "pointer",
+                                background: "rgba(57,255,20,0.12)", color: "#39ff14",
+                                border: "1px solid rgba(57,255,20,0.25)",
+                                fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em",
+                                transition: "all 0.2s",
+                              }}>Following</button>
+                            )}
+                            <button onClick={async (e) => {
+                              e.stopPropagation();
+                              const token = await getAuthToken();
+                              if (!token) return;
+                              const res = await fetch("/api/businesses/save", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ businessId: place.businessId }),
+                              });
+                              if (res.ok) {
+                                setSavedPlaces(prev => prev.filter(p => p.id !== place.id));
+                              }
+                            }} style={{
+                              fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 50, cursor: "pointer",
+                              background: "rgba(255,45,146,0.12)", color: "#ff2d92",
+                              border: "1px solid rgba(255,45,146,0.25)",
+                              fontFamily: "'DM Sans', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em",
+                              transition: "all 0.2s",
+                            }}>Saved</button>
+                          </div>
                         </div>
                       </div>
                     </NeonBorderCard>
                   );
                 })}
               </div>
-            )}
+            </>)}
             </>)}
           </div>
 

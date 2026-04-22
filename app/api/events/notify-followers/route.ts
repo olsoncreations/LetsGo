@@ -83,11 +83,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Find all users who follow this business
+  // Find all users who follow this business (only followers, not mere savers)
   const { data: followers } = await supabaseServer
     .from("user_followed_businesses")
     .select("user_id")
-    .eq("business_id", businessId);
+    .eq("business_id", businessId)
+    .eq("is_following", true);
 
   const followerIds = (followers ?? []).map((f) => f.user_id as string);
 

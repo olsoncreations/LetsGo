@@ -1826,7 +1826,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {[
                         { label: "🌐 All Businesses", val: "All Businesses" },
-                        { label: "❤️ My Saved", val: "My Saved" },
+                        { label: "❤️ My Places", val: "My Places" },
                         { label: "✨ New to Me", val: "New to Me" },
                       ].map(opt => glassPill(opt.label, filters.browseFrom === opt.val, () => setFilters(p => ({ ...p, browseFrom: opt.val })), { fontSize: 12, padding: "8px 16px" }))}
                     </div>

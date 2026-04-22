@@ -174,7 +174,7 @@ const PRICE_TOOLTIPS: Record<string, string> = {
 
 // ─── Filter Bar ───
 
-function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZip, onLocationZipChange, onLocationCoordsChange, showFollowedOnly, setShowFollowedOnly, followedCount, onApply }: {
+function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZip, onLocationZipChange, onLocationCoordsChange, showMyPlacesOnly, setShowMyPlacesOnly, myPlacesCount, onApply }: {
   filtersOpen: boolean;
   setFiltersOpen: (v: boolean) => void;
   filters: FilterState;
@@ -182,9 +182,9 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
   locationZip: string;
   onLocationZipChange: (zip: string) => void;
   onLocationCoordsChange: (coords: [number, number] | null) => void;
-  showFollowedOnly: boolean;
-  setShowFollowedOnly: (v: boolean) => void;
-  followedCount: number;
+  showMyPlacesOnly: boolean;
+  setShowMyPlacesOnly: (v: boolean) => void;
+  myPlacesCount: number;
   onApply: () => void;
 }) {
   const [searchFocused, setSearchFocused] = useState(false);
@@ -534,9 +534,9 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
         {/* Browse From — always visible, at the top */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "'DM Sans', sans-serif", marginRight: 8 }}>Browse From</div>
-          <GlassPill active={!showFollowedOnly} onClick={() => setShowFollowedOnly(false)}>🌐 All Businesses</GlassPill>
-          {followedCount > 0 && (
-            <GlassPill active={showFollowedOnly} onClick={() => setShowFollowedOnly(true)}>❤️ My Saved ({followedCount})</GlassPill>
+          <GlassPill active={!showMyPlacesOnly} onClick={() => setShowMyPlacesOnly(false)}>🌐 All Businesses</GlassPill>
+          {myPlacesCount > 0 && (
+            <GlassPill active={showMyPlacesOnly} onClick={() => setShowMyPlacesOnly(true)}>❤️ My Places ({myPlacesCount})</GlassPill>
           )}
           <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
             display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
@@ -597,7 +597,7 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
 
         {/* Apply & Clear buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>
-          <button onClick={() => { setFilters({ search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [] }); setShowFollowedOnly(false); }} style={{
+          <button onClick={() => { setFilters({ search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [] }); setShowMyPlacesOnly(false); }} style={{
             flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
             border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
             color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
@@ -777,7 +777,7 @@ function PayoutLadder({ rates, levels = DEFAULT_PAYOUT_LEVELS }: { rates: number
 
 // ─── Like Button ───
 
-function LikeButton({ liked, onToggle }: { liked: boolean; onToggle: () => void }) {
+function LikeButton({ liked, onToggle }: { liked: boolean; onToggle: () => void; }) {
   const [pop, setPop] = useState(false);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -846,11 +846,12 @@ function ShareButton({ name }: { name: string }) {
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = window.location.href;
+    const siteUrl = "https://www.useletsgo.com";
+    const shareText = `Check out ${name} on LetsGo! Discover places and earn cash back.`;
     if (navigator.share) {
-      try { await navigator.share({ title: name, text: `Check out ${name} on LetsGo!`, url }); } catch { /* user cancelled */ }
+      try { await navigator.share({ title: `${name} on LetsGo`, text: shareText, url: siteUrl }); } catch { /* user cancelled */ }
     } else {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(`${shareText} ${siteUrl}`);
       showToast("Link copied to clipboard!");
     }
   };
@@ -1061,11 +1062,11 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
 
 // ─── Photo Page (slides 3+) ───
 
-function PhotoPage({ image, label, liked, onToggle }: {
+function PhotoPage({ image, label, saved, onToggleSave }: {
   image: DiscoveryImage;
   label: string;
-  liked: boolean;
-  onToggle: () => void;
+  saved: boolean;
+  onToggleSave: () => void;
 }) {
   return (
     <div style={{ width: "100%", height: "100%", flexShrink: 0, position: "relative", background: COLORS.darkBg }}>
@@ -1076,7 +1077,7 @@ function PhotoPage({ image, label, liked, onToggle }: {
           <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", fontFamily: "'DM Sans', sans-serif", textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}>{label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
             <ShareButton name={label} />
-            <LikeButton liked={liked} onToggle={onToggle} />
+            <LikeButton liked={saved} onToggle={onToggleSave} />
           </div>
         </div>
       </div>
@@ -1086,7 +1087,7 @@ function PhotoPage({ image, label, liked, onToggle }: {
 
 // ─── Main Photo Page (hero - slide 1) ───
 
-function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; liked: boolean; onToggle: () => void; userZip: string; userCoords: [number, number] | null; geoReady: number; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
+function MainPhotoPage({ biz, saved, onToggleSave, userZip, userCoords, geoReady, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; saved: boolean; onToggleSave: () => void; userZip: string; userCoords: [number, number] | null; geoReady: number; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
   const distance = useMemo(() => {
     return getBusinessDistance(userCoords, userZip, biz.latitude, biz.longitude, biz.businessZip);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1123,7 +1124,7 @@ function MainPhotoPage({ biz, liked, onToggle, userZip, userCoords, geoReady, fo
           <h2 style={{ fontSize: "clamp(24px, 7vw, 36px)", fontWeight: 900, color: "#fff", margin: 0, lineHeight: 1.05, fontFamily: "'Dela Gothic One', sans-serif", textShadow: "0 2px 20px rgba(0,0,0,0.6)", letterSpacing: -0.5 }}>{biz.name}</h2>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
             <ShareButton name={biz.name} />
-            <LikeButton liked={liked} onToggle={onToggle} />
+            <LikeButton liked={saved} onToggle={onToggleSave} />
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
@@ -1245,11 +1246,10 @@ function PageDots({ total, current }: { total: number; current: number }) {
 
 // ─── Business Card (horizontal swipeable via touch) ───
 
-function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; userZip: string; userCoords: [number, number] | null; geoReady: number; payoutLevels?: { level: number; name: string; visits: string }[]; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
+function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, saved, onToggleSave, followed, onToggleFollow, onOpenChainLocations }: { biz: DiscoveryBusiness; userZip: string; userCoords: [number, number] | null; geoReady: number; payoutLevels?: { level: number; name: string; visits: string }[]; saved: boolean; onToggleSave: () => void; followed: boolean; onToggleFollow: () => void; onOpenChainLocations?: (chainId: string, brandName: string) => void }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [liked, setLiked] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const startX = useRef(0);
   const startY = useRef(0);
@@ -1305,7 +1305,7 @@ function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, follow
     setDragOffset(0);
   };
 
-  const toggleLike = () => setLiked(l => !l);
+
 
   const translateX = -(currentPage * 100 / totalPages) + (isDragging ? (dragOffset / getWidth()) * (100 / totalPages) : 0);
 
@@ -1330,7 +1330,7 @@ function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, follow
       }}>
         {/* Slide 1: Hero photo */}
         <div style={{ width: `${100 / totalPages}%`, height: "100%", flexShrink: 0, overflow: "hidden" }}>
-          <MainPhotoPage biz={biz} liked={liked} onToggle={toggleLike} userZip={userZip} userCoords={userCoords} geoReady={geoReady} followed={followed} onToggleFollow={onToggleFollow} onOpenChainLocations={onOpenChainLocations} />
+          <MainPhotoPage biz={biz} saved={saved} onToggleSave={onToggleSave} userZip={userZip} userCoords={userCoords} geoReady={geoReady} followed={followed} onToggleFollow={onToggleFollow} onOpenChainLocations={onOpenChainLocations} />
         </div>
         {/* Slide 2: Detail page */}
         <div style={{ width: `${100 / totalPages}%`, height: "100%", flexShrink: 0, overflow: "hidden" }}>
@@ -1339,7 +1339,7 @@ function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, follow
         {/* Slides 3+: Additional photos */}
         {extraPhotos.map((img, i) => (
           <div key={i} style={{ width: `${100 / totalPages}%`, height: "100%", flexShrink: 0, overflow: "hidden" }}>
-            <PhotoPage image={img} label={biz.name} liked={liked} onToggle={toggleLike} />
+            <PhotoPage image={img} label={biz.name} saved={saved} onToggleSave={onToggleSave} />
           </div>
         ))}
       </div>
@@ -1382,8 +1382,9 @@ function DiscoveryPage() {
   const verticalRef = useRef<HTMLDivElement>(null);
   const [geoReady, setGeoReady] = useState(0); // increments when geocoding completes, triggers distance recalc
   const [payoutLevels, setPayoutLevels] = useState(DEFAULT_PAYOUT_LEVELS);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
-  const [showFollowedOnly, setShowFollowedOnly] = useState(false);
+  const [showMyPlacesOnly, setShowMyPlacesOnly] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
   const GMAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -1514,7 +1515,7 @@ function DiscoveryPage() {
     });
   }, []);
 
-  // Fetch followed businesses on mount
+  // Fetch saved + followed businesses on mount
   useEffect(() => {
     const userId = getUserId();
     if (!userId) return;
@@ -1528,13 +1529,67 @@ function DiscoveryPage() {
         });
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled && Array.isArray(data.followedBusinessIds)) {
-          setFollowedIds(new Set(data.followedBusinessIds as string[]));
+        if (!cancelled) {
+          if (Array.isArray(data.savedBusinessIds)) {
+            setSavedIds(new Set(data.savedBusinessIds as string[]));
+          }
+          if (Array.isArray(data.followedBusinessIds)) {
+            setFollowedIds(new Set(data.followedBusinessIds as string[]));
+          }
         }
       } catch { /* silent — non-critical */ }
     })();
     return () => { cancelled = true; };
   }, [getUserId, getAuthToken]);
+
+  const handleToggleSave = useCallback(async (businessId: string) => {
+    const userId = getUserId();
+    if (!userId) {
+      showToast("Please log in to save businesses.");
+      return;
+    }
+    const wasSaved = savedIds.has(businessId);
+    // Optimistic update: unsave removes both saved + followed
+    setSavedIds(prev => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(businessId); else next.add(businessId);
+      return next;
+    });
+    if (wasSaved) {
+      setFollowedIds(prev => {
+        const next = new Set(prev);
+        next.delete(businessId);
+        return next;
+      });
+    }
+    try {
+      const token = await getAuthToken();
+      if (!token) { showToast("Please log in to save businesses."); return; }
+      const res = await fetch("/api/businesses/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ businessId }),
+      });
+      if (!res.ok) {
+        // Revert
+        setSavedIds(prev => {
+          const next = new Set(prev);
+          if (wasSaved) next.add(businessId); else next.delete(businessId);
+          return next;
+        });
+        if (wasSaved) {
+          // Can't reliably know if was following, so re-fetch
+          // For now just revert saved; follow state will correct on next load
+        }
+      }
+    } catch {
+      setSavedIds(prev => {
+        const next = new Set(prev);
+        if (wasSaved) next.add(businessId); else next.delete(businessId);
+        return next;
+      });
+    }
+  }, [savedIds, getUserId, getAuthToken, showToast]);
 
   const handleToggleFollow = useCallback(async (businessId: string) => {
     const userId = getUserId();
@@ -1543,18 +1598,27 @@ function DiscoveryPage() {
       return;
     }
     const wasFollowed = followedIds.has(businessId);
+    // Optimistic update: follow auto-saves, unfollow keeps saved
     setFollowedIds(prev => {
       const next = new Set(prev);
       if (wasFollowed) next.delete(businessId); else next.add(businessId);
       return next;
     });
+    if (!wasFollowed) {
+      // Follow auto-saves
+      setSavedIds(prev => {
+        const next = new Set(prev);
+        next.add(businessId);
+        return next;
+      });
+    }
     try {
       const token = await getAuthToken();
       if (!token) { showToast("Please log in to follow businesses."); return; }
       const res = await fetch("/api/businesses/follow", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ businessId, userId }),
+        body: JSON.stringify({ businessId }),
       });
       if (!res.ok) {
         setFollowedIds(prev => {
@@ -1562,6 +1626,13 @@ function DiscoveryPage() {
           if (wasFollowed) next.add(businessId); else next.delete(businessId);
           return next;
         });
+        if (!wasFollowed) {
+          setSavedIds(prev => {
+            const next = new Set(prev);
+            next.delete(businessId);
+            return next;
+          });
+        }
       }
     } catch {
       setFollowedIds(prev => {
@@ -1570,7 +1641,7 @@ function DiscoveryPage() {
         return next;
       });
     }
-  }, [followedIds, getUserId, getAuthToken]);
+  }, [followedIds, getUserId, getAuthToken, showToast]);
 
   // Fetch a page of businesses from the paginated API
   const fetchDiscoverPage = useCallback(async (
@@ -1578,7 +1649,6 @@ function DiscoveryPage() {
     currentFilters: FilterState,
     append: boolean,
     followedOnly: boolean,
-    currentUserId?: string,
   ) => {
     if (append) setLoadingMore(true);
     else { setLoading(true); setError(""); }
@@ -1599,9 +1669,12 @@ function DiscoveryPage() {
         }
         if (locationZip) params.set("userZip", locationZip);
       }
-      if (followedOnly && currentUserId) {
-        params.set("followed", "true");
-        params.set("userId", currentUserId);
+      if (followedOnly) {
+        const uid = getUserId();
+        if (uid) {
+          params.set("followed", "true");
+          params.set("userId", uid);
+        }
       }
 
       const res = await fetch(`/api/businesses/discover?${params}`);
@@ -1663,7 +1736,7 @@ function DiscoveryPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [locationCoords, locationZip]);
+  }, [locationCoords, locationZip, getUserId]);
 
   // Load saved filter preferences, then do initial fetch
   useEffect(() => {
@@ -1673,9 +1746,9 @@ function DiscoveryPage() {
       if (saved) {
         const merged = { ...filters, ...saved, search: "" };
         setFilters(merged);
-        fetchDiscoverPage(1, merged, false, showFollowedOnly);
+        fetchDiscoverPage(1, merged, false, showMyPlacesOnly);
       } else {
-        fetchDiscoverPage(1, filters, false, showFollowedOnly);
+        fetchDiscoverPage(1, filters, false, showMyPlacesOnly);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1685,8 +1758,8 @@ function DiscoveryPage() {
   const handleApplyFilters = useCallback(() => {
     setCurrentBiz(0);
     if (verticalRef.current) verticalRef.current.scrollTop = 0;
-    fetchDiscoverPage(1, filters, false, showFollowedOnly);
-  }, [filters, showFollowedOnly, fetchDiscoverPage]);
+    fetchDiscoverPage(1, filters, false, showMyPlacesOnly);
+  }, [filters, showMyPlacesOnly, fetchDiscoverPage]);
 
   // Re-fetch when browser geolocation resolves (coords changed from zip centroid to real GPS)
   const prevCoordsRef = useRef(locationCoords);
@@ -1695,9 +1768,9 @@ function DiscoveryPage() {
     prevCoordsRef.current = locationCoords;
     // Only re-fetch if we already have businesses loaded (not initial load)
     if (businesses.length > 0) {
-      fetchDiscoverPage(1, filters, false, showFollowedOnly);
+      fetchDiscoverPage(1, filters, false, showMyPlacesOnly);
     }
-  }, [locationCoords, businesses.length, filters, showFollowedOnly, fetchDiscoverPage]);
+  }, [locationCoords, businesses.length, filters, showMyPlacesOnly, fetchDiscoverPage]);
 
   // Debounced search: auto-fetch when user types in search (no Apply needed)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -1709,10 +1782,10 @@ function DiscoveryPage() {
     searchDebounceRef.current = setTimeout(() => {
       setCurrentBiz(0);
       if (verticalRef.current) verticalRef.current.scrollTop = 0;
-      fetchDiscoverPage(1, filters, false, showFollowedOnly);
+      fetchDiscoverPage(1, filters, false, showMyPlacesOnly);
     }, 500);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
-  }, [filters.search, filters, showFollowedOnly, fetchDiscoverPage]);
+  }, [filters.search, filters, showMyPlacesOnly, fetchDiscoverPage]);
 
   // Client-side filtering (only for things not handled server-side: openNow, sort, spotlight)
   const filteredBusinesses = useMemo(() => {
@@ -1772,9 +1845,9 @@ function DiscoveryPage() {
 
     // Prefetch next page when within 10 businesses of the end
     if (hasMore && !loadingMore && newBiz >= businesses.length - 10) {
-      fetchDiscoverPage(discoverPage + 1, filters, true, showFollowedOnly);
+      fetchDiscoverPage(discoverPage + 1, filters, true, showMyPlacesOnly);
     }
-  }, [hasMore, loadingMore, businesses.length, discoverPage, filters, showFollowedOnly, fetchDiscoverPage]);
+  }, [hasMore, loadingMore, businesses.length, discoverPage, filters, showMyPlacesOnly, fetchDiscoverPage]);
 
   if (!authChecked) return <div style={{ minHeight: "100vh", background: COLORS.darkBg }} />;
 
@@ -1794,7 +1867,7 @@ function DiscoveryPage() {
         />
       )}
       <FloatingOrbs />
-      <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showFollowedOnly={showFollowedOnly} setShowFollowedOnly={setShowFollowedOnly} followedCount={followedIds.size} onApply={handleApplyFilters} />
+      <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showMyPlacesOnly={showMyPlacesOnly} setShowMyPlacesOnly={setShowMyPlacesOnly} myPlacesCount={savedIds.size} onApply={handleApplyFilters} />
 
       {/* LaunchBanner is rendered inside MainPhotoPage (page 1 only) */}
 
@@ -1843,7 +1916,7 @@ function DiscoveryPage() {
         }}>
           {filteredBusinesses.map((biz) => (
             <div key={biz.id} style={{ width: "100%", height: "100dvh", scrollSnapAlign: "start", position: "relative" }}>
-              <BusinessCard biz={biz} userZip={locationZip} userCoords={locationCoords} geoReady={geoReady} payoutLevels={payoutLevels} followed={followedIds.has(biz.id)} onToggleFollow={() => handleToggleFollow(biz.id)} onOpenChainLocations={openChainLocations} />
+              <BusinessCard biz={biz} userZip={locationZip} userCoords={locationCoords} geoReady={geoReady} payoutLevels={payoutLevels} saved={savedIds.has(biz.id)} onToggleSave={() => handleToggleSave(biz.id)} followed={followedIds.has(biz.id)} onToggleFollow={() => handleToggleFollow(biz.id)} onOpenChainLocations={openChainLocations} />
             </div>
           ))}
         </div>

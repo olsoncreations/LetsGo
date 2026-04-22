@@ -1082,9 +1082,9 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Browse From</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {["All Businesses", "My Saved"].map(opt => (
+              {["All Businesses", "My Places"].map(opt => (
                 <GlassPill key={opt} active={(filters.browseFrom || "All Businesses") === opt} onClick={() => setFilters(p => ({ ...p, browseFrom: opt }))} style={{ fontSize: 12, padding: "8px 16px" }}>
-                  {opt === "All Businesses" && "🌐 "}{opt === "My Saved" && "❤️ "}{opt}
+                  {opt === "All Businesses" && "🌐 "}{opt === "My Places" && "❤️ "}{opt}
                 </GlassPill>
               ))}
               <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
@@ -1103,9 +1103,9 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                 Open Now
               </button>
             </div>
-            {filters.browseFrom === "My Saved" && (
+            {filters.browseFrom === "My Places" && (
               <div style={{ fontSize: 11, color: COLORS.neonOrange, fontFamily: "'DM Sans', sans-serif", marginTop: 8, lineHeight: 1.5 }}>
-                Save places from your profile page to use this filter. All businesses will be shown until you have saved places.
+                Save or follow places from Discovery to use this filter. All businesses will be shown until you have places.
               </div>
             )}
           </div>
@@ -2658,14 +2658,17 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
     const { data: { session } } = await supabaseBrowser.auth.getSession();
     if (!session?.user?.id || heartLoading) return;
     setHeartLoading(true);
-    const uid = session.user.id;
-    if (hearted) {
-      await supabaseBrowser.from("user_followed_businesses").delete().eq("user_id", uid).eq("business_id", business.id);
-      setHearted(false);
-    } else {
-      await supabaseBrowser.from("user_followed_businesses").insert({ user_id: uid, business_id: business.id });
-      setHearted(true);
-    }
+    try {
+      const token = session.access_token;
+      const res = await fetch("/api/businesses/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ businessId: business.id }),
+      });
+      if (res.ok) {
+        setHearted(!hearted);
+      }
+    } catch { /* silent */ }
     setHeartLoading(false);
   };
 

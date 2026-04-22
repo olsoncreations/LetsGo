@@ -355,11 +355,12 @@ export async function POST(req: NextRequest): Promise<Response> {
             .select("business_id")
             .eq("voter_id", userId),
 
-          // Followed businesses
+          // Followed businesses (only true followers, not just saved)
           supabaseServer
             .from("user_followed_businesses")
             .select("business_id")
-            .eq("user_id", userId),
+            .eq("user_id", userId)
+            .eq("is_following", true),
 
           // Re-rolled businesses from past date nights
           supabaseServer
