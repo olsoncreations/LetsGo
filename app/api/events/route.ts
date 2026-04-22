@@ -175,7 +175,7 @@ export async function GET(): Promise<Response> {
         payoutRange: payoutRangeStr(bpsValues),
         payoutTiers: bpsValues.map(v => v / 100),
         viewCount: viewCounts.get(eid) || 0,
-        isTrial: biz.billing_plan === "trial" && !!biz.seeded_at,
+        isTrial: (biz.billing_plan === "trial" && !!biz.seeded_at) || bid.startsWith("seed-"),
       };
     }).filter(Boolean);
 

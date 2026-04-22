@@ -3082,7 +3082,7 @@ export default function GroupVote() {
             latitude: (b.latitude as number) ?? null,
             longitude: (b.longitude as number) ?? null,
             gradient: getBizGradient(b.id as string),
-            isTrial: b.billing_plan === "trial" && !!b.seeded_at,
+            isTrial: (b.billing_plan === "trial" && !!b.seeded_at) || (b.id as string).startsWith("seed-"),
           });
         }
 

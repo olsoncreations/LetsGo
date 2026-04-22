@@ -348,8 +348,8 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     for (const row of allBusinesses) {
       if (excludeSet.has(row.id)) continue;
-      // Has Rewards filter — skip seeded/trial businesses
-      if (hasRewards && row.billing_plan === "trial" && !!row.seeded_at) continue;
+      // Has Rewards filter — skip seeded/trial businesses (seed- prefix as safety net)
+      if (hasRewards && ((row.billing_plan === "trial" && !!row.seeded_at) || row.id.startsWith("seed-"))) continue;
 
       const bt = getRowBusinessType(row);
       const cm = row.category_main || "";

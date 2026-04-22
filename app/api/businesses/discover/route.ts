@@ -56,8 +56,9 @@ export async function GET(req: NextRequest) {
       .eq("is_active", true);
 
     // Has Rewards — exclude seeded/trial businesses (server-side so pagination works)
+    // Uses billing_plan + seed- ID prefix as safety net for untagged seed businesses
     if (hasRewards) {
-      query = query.or("billing_plan.neq.trial,seeded_at.is.null");
+      query = query.neq("billing_plan", "trial").not("id", "like", "seed-%");
     }
 
     // Text search — match business name, address, or category
