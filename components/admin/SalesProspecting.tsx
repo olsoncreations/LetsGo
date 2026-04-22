@@ -1082,7 +1082,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
 
   function selectAllVisible() {
     const seedableIds = filteredLeads
-      .filter(l => !l.seeded_at)
+      .filter(l => !l.seeded_at && !l.unseeded_at)
       .map(l => l.id);
     setSelectedLeadIds(new Set(seedableIds));
   }
@@ -2931,7 +2931,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         >
           {(selectedLeadIds.size > 0 || unseedLeadIds.size > 0)
             ? `Deselect All (${selectedLeadIds.size + unseedLeadIds.size})`
-            : `Select All Seedable (${filteredLeads.filter(l => !l.seeded_at).length})`}
+            : `Select All Seedable (${filteredLeads.filter(l => !l.seeded_at && !l.unseeded_at).length})`}
         </button>
         <button
           onClick={handleBulkSeed}
