@@ -245,6 +245,20 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
     }
 
+    // Block receipts for seeded/trial businesses (rewards not yet active)
+    const { data: bizCheck } = await supabase
+      .from("business")
+      .select("billing_plan, seeded_at")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    if (bizCheck?.billing_plan === "trial" || (bizCheck?.seeded_at && !bizCheck?.billing_plan)) {
+      return NextResponse.json(
+        { error: "This business hasn't activated rewards yet. Receipts can't be submitted for unclaimed businesses." },
+        { status: 400 }
+      );
+    }
+
     // Duplicate receipt detection — check for similar receipts within 3 weeks
     const confirmDuplicate = body.confirmDuplicate === true;
     const dupCutoff = new Date(now.getTime() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
