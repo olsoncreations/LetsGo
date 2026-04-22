@@ -62,6 +62,38 @@ const RESTAURANT_TYPES = new Set([
 ]);
 
 
+// Business types that should never appear as date night activities.
+// Checked against businessType (config or column) and category_main, case-insensitive.
+const DATE_NIGHT_EXCLUDED_TYPES = new Set([
+  // Fitness / wellness
+  "gym", "fitness_center", "fitness", "yoga_studio", "yoga studio",
+  "sports_club", "sports club", "swimming_pool", "swimming pool",
+  // Personal care
+  "salon_beauty", "salon/beauty", "beauty_salon", "beauty salon",
+  "hair_salon", "hair salon", "barber_shop", "barber shop",
+  "nail_salon", "nail salon", "tanning_studio", "tanning studio",
+  // Cannabis / smoke
+  "dispensary", "cannabis", "smoke_shop", "smoke shop",
+  "tobacco_shop", "tobacco shop", "vape_shop", "vape shop",
+  // Automotive
+  "auto_repair", "auto repair", "car_wash", "car wash",
+  "car_dealer", "car dealer", "gas_station", "gas station",
+  "parking", "towing",
+  // Medical / professional
+  "doctor", "dentist", "dental", "veterinary", "veterinarian",
+  "hospital", "clinic", "pharmacy", "optician",
+  "lawyer", "accountant", "insurance", "financial",
+  "bank", "atm", "real_estate", "real estate",
+  // Services / errands
+  "laundry", "dry_cleaning", "dry cleaning", "storage",
+  "locksmith", "plumber", "electrician", "moving_company",
+  "funeral_home", "funeral home", "cemetery",
+  // Retail (not date-worthy)
+  "convenience_store", "convenience store",
+  "hardware_store", "hardware store",
+  "electronics_store", "electronics store",
+]);
+
 const MAX_RECENT_RESULTS = 30;
 const LOCATION_RADIUS_MILES = 20;
 
@@ -313,14 +345,20 @@ export async function POST(req: NextRequest): Promise<Response> {
     const activities: BusinessRow[] = [];
 
     for (const row of allBusinesses) {
+      if (excludeSet.has(row.id)) continue;
+
       const bt = getRowBusinessType(row);
       const cm = row.category_main || "";
       const tags = getRowTags(row);
 
       if (isRestaurantType(bt, cm, tags)) {
-        if (!excludeSet.has(row.id)) restaurants.push(row);
+        restaurants.push(row);
       } else {
-        if (!excludeSet.has(row.id)) activities.push(row);
+        // Skip business types that don't make sense as date night activities
+        const btLower = bt.toLowerCase();
+        const cmLower = cm.toLowerCase();
+        if (DATE_NIGHT_EXCLUDED_TYPES.has(btLower) || DATE_NIGHT_EXCLUDED_TYPES.has(cmLower)) continue;
+        activities.push(row);
       }
     }
 
