@@ -304,7 +304,7 @@ export default function FindFriendsPage() {
         smsSent = 0;
         smsFailed = 0;
         const siteUrl = window.location.origin;
-        const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome\n\nReply STOP to opt out. Msg & data rates may apply.`);
+        const body = encodeURIComponent(`Check out LetsGo — discover restaurants, earn rewards, and play games with friends! Join here: ${siteUrl}/welcome\n\nReply STOP to opt out or HELP for help. Msg & data rates may apply.`);
 
         // Open first contact in SMS app
         window.open(`sms:${withPhone[0].phone}?body=${body}`, "_self");
@@ -756,7 +756,7 @@ export default function FindFriendsPage() {
                   />
                   <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
                     I agree to send a one-time SMS invite to the selected contacts.
-                    Recipients can reply STOP to opt out. Msg &amp; data rates may apply.
+                    Recipients can reply STOP to opt out or HELP for help. Msg &amp; data rates may apply.
                     By sending, I agree to the{" "}
                     <a href="/terms" target="_blank" style={{ color: PINK, textDecoration: "underline" }}>Terms of Service</a>
                     {" "}and{" "}

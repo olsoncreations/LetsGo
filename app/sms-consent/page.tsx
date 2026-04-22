@@ -80,7 +80,7 @@ export default function SmsConsentPage() {
             fontStyle: "italic",
             marginBottom: 24,
           }}>
-            &ldquo;Chris Olson invited you to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: https://www.useletsgo.com/welcome Reply STOP to opt out. Msg &amp; data rates may apply.&rdquo;
+            &ldquo;Chris Olson invited you to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: https://www.useletsgo.com/welcome Reply STOP to opt out or HELP for help. Msg &amp; data rates may apply.&rdquo;
           </div>
 
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 16 }}>

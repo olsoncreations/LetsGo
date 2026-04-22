@@ -142,8 +142,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       // Send SMS via Twilio
       try {
         const messageBody = inviterName
-          ? `${displayName} invited you to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: ${siteUrl}/welcome\n\nReply STOP to opt out. Msg & data rates may apply.`
-          : `You've been invited to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: ${siteUrl}/welcome\n\nReply STOP to opt out. Msg & data rates may apply.`;
+          ? `${displayName} invited you to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: ${siteUrl}/welcome\n\nReply STOP to opt out or HELP for help. Msg & data rates may apply.`
+          : `You've been invited to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: ${siteUrl}/welcome\n\nReply STOP to opt out or HELP for help. Msg & data rates may apply.`;
 
         await twilioClient.messages.create({
           body: messageBody,
