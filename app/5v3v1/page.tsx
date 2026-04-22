@@ -74,6 +74,7 @@ type FilterState = {
   categories: string[];
   price: string;
   openNow: boolean;
+  hasRewards: boolean;
   distance: number;
   tags: string[];
   browseFrom?: string;
@@ -1102,6 +1103,21 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                 }} />
                 Open Now
               </button>
+              <button onClick={() => setFilters(p => ({ ...p, hasRewards: !p.hasRewards }))} style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+                border: `1px solid ${filters.hasRewards ? COLORS.neonYellow : COLORS.cardBorder}`,
+                background: filters.hasRewards ? `${COLORS.neonYellow}15` : COLORS.glass,
+                color: filters.hasRewards ? COLORS.neonYellow : COLORS.textSecondary,
+                fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                backdropFilter: "blur(12px)", transition: "all 0.3s",
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: filters.hasRewards ? COLORS.neonYellow : COLORS.textSecondary,
+                  boxShadow: filters.hasRewards ? `0 0 8px ${COLORS.neonYellow}` : "none",
+                }} />
+                Has Rewards
+              </button>
             </div>
             {filters.browseFrom === "My Places" && (
               <div style={{ fontSize: 11, color: COLORS.neonOrange, fontFamily: "'DM Sans', sans-serif", marginTop: 8, lineHeight: 1.5 }}>
@@ -1401,6 +1417,9 @@ function PickFiveStep({ selectedIds, setSelectedIds, onSend, onBack, friend, bus
 
     // Open now filter
     if (filters.openNow && !biz.isOpen) return false;
+
+    // Has Rewards — hide seeded/trial businesses
+    if (filters.hasRewards && biz.isTrial) return false;
 
     // Distance filter — uses GPS coordinates when available, falls back to zip
     const dist = getBusinessDistance(locationCoords, locationZip, biz.latitude, biz.longitude, biz.businessZip);
@@ -3009,7 +3028,7 @@ function FiveThreeOne() {
   const [step, setStep] = useState(0);
   const [viewMode, setViewMode] = useState<"player1" | "player2">("player1");
   const [filters, setFilters] = useState<FilterState>({
-    categories: ["All"], price: "Any", openNow: false, distance: 15, tags: [],
+    categories: ["All"], price: "Any", openNow: false, hasRewards: false, distance: 15, tags: [],
   });
   const [selectedFriend, setSelectedFriend] = useState<GameFriend | null>(null);
   const [selectedFive, setSelectedFive] = useState<string[]>([]);
@@ -3124,6 +3143,7 @@ function FiveThreeOne() {
           }
           if (locationZip) params.set("userZip", locationZip);
           params.set("distance", "50");
+          if (filters.hasRewards) params.set("hasRewards", "true");
 
           const res = await fetch(`/api/businesses/discover?${params}`);
           if (!res.ok) break;
@@ -3382,7 +3402,7 @@ function FiveThreeOne() {
   const handleReset = () => {
     setStep(0);
     setViewMode("player1");
-    setFilters({ categories: ["All"], price: "Any", openNow: false, distance: 15, tags: [] });
+    setFilters({ categories: ["All"], price: "Any", openNow: false, hasRewards: false, distance: 15, tags: [] });
     setSelectedFriend(null);
     setSelectedFive([]);
     setSelectedThree([]);

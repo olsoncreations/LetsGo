@@ -72,6 +72,7 @@ type Event = {
   payoutRange: string;
   payoutTiers: number[];
   viewCount: number;
+  isTrial: boolean;
   // Computed client-side
   dist?: string;       // e.g. "1.2 mi"
   distMiles?: number;
@@ -89,6 +90,7 @@ type Filters = {
   vibes: string[];
   sort: string;
   search: string;
+  hasRewards: boolean;
 };
 
 // ── Filter Options (fallbacks if DB fetch fails) ──────────
@@ -1049,12 +1051,12 @@ const FiltersPanel = ({
     filters.date !== "all" || (filters.dateFrom !== "" || filters.dateTo !== ""),
     filters.price !== "all",
     filters.distance !== "all", filters.timeOfDay !== "all", filters.capacity !== "all",
-    filters.vibes.length > 0, filters.search.length > 0,
+    filters.vibes.length > 0, filters.search.length > 0, filters.hasRewards,
   ].filter(Boolean).length;
 
   const clearAll = () => setFilters({
     category: "all", date: "all", dateFrom: "", dateTo: "", price: "all", distance: "all",
-    timeOfDay: "all", capacity: "all", vibes: [], sort: "date-asc", search: "",
+    timeOfDay: "all", capacity: "all", vibes: [], sort: "date-asc", search: "", hasRewards: false,
   });
 
   const toggleVibe = (v: string) => {
@@ -1278,6 +1280,24 @@ const FiltersPanel = ({
               ))}
             </div>
           </FilterSection>
+          <div style={{ height: 1, background: CARD_BORDER }} />
+          <FilterSection title="Rewards">
+            <button onClick={() => setFilters(prev => ({ ...prev, hasRewards: !prev.hasRewards }))} style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+              border: `1px solid ${filters.hasRewards ? YELLOW : CARD_BORDER}`,
+              background: filters.hasRewards ? `${YELLOW}15` : "rgba(18,18,31,0.85)",
+              backdropFilter: "blur(12px)",
+              color: filters.hasRewards ? YELLOW : TEXT_MUTED,
+              fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY, transition: "all 0.3s",
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%",
+                background: filters.hasRewards ? YELLOW : TEXT_MUTED,
+                boxShadow: filters.hasRewards ? `0 0 8px ${YELLOW}` : "none",
+              }} />
+              Has Rewards
+            </button>
+          </FilterSection>
         </div>
       )}
     </div>
@@ -1296,7 +1316,7 @@ export default function EventsPage() {
 
   const [filters, setFilters] = useState<Filters>({
     category: "all", date: "all", dateFrom: "", dateTo: "", price: "all", distance: "all",
-    timeOfDay: "all", capacity: "all", vibes: [], sort: "date-asc", search: "",
+    timeOfDay: "all", capacity: "all", vibes: [], sort: "date-asc", search: "", hasRewards: false,
   });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [timeStr, setTimeStr] = useState("");
@@ -1750,6 +1770,9 @@ export default function EventsPage() {
       if (!hasMatch) return false;
     }
 
+    // Has Rewards — hide events from seeded/trial businesses
+    if (filters.hasRewards && e.isTrial) return false;
+
     if (filters.search) {
       const q = filters.search.toLowerCase();
       const match = e.title.toLowerCase().includes(q) ||
@@ -1973,7 +1996,7 @@ export default function EventsPage() {
                           {events.length > 0 && (
                             <NeonBtn onClick={() => setFilters({
                               category: "all", date: "all", dateFrom: "", dateTo: "", price: "all", distance: "all",
-                              timeOfDay: "all", capacity: "all", vibes: [], sort: "date-asc", search: "",
+                              timeOfDay: "all", capacity: "all", vibes: [], sort: "date-asc", search: "", hasRewards: false,
                             })}>Clear All Filters</NeonBtn>
                           )}
                         </div>

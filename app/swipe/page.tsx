@@ -48,6 +48,7 @@ type FilterState = {
   price: string;
   sort: string;
   openNow: boolean;
+  hasRewards: boolean;
   distance: number;
   tags: string[];
 };
@@ -553,6 +554,21 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
             }} />
             Open Now
           </button>
+          <button onClick={() => setFilters(p => ({ ...p, hasRewards: !p.hasRewards }))} style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+            border: `1px solid ${filters.hasRewards ? COLORS.neonYellow : COLORS.cardBorder}`,
+            background: filters.hasRewards ? `${COLORS.neonYellow}15` : COLORS.glass,
+            color: filters.hasRewards ? COLORS.neonYellow : COLORS.textSecondary,
+            fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+            backdropFilter: "blur(12px)", transition: "all 0.3s",
+          }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%", display: "inline-block",
+              background: filters.hasRewards ? COLORS.neonYellow : COLORS.textSecondary,
+              boxShadow: filters.hasRewards ? `0 0 8px ${COLORS.neonYellow}` : "none",
+            }} />
+            Has Rewards
+          </button>
         </div>
 
         {/* Price — always visible */}
@@ -597,7 +613,7 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
 
         {/* Apply & Clear buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>
-          <button onClick={() => { setFilters({ search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [] }); setShowMyPlacesOnly(false); }} style={{
+          <button onClick={() => { setFilters({ search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [] }); setShowMyPlacesOnly(false); }} style={{
             flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
             border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
             color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
@@ -1374,7 +1390,7 @@ function DiscoveryPage() {
   const [totalBizCount, setTotalBizCount] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, distance: 15, tags: [],
+    search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [],
   });
   const [currentBiz, setCurrentBiz] = useState(0);
   const [locationZip, setLocationZip] = useState("68102");
@@ -1659,6 +1675,7 @@ function DiscoveryPage() {
       if (currentFilters.categories.length > 0) params.set("category", currentFilters.categories.join(","));
       if (currentFilters.price !== "Any") params.set("price", currentFilters.price);
       if (currentFilters.openNow) params.set("openNow", "true");
+      if (currentFilters.hasRewards) params.set("hasRewards", "true");
       if (currentFilters.tags.length > 0) params.set("tags", currentFilters.tags.join(","));
       // Distance filtering — server-side bounding box
       if (currentFilters.distance > 0) {
@@ -1818,6 +1835,11 @@ function DiscoveryPage() {
     // Open now is real-time client-side (depends on current time + hours)
     if (filters.openNow) {
       result = result.filter(b => b.isOpen);
+    }
+
+    // Has Rewards — hide seeded/trial businesses with no real payouts
+    if (filters.hasRewards) {
+      result = result.filter(b => !b.isTrial);
     }
 
     // Tags are partially server-side but also refine client-side for subtype matching

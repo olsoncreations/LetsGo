@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     const distance = parseFloat(sp.get("distance") || "0");
     const userLat = parseFloat(sp.get("userLat") || "0");
     const userLng = parseFloat(sp.get("userLng") || "0");
+    const hasRewards = sp.get("hasRewards") === "true";
     const userZip = sp.get("userZip") || "";
 
     // Build the business query
@@ -53,6 +54,11 @@ export async function GET(req: NextRequest) {
         created_at
       `, { count: "exact" })
       .eq("is_active", true);
+
+    // Has Rewards — exclude seeded/trial businesses (server-side so pagination works)
+    if (hasRewards) {
+      query = query.or("billing_plan.neq.trial,seeded_at.is.null");
+    }
 
     // Text search — match business name, address, or category
     if (search) {

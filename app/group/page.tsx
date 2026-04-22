@@ -102,6 +102,7 @@ interface Business {
   latitude: number | null;
   longitude: number | null;
   gradient: string;
+  isTrial: boolean;
 }
 
 interface Friend {
@@ -116,6 +117,7 @@ interface FilterState {
   price: string[];
   sort: string;
   openNow: boolean;
+  hasRewards: boolean;
   distance: number;
   tags: string[];
   browseFrom: string;
@@ -1619,7 +1621,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const [confirmLockIn, setConfirmLockIn] = useState(false);
   const [suggestionsSubmitted, setSuggestionsSubmitted] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    category: [], price: [], sort: "Nearest", openNow: false, distance: 15, tags: [], browseFrom: "All Businesses",
+    category: [], price: [], sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [], browseFrom: "All Businesses",
   });
 
   // DB-driven tag categories
@@ -1684,6 +1686,8 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
     // Distance filter — uses GPS coordinates when available, falls back to zip
     const dist = getBusinessDistance(userCoords, userZip, b.latitude, b.longitude, b.zip);
     if (dist !== null && dist > filters.distance) return false;
+    // Has Rewards — hide seeded/trial businesses
+    if (filters.hasRewards && b.isTrial) return false;
     return matchCat && matchSearch;
   });
 
@@ -1879,8 +1883,8 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                     style={{ width: "100%", accentColor: BLUE, height: 4 }} />
                 </div>
 
-                {/* Open Now */}
-                <div style={{ marginBottom: 16 }}>
+                {/* Open Now + Has Rewards */}
+                <div style={{ marginBottom: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={() => setFilters(p => ({ ...p, openNow: !p.openNow }))} style={{
                     display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
                     border: `1px solid ${filters.openNow ? NEON : CARD_BORDER}`,
@@ -1895,6 +1899,21 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                       boxShadow: filters.openNow ? `0 0 8px ${NEON}` : "none",
                     }} />
                     Open Now Only
+                  </button>
+                  <button onClick={() => setFilters(p => ({ ...p, hasRewards: !p.hasRewards }))} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+                    border: `1px solid ${filters.hasRewards ? "#ffff00" : CARD_BORDER}`,
+                    background: filters.hasRewards ? "rgba(255, 255, 0, 0.1)" : "rgba(18,18,31,0.85)",
+                    backdropFilter: "blur(12px)",
+                    color: filters.hasRewards ? "#ffff00" : TEXT_DIM,
+                    fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY, transition: "all 0.3s",
+                  }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: "50%",
+                      background: filters.hasRewards ? "#ffff00" : TEXT_DIM,
+                      boxShadow: filters.hasRewards ? "0 0 8px #ffff00" : "none",
+                    }} />
+                    Has Rewards
                   </button>
                 </div>
 
@@ -3063,6 +3082,7 @@ export default function GroupVote() {
             latitude: (b.latitude as number) ?? null,
             longitude: (b.longitude as number) ?? null,
             gradient: getBizGradient(b.id as string),
+            isTrial: b.billing_plan === "trial" && !!b.seeded_at,
           });
         }
 

@@ -24,6 +24,7 @@ type GenerateRequest = {
   exclude: string[];
   userLat?: number;
   userLng?: number;
+  hasRewards?: boolean;
 };
 
 type ScoredBusiness = {
@@ -275,7 +276,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const body = await req.json() as GenerateRequest;
-    const { vibes = [], budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [], userLat, userLng } = body;
+    const { vibes = [], budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [], userLat, userLng, hasRewards = false } = body;
 
     // Fall back to user's profile zip code when no location provided
     let location = bodyLocation;
@@ -295,6 +296,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         "id, business_name, public_business_name, contact_phone, website, " +
         "street_address, city, state, zip, latitude, longitude, category_main, business_type, " +
         "config, blurb, payout_tiers, payout_preset, is_active, tags, description, " +
+        "billing_plan, seeded_at, " +
         "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, " +
         "thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
       )
@@ -346,6 +348,8 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     for (const row of allBusinesses) {
       if (excludeSet.has(row.id)) continue;
+      // Has Rewards filter — skip seeded/trial businesses
+      if (hasRewards && row.billing_plan === "trial" && !!row.seeded_at) continue;
 
       const bt = getRowBusinessType(row);
       const cm = row.category_main || "";

@@ -24,7 +24,7 @@ export async function GET(): Promise<Response> {
       supabaseServer
         .from("business")
         .select(
-          "id, business_name, public_business_name, street_address, address_line1, city, state, zip, latitude, longitude, contact_phone, phone_number, website, website_url, blurb, category_main, price_level, config, payout_preset, " +
+          "id, business_name, public_business_name, street_address, address_line1, city, state, zip, latitude, longitude, contact_phone, phone_number, website, website_url, blurb, category_main, price_level, config, payout_preset, billing_plan, seeded_at, " +
           "mon_open, mon_close, tue_open, tue_close, wed_open, wed_close, thu_open, thu_close, fri_open, fri_close, sat_open, sat_close, sun_open, sun_close"
         )
         .eq("is_active", true),
@@ -175,6 +175,7 @@ export async function GET(): Promise<Response> {
         payoutRange: payoutRangeStr(bpsValues),
         payoutTiers: bpsValues.map(v => v / 100),
         viewCount: viewCounts.get(eid) || 0,
+        isTrial: biz.billing_plan === "trial" && !!biz.seeded_at,
       };
     }).filter(Boolean);
 

@@ -373,12 +373,12 @@ async function getAuthToken(): Promise<string | null> {
 
 // ── API Helpers ───────────────────────────────────────────────
 
-async function callGenerate(exclude: string[] = [], userLat?: number, userLng?: number): Promise<GenerateResponse> {
+async function callGenerate(exclude: string[] = [], userLat?: number, userLng?: number, hasRewards = false): Promise<GenerateResponse> {
   const token = await getAuthToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const body: Record<string, unknown> = { vibes: [], budget: "$$", cuisines: [], location: "", exclude };
+  const body: Record<string, unknown> = { vibes: [], budget: "$$", cuisines: [], location: "", exclude, hasRewards };
   if (userLat != null && userLng != null) {
     body.userLat = userLat;
     body.userLng = userLng;
@@ -417,13 +417,32 @@ async function callLockIn(sessionId: string): Promise<void> {
 // VIEW 1: HUB
 // ═══════════════════════════════════════════════════════════════
 
-function DateHub({ onNewDate }: { onNewDate: () => void }) {
+function DateHub({ onNewDate, hasRewards, setHasRewards }: { onNewDate: () => void; hasRewards: boolean; setHasRewards: (v: boolean) => void }) {
   return (
     <div style={{ animation: "fadeIn 0.5s ease both" }}>
       <div style={{ marginBottom: 28 }}>
         <SectionLabel text="DATE NIGHT GENERATOR" />
         <h1 style={{ fontFamily: FONT_DISPLAY, fontSize: 32, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.1, marginBottom: 8 }}>Date Night</h1>
         <p style={{ fontFamily: FONT_BODY, fontSize: 13, color: TEXT_DIM, lineHeight: 1.5 }}>The future is here, let our Date Night Generator pick your next Adventure.</p>
+      </div>
+
+      {/* Has Rewards toggle */}
+      <div style={{ marginBottom: 20, display: "flex", gap: 8 }}>
+        <button onClick={() => setHasRewards(!hasRewards)} style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 50,
+          border: `1px solid ${hasRewards ? YELLOW : CARD_BORDER}`,
+          background: hasRewards ? `${YELLOW}15` : `rgba(18,18,31,0.85)`,
+          backdropFilter: "blur(12px)",
+          color: hasRewards ? YELLOW : TEXT_DIM,
+          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY, transition: "all 0.3s",
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: hasRewards ? YELLOW : TEXT_DIM,
+            boxShadow: hasRewards ? `0 0 8px ${YELLOW}` : "none",
+          }} />
+          Has Rewards
+        </button>
       </div>
 
       {/* New Date CTA */}
@@ -597,7 +616,7 @@ function ImageCarousel({ images, alt, accentColor, accentRGB }: {
   );
 }
 
-function TheShow({ onBack }: { onBack: () => void }) {
+function TheShow({ onBack, hasRewards = false }: { onBack: () => void; hasRewards?: boolean }) {
   // stage: "matching" → "cards"
   const [stage, setStage] = useState<"matching" | "cards">("matching");
   const [phase, setPhase] = useState(0);
@@ -692,7 +711,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
     apiResultRef.current = null;
     animationDoneRef.current = false;
 
-    callGenerate(excludedIds, userCoords?.[0], userCoords?.[1])
+    callGenerate(excludedIds, userCoords?.[0], userCoords?.[1], hasRewards)
       .then(result => {
         apiResultRef.current = result;
         if (animationDoneRef.current) {
@@ -760,7 +779,7 @@ function TheShow({ onBack }: { onBack: () => void }) {
     setExcludedIds(newExclude);
 
     try {
-      const result = await callGenerate(newExclude, userCoords?.[0], userCoords?.[1]);
+      const result = await callGenerate(newExclude, userCoords?.[0], userCoords?.[1], hasRewards);
       setTimeout(() => {
         if (target === "restaurant" && result.restaurant) {
           setRestaurant(result.restaurant);
@@ -1359,6 +1378,7 @@ export default function DateNightPage() {
   const [view, setView] = useState<DateNightView>("hub");
   const [showKey, setShowKey] = useState(0);
   const [timeStr, setTimeStr] = useState("");
+  const [hasRewards, setHasRewards] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
   // Onboarding tour
@@ -1432,8 +1452,8 @@ export default function DateNightPage() {
           <MarqueeBanner text="GENERATOR PICKS THE SPOT · DATE NIGHT MAGIC · YOUR NEXT ADVENTURE" />
 
           <div style={{ paddingBottom: 60 }}>
-            {view === "hub" && <DateHub onNewDate={() => { setShowKey(k => k + 1); setView("show"); }} />}
-            {view === "show" && <TheShow key={showKey} onBack={goHome} />}
+            {view === "hub" && <DateHub onNewDate={() => { setShowKey(k => k + 1); setView("show"); }} hasRewards={hasRewards} setHasRewards={setHasRewards} />}
+            {view === "show" && <TheShow key={showKey} onBack={goHome} hasRewards={hasRewards} />}
           </div>
 
           <div style={{
