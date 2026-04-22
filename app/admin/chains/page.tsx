@@ -523,6 +523,20 @@ function ChainsPage() {
             <EditField label="Brand Name" value={val("brand_name") || ""} editable={isEditing} onChange={(v: string) => setEditedChain((p) => ({ ...p, brand_name: v }))} />
             <EditField label="Chain Code" value={val("chain_code") || ""} editable={isEditing} onChange={(v: string) => setEditedChain((p) => ({ ...p, chain_code: v.toUpperCase().replace(/[^A-Z0-9]/g, "") }))} />
             <EditField label="Franchise Model" value={val("franchise_model") || ""} editable={isEditing} type="select" options={[{ value: "corporate", label: "Corporate" }, { value: "franchise", label: "Franchise" }, { value: "mixed", label: "Mixed" }]} onChange={(v: string) => setEditedChain((p) => ({ ...p, franchise_model: v }))} />
+            <EditField
+              label="Custom Rate ($/mo per location)"
+              value={isEditing ? String((editedChain.premium_rate_cents ?? c.premium_rate_cents) / 100) : c.premium_rate_cents > 0 ? `$${(c.premium_rate_cents / 100).toFixed(2)}` : "Custom contract"}
+              editable={isEditing}
+              onChange={(v: string) => {
+                const dollars = parseFloat(v.replace(/[^0-9.]/g, ""));
+                if (!isNaN(dollars)) setEditedChain((p) => ({ ...p, premium_rate_cents: Math.round(dollars * 100) }));
+              }}
+            />
+            {isEditing && (
+              <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: -8, marginBottom: 12 }}>
+                Tier default: ${(({ local: 400, regional: 350, national: 300, enterprise: 0 } as Record<string, number>)[c.pricing_tier] || 0)}/mo — override above for negotiated rates
+              </div>
+            )}
             <EditField label="Internal Notes" value={val("internal_notes") || ""} editable={isEditing} textarea onChange={(v: string) => setEditedChain((p) => ({ ...p, internal_notes: v }))} />
             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 12 }}>
               Created {formatDate(c.created_at)} &bull; Updated {formatDate(c.updated_at)}
