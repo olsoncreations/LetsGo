@@ -1234,7 +1234,10 @@ export default function OnboardingPage() {
           // Business details from onboarding (primary source)
           business_name: (payload.businessName as string) || existingBiz.business_name,
           public_business_name: (payload.publicBusinessName as string) || (payload.businessName as string) || existingBiz.public_business_name,
+          // Populate BOTH column sets so admin Businesses page + discovery page both work
           category_main: (payload.businessType as string) || existingBiz.category_main,
+          business_type: (payload.businessTypeTag as string) || (payload.businessType as string) || existingBiz.business_type,
+          price_level: (payload.priceLevel as string) || existingBiz.price_level,
           age_restriction: (payload.ageRestriction as string) || existingBiz.age_restriction,
           tags: (payload.selectedTags as string[]) || existingBiz.tags || [],
           config: mergedConfig,
