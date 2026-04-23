@@ -755,14 +755,14 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
         { label: "Credit Card Fees", cents: paymentType === "card" ? Math.max(currentMonthBill.ccFeesCents, ccFeeEstimateCents) : 0, color: colors.warning },
         { label: "Adjustments", cents: totalAdjCents, color: totalAdjCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
       ]
-    : isPremium ? [
-        { label: "Premium Subscription", cents: planCostCents, color: colors.primary },
+    : [
+        { label: isPremium ? "Premium Subscription" : "Basic (Pay-per-receipt)", cents: planCostCents, color: colors.primary },
         { label: "Progressive Payouts", cents: progressivePayoutsCents, color: colors.accent },
         { label: "Advertising & Add-ons", cents: advertisingAddOnsCents, color: colors.secondary },
+        { label: "LetsGo Fees (10%)", cents: letsGoFeesCents, color: "#fb7185" },
         { label: `Credit Card Fees (${(ccFeeBps / 100).toFixed(1)}%)`, cents: ccFeeEstimateCents, color: colors.warning },
         { label: "Adjustments", cents: pendingAdjTotalCents, color: pendingAdjTotalCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
-      ]
-    : [];
+      ];
 
   return (
     <div>
