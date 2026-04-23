@@ -1277,6 +1277,18 @@ export default function OnboardingPage() {
             ? { logo_url: (payload.businessLogoFile as Record<string, unknown>).url }
             : {}),
 
+          // Billing address from onboarding
+          ...(payload.billingSameAsBusiness
+            ? {
+                billing_address: [(payload.streetAddress as string) || existingBiz.street_address, [(payload.city as string) || existingBiz.city, (payload.state as string) || existingBiz.state, (payload.zip as string) || existingBiz.zip].filter(Boolean).join(", ")].filter(Boolean).join(", "),
+                billing_email: applicantEmail || existingBiz.billing_email,
+              }
+            : {
+                ...(payload.billingStreet ? { billing_address: [(payload.billingStreet as string), [(payload.billingCity as string), (payload.billingState as string), (payload.billingZip as string)].filter(Boolean).join(", ")].filter(Boolean).join(", ") } : {}),
+                billing_email: applicantEmail || existingBiz.billing_email,
+              }
+          ),
+
           // Payment method & Stripe from onboarding
           ...(payload.paymentMethod ? { payment_method: payload.paymentMethod } : {}),
           ...(payload.stripeCustomerId ? { stripe_customer_id: payload.stripeCustomerId } : {}),
@@ -1332,6 +1344,28 @@ export default function OnboardingPage() {
           .from("partner_onboarding_submissions")
           .update({ status: "approved" })
           .eq("id", selected.id);
+
+        // Fetch bank/card display info from Stripe (non-blocking — don't fail the whole approve)
+        if (payload.stripePaymentMethodId) {
+          try {
+            const { data: { session } } = await supabaseBrowser.auth.getSession();
+            if (session?.access_token) {
+              await fetch("/api/stripe/business-payment-info", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                  businessId: claimBusinessId,
+                  paymentMethodId: payload.stripePaymentMethodId,
+                }),
+              });
+            }
+          } catch {
+            // Non-critical — admin can manually fetch later
+          }
+        }
 
         businessId = claimBusinessId;
       } else {
