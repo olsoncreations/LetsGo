@@ -661,6 +661,39 @@ export default function Media({ businessId, isPremium }: BusinessTabProps) {
           });
         }
 
+        // If no photos from business_media, fall back to config.images (e.g. Google Places)
+        if (mapped.filter(m => m.type === "photo").length === 0) {
+          const { data: bizRow } = await supabaseBrowser
+            .from("business")
+            .select("config")
+            .eq("id", businessId)
+            .maybeSingle();
+
+          const cfgImages = (bizRow?.config as Record<string, unknown>)?.images;
+          if (Array.isArray(cfgImages) && cfgImages.length > 0) {
+            for (let i = 0; i < cfgImages.length; i++) {
+              const imgUrl = String(cfgImages[i]);
+              if (!imgUrl) continue;
+              mapped.push({
+                id: `config-img-${i}`,
+                type: "photo" as MediaType,
+                url: imgUrl,
+                caption: `Photo ${i + 1}`,
+                description: "",
+                isMainPhoto: i === 0,
+                sortOrder: i,
+                focalX: 50,
+                focalY: 30,
+                saves: undefined,
+                likes: undefined,
+                bucket: "",
+                path: "",
+                adminStatus: "active" as const,
+              });
+            }
+          }
+        }
+
         if (!mounted) return;
         setMediaGallery(mapped);
       } catch (e) {

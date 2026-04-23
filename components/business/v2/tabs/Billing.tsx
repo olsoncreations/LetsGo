@@ -483,7 +483,7 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
     try {
       const { data, error } = await supabaseBrowser
         .from("business")
-        .select("config")
+        .select("config, payment_method, bank_name, account_type, routing_last4, account_last4, card_brand, card_last4")
         .eq("id", businessId)
         .maybeSingle();
 
@@ -491,21 +491,22 @@ export default function Billing({ businessId, isPremium }: BusinessTabProps) {
 
       const cfg = (data?.config ?? {}) as Record<string, any>;
 
-      // Set preferred payment type
-      setPaymentType(cfg.paymentMethod === "card" ? "card" : "bank");
+      // Set preferred payment type (check column first, then config)
+      const pm = data?.payment_method || cfg.paymentMethod;
+      setPaymentType(pm === "card" ? "card" : "bank");
 
-      // Always load both — they may both have data
+      // Always load both — check columns first, fall back to config
       setCardInfo({
-        brand: cfg.cardBrand || cfg.cardName || "",
-        last4: cfg.cardLast4 || "",
+        brand: data?.card_brand || cfg.cardBrand || cfg.cardName || "",
+        last4: data?.card_last4 || cfg.cardLast4 || "",
         expMonth: cfg.cardExpMonth || 0,
         expYear: cfg.cardExpYear || 0,
       });
       setBankInfo({
-        bankName: cfg.bankName || "",
-        accountType: cfg.accountType || "checking",
-        routingLast4: cfg.routingLast4 || "",
-        accountLast4: cfg.accountLast4 || "",
+        bankName: data?.bank_name || cfg.bankName || "",
+        accountType: data?.account_type || cfg.accountType || "checking",
+        routingLast4: data?.routing_last4 || cfg.routingLast4 || "",
+        accountLast4: data?.account_last4 || cfg.accountLast4 || "",
       });
 
       setPaymentLoaded(true);
@@ -754,14 +755,14 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
         { label: "Credit Card Fees", cents: paymentType === "card" ? Math.max(currentMonthBill.ccFeesCents, ccFeeEstimateCents) : 0, color: colors.warning },
         { label: "Adjustments", cents: totalAdjCents, color: totalAdjCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
       ]
-    : [
-        { label: isPremium ? "Premium Subscription" : "Basic (Pay-per-receipt)", cents: planCostCents, color: colors.primary },
+    : isPremium ? [
+        { label: "Premium Subscription", cents: planCostCents, color: colors.primary },
         { label: "Progressive Payouts", cents: progressivePayoutsCents, color: colors.accent },
         { label: "Advertising & Add-ons", cents: advertisingAddOnsCents, color: colors.secondary },
-        { label: "LetsGo Fees (10%)", cents: letsGoFeesCents, color: "#fb7185" },
         { label: `Credit Card Fees (${(ccFeeBps / 100).toFixed(1)}%)`, cents: ccFeeEstimateCents, color: colors.warning },
         { label: "Adjustments", cents: pendingAdjTotalCents, color: pendingAdjTotalCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
-      ];
+      ]
+    : [];
 
   return (
     <div>

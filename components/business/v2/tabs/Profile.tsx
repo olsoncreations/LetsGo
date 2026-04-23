@@ -415,12 +415,12 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
           cuisineType: asStr(row.category_main ?? "Other"),
           priceLevel: asStr(row.price_level ?? "$$"),
           ageRestriction: normalizeAgeRestriction(asStr(row.age_restriction ?? "all")),
-          repName: asStr(cfg.repName ?? cfg.rep_name ?? ""),
-          repTitle: asStr(cfg.repTitle ?? cfg.rep_title ?? cfg.role ?? ""),
-          repEmail: asStr(cfg.repEmail ?? cfg.rep_email ?? ""),
-          repPhone: asStr(cfg.repPhone ?? cfg.rep_phone ?? ""),
-          loginEmail: asStr(cfg.loginEmail ?? cfg.login_email ?? cfg.email ?? ""),
-          loginPhone: asStr(cfg.loginPhone ?? cfg.login_phone ?? cfg.phone ?? ""),
+          repName: asStr(cfg.repName ?? cfg.rep_name ?? row.rep_name ?? ""),
+          repTitle: asStr(cfg.repTitle ?? cfg.rep_title ?? cfg.role ?? row.rep_title ?? ""),
+          repEmail: asStr(cfg.repEmail ?? cfg.rep_email ?? row.rep_email ?? ""),
+          repPhone: asStr(cfg.repPhone ?? cfg.rep_phone ?? row.rep_phone ?? ""),
+          loginEmail: asStr(cfg.loginEmail ?? cfg.login_email ?? cfg.email ?? row.login_email ?? ""),
+          loginPhone: asStr(cfg.loginPhone ?? cfg.login_phone ?? cfg.phone ?? row.login_phone ?? ""),
         };
 
         // Fill login email from authenticated session if config doesn't have it
