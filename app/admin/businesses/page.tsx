@@ -583,7 +583,8 @@ function BusinessesPage() {
 
   // Derive status from is_active and status field
   function getStatus(b: Business): string {
-    if (b.billing_plan === "trial" || b.id.startsWith("seed-")) return "trial";
+    if (b.billing_plan === "trial") return "trial";
+    if (b.id.startsWith("seed-") && (!b.billing_plan || b.billing_plan === "trial")) return "trial";
     if (b.status) return b.status;
     return b.is_active ? "active" : "paused";
   }

@@ -1277,7 +1277,8 @@ export default function OnboardingPage() {
             ? { logo_url: (payload.businessLogoFile as Record<string, unknown>).url }
             : {}),
 
-          // Stripe from onboarding
+          // Payment method & Stripe from onboarding
+          ...(payload.paymentMethod ? { payment_method: payload.paymentMethod } : {}),
           ...(payload.stripeCustomerId ? { stripe_customer_id: payload.stripeCustomerId } : {}),
           ...(payload.stripePaymentMethodId ? { stripe_payment_method_id: payload.stripePaymentMethodId } : {}),
 
