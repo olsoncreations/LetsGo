@@ -756,7 +756,7 @@ const { data: rpcData, error: rpcErr } = await supabaseBrowser.rpc("get_invoice_
         { label: "Adjustments", cents: totalAdjCents, color: totalAdjCents < 0 ? colors.success : "rgba(255,255,255,0.6)" },
       ]
     : [
-        { label: isPremium ? "Premium Subscription" : "Basic (Pay-per-receipt)", cents: planCostCents, color: colors.primary },
+        { label: "Premium Subscription", cents: planCostCents, color: colors.primary },
         { label: "Progressive Payouts", cents: progressivePayoutsCents, color: colors.accent },
         { label: "Advertising & Add-ons", cents: advertisingAddOnsCents, color: colors.secondary },
         { label: "LetsGo Fees (10%)", cents: letsGoFeesCents, color: "#fb7185" },
