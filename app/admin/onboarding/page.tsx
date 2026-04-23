@@ -921,8 +921,118 @@ export default function OnboardingPage() {
   } | null>(null);
   const [verifyingAddress, setVerifyingAddress] = useState(false);
 
+  // ─── Link to Existing Business (admin-side claim) ───
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linkResults, setLinkResults] = useState<{ id: string; business_name: string; city: string; state: string; seeded_at: string | null; claim_code: string | null }[]>([]);
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [linkedBusiness, setLinkedBusiness] = useState<{ id: string; business_name: string; city: string; state: string } | null>(null);
+
   const selected = submissions.find((s) => s.id === selectedId) || null;
   const p = (selected?.payload || {}) as Record<string, unknown>;
+
+  // When selection changes, load linked business if claim_business_id exists in payload
+  useEffect(() => {
+    setLinkSearch("");
+    setLinkResults([]);
+    if (!selected) { setLinkedBusiness(null); return; }
+    const claimId = (selected.payload as Record<string, unknown>).claim_business_id as string | undefined;
+    if (!claimId) { setLinkedBusiness(null); return; }
+    (async () => {
+      const { data } = await supabaseBrowser
+        .from("business")
+        .select("id, business_name, city, state")
+        .eq("id", claimId)
+        .maybeSingle();
+      if (data) setLinkedBusiness(data);
+      else setLinkedBusiness(null);
+    })();
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Search for existing businesses to link
+  async function handleLinkSearch() {
+    if (!linkSearch.trim()) return;
+    setLinkSearching(true);
+    try {
+      const { data } = await supabaseBrowser
+        .from("business")
+        .select("id, business_name, city, state, seeded_at, claim_code")
+        .ilike("business_name", `%${linkSearch.trim()}%`)
+        .order("business_name")
+        .limit(10);
+      setLinkResults(data || []);
+    } catch {
+      setLinkResults([]);
+    } finally {
+      setLinkSearching(false);
+    }
+  }
+
+  // Link a business to this submission (saves to payload immediately)
+  async function handleLinkBusiness(biz: { id: string; business_name: string; city: string; state: string }) {
+    if (!selected) return;
+    setActionLoading(true);
+    try {
+      const updatedPayload = { ...selected.payload, claim_business_id: biz.id };
+      const { error } = await supabaseBrowser
+        .from("partner_onboarding_submissions")
+        .update({ payload: updatedPayload })
+        .eq("id", selected.id);
+      if (error) { alert("Error linking business: " + error.message); return; }
+      logAudit({
+        action: "link_seed_business",
+        tab: AUDIT_TABS.ONBOARDING,
+        subTab: "Claim Link",
+        targetType: "onboarding_submission",
+        targetId: selected.id,
+        entityName: selected.business_name || "",
+        fieldName: "claim_business_id",
+        oldValue: "",
+        newValue: biz.id,
+        details: `Linked onboarding submission to existing business "${biz.business_name}" (${biz.id})`,
+      });
+      setLinkedBusiness(biz);
+      setLinkSearch("");
+      setLinkResults([]);
+      await fetchSubmissions();
+    } catch (err) {
+      console.error("Link error:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Unlink a business from this submission
+  async function handleUnlinkBusiness() {
+    if (!selected) return;
+    setActionLoading(true);
+    try {
+      const payload = { ...selected.payload } as Record<string, unknown>;
+      delete payload.claim_business_id;
+      const { error } = await supabaseBrowser
+        .from("partner_onboarding_submissions")
+        .update({ payload })
+        .eq("id", selected.id);
+      if (error) { alert("Error unlinking: " + error.message); return; }
+      logAudit({
+        action: "unlink_seed_business",
+        tab: AUDIT_TABS.ONBOARDING,
+        subTab: "Claim Link",
+        targetType: "onboarding_submission",
+        targetId: selected.id,
+        entityName: selected.business_name || "",
+        fieldName: "claim_business_id",
+        oldValue: linkedBusiness?.id || "",
+        newValue: "",
+        details: `Unlinked onboarding submission from business "${linkedBusiness?.business_name}"`,
+      });
+      setLinkedBusiness(null);
+      await fetchSubmissions();
+    } catch (err) {
+      console.error("Unlink error:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   // DB-driven business type options
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
@@ -1062,25 +1172,59 @@ export default function OnboardingPage() {
       let businessId: string;
 
       if (claimBusinessId) {
-        // ─── CLAIM MODE: Update existing seeded business instead of creating new ───
+        // ─── CLAIM MODE: Update existing business — preserve existing data, only add what's missing ───
         const selectedPlan = (payload.plan as string) || "basic";
         const payoutPreset = (payload.payoutPreset as string) || "standard";
         const payoutBps = (payload.payoutBps as number[]) || [500, 750, 1000, 1250, 1500, 1750, 2000];
 
-        // Update the business record
+        // Fetch existing business to know what data is already there
+        const { data: existingBiz, error: fetchErr } = await supabaseBrowser
+          .from("business")
+          .select("*")
+          .eq("id", claimBusinessId)
+          .maybeSingle();
+
+        if (fetchErr || !existingBiz) {
+          alert("Error: Could not find linked business " + claimBusinessId);
+          return;
+        }
+
+        // Build update: only fill in fields that are currently empty/null on the seed record
+        // NEVER overwrite existing business name, phone, website, address, photos, etc.
+        const bizUpdate: Record<string, unknown> = {
+          // Always update: convert from trial to active plan
+          billing_plan: selectedPlan,
+          seeded_at: null,
+          claim_code: null,
+          trial_expires_at: null,
+          payout_preset: payoutPreset,
+          is_active: true,
+        };
+
+        // Contact info from applicant — only add if missing on seed
+        const applicantEmail = (payload.email as string) || selected.contact_email;
+        const applicantPhone = (payload.phone as string) || (payload.businessPhone as string);
+        const applicantFullName = payload.fullName as string;
+        const applicantRole = payload.role as string;
+
+        if (!existingBiz.contact_email && applicantEmail) bizUpdate.contact_email = applicantEmail;
+        if (!existingBiz.contact_phone && applicantPhone) bizUpdate.contact_phone = applicantPhone;
+        if (!existingBiz.rep_name && applicantFullName) bizUpdate.rep_name = applicantFullName;
+        if (!existingBiz.rep_email && applicantEmail) bizUpdate.rep_email = applicantEmail;
+        if (!existingBiz.rep_phone && applicantPhone) bizUpdate.rep_phone = applicantPhone;
+        if (!existingBiz.rep_title && applicantRole) bizUpdate.rep_title = applicantRole;
+        if (!existingBiz.login_email && applicantEmail) bizUpdate.login_email = applicantEmail;
+
+        // Only fill these if the seed has no data for them
+        if (!existingBiz.business_name && payload.businessName) bizUpdate.business_name = payload.businessName;
+        if (!existingBiz.public_business_name && (payload.publicBusinessName || payload.businessName)) {
+          bizUpdate.public_business_name = (payload.publicBusinessName as string) || (payload.businessName as string);
+        }
+        if (!existingBiz.website && !existingBiz.website_url && payload.website) bizUpdate.website = payload.website;
+
         const { error: bizErr } = await supabaseBrowser
           .from("business")
-          .update({
-            billing_plan: selectedPlan,
-            seeded_at: null,
-            claim_code: null,
-            trial_expires_at: null,
-            payout_preset: payoutPreset,
-            business_name: (payload.businessName as string) || undefined,
-            public_business_name: (payload.publicBusinessName as string) || (payload.businessName as string) || undefined,
-            contact_phone: (payload.businessPhone as string) || undefined,
-            website: (payload.website as string) || undefined,
-          })
+          .update(bizUpdate)
           .eq("id", claimBusinessId);
 
         if (bizErr) {
@@ -1088,7 +1232,7 @@ export default function OnboardingPage() {
           return;
         }
 
-        // Update payout tiers
+        // Update payout tiers — replace trial 0% tiers with real tiers from onboarding
         await supabaseBrowser
           .from("business_payout_tiers")
           .delete()
@@ -2379,15 +2523,18 @@ export default function OnboardingPage() {
                     ❌ Reject
                   </button>
                   <button
-                    onClick={() =>
+                    onClick={() => {
+                      const isLinked = !!(linkedBusiness || (p.claim_business_id));
                       setConfirmModal({
-                        title: "Approve & Publish?",
-                        message: `This will approve the business application and make "${selected.business_name || (p.publicBusinessName as string) || "this business"}" live on the platform.`,
-                        type: "info",
-                        confirmText: "Approve & Publish",
+                        title: isLinked ? "Approve & Link to Existing Business?" : "Approve & Publish?",
+                        message: isLinked
+                          ? `This will link the applicant as owner of "${linkedBusiness?.business_name || "the linked business"}" (${linkedBusiness?.id || p.claim_business_id}). Contact info and payout tiers will be updated. The existing business record will NOT be overwritten.`
+                          : `This will approve the business application and make "${selected.business_name || (p.publicBusinessName as string) || "this business"}" live on the platform.`,
+                        type: isLinked ? "warning" : "info",
+                        confirmText: isLinked ? "Approve & Link" : "Approve & Publish",
                         onConfirm: handleApprove,
-                      })
-                    }
+                      });
+                    }}
                     disabled={actionLoading}
                     style={{
                       padding: "10px 18px",
@@ -2471,6 +2618,128 @@ export default function OnboardingPage() {
             {/* Content */}
             <div style={{ flex: 1, overflowY: "auto", padding: 32 }}>
               <div style={{ maxWidth: 1100 }}>
+                {/* ─── Link to Existing Business ─── */}
+                {selected.status !== "approved" && (
+                  <div style={{ marginBottom: 28 }}>
+                    <SectionTitle icon="🔗">Link to Existing Business</SectionTitle>
+                    <Card title={linkedBusiness ? "Linked Business" : "Search & Link"}>
+                      {linkedBusiness ? (
+                        <div>
+                          <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "12px 16px", borderRadius: 8,
+                            background: "rgba(57,255,20,0.08)", border: "1px solid rgba(57,255,20,0.25)",
+                          }}>
+                            <div>
+                              <span style={{ fontWeight: 700, color: COLORS.neonGreen, fontSize: 14 }}>
+                                {linkedBusiness.business_name}
+                              </span>
+                              <span style={{ color: COLORS.textSecondary, fontSize: 12, marginLeft: 10 }}>
+                                {linkedBusiness.city}, {linkedBusiness.state}
+                              </span>
+                              <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 4, fontFamily: "monospace" }}>
+                                {linkedBusiness.id}
+                              </div>
+                            </div>
+                            <button
+                              onClick={handleUnlinkBusiness}
+                              disabled={actionLoading}
+                              style={{
+                                padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                background: "rgba(255,49,49,0.15)", border: "1px solid rgba(255,49,49,0.3)",
+                                color: COLORS.neonRed, cursor: "pointer",
+                              }}
+                            >
+                              Unlink
+                            </button>
+                          </div>
+                          <div style={{ fontSize: 11, color: COLORS.neonGreen, marginTop: 8 }}>
+                            When approved, this submission will update the linked business instead of creating a new one.
+                            The owner will be linked, contact info added, and payout tiers updated.
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 10 }}>
+                            If this business already exists in the system (e.g. seeded), search and link it here.
+                            Approving a linked submission updates the existing record instead of creating a duplicate.
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <input
+                              type="text"
+                              value={linkSearch}
+                              onChange={(e) => setLinkSearch(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleLinkSearch(); }}
+                              placeholder="Search by business name..."
+                              style={{
+                                flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 13,
+                                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                                color: "#fff", outline: "none",
+                              }}
+                            />
+                            <button
+                              onClick={handleLinkSearch}
+                              disabled={linkSearching || !linkSearch.trim()}
+                              style={{
+                                padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                background: "rgba(0,212,255,0.15)", border: "1px solid rgba(0,212,255,0.3)",
+                                color: COLORS.neonBlue, cursor: "pointer",
+                                opacity: linkSearching || !linkSearch.trim() ? 0.5 : 1,
+                              }}
+                            >
+                              {linkSearching ? "..." : "Search"}
+                            </button>
+                          </div>
+                          {linkResults.length > 0 && (
+                            <div style={{ marginTop: 10, maxHeight: 200, overflowY: "auto" }}>
+                              {linkResults.map((biz) => (
+                                <div
+                                  key={biz.id}
+                                  style={{
+                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                    padding: "8px 12px", borderRadius: 6, marginBottom: 4,
+                                    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                                  }}
+                                >
+                                  <div>
+                                    <span style={{ fontWeight: 600, fontSize: 13, color: "#fff" }}>{biz.business_name}</span>
+                                    <span style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 8 }}>
+                                      {biz.city}, {biz.state}
+                                    </span>
+                                    {biz.seeded_at && (
+                                      <span style={{
+                                        fontSize: 9, fontWeight: 700, marginLeft: 8, padding: "2px 6px", borderRadius: 4,
+                                        background: "rgba(255,255,0,0.12)", color: COLORS.neonYellow,
+                                        border: "1px solid rgba(255,255,0,0.25)",
+                                      }}>
+                                        SEEDED
+                                      </span>
+                                    )}
+                                    <div style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 2, fontFamily: "monospace" }}>
+                                      {biz.id}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleLinkBusiness(biz)}
+                                    disabled={actionLoading}
+                                    style={{
+                                      padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                      background: "rgba(57,255,20,0.12)", border: "1px solid rgba(57,255,20,0.3)",
+                                      color: COLORS.neonGreen, cursor: "pointer", whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    Link
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                )}
+
                 {/* Business Identity */}
                 <SectionTitle icon="🏢">Business Identity</SectionTitle>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>

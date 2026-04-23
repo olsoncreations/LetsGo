@@ -2015,11 +2015,21 @@ export function MediaGrid({ items, onPreview }: MediaGridProps) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
       {validItems.map((item, i) => {
-        const isVideo = item.url?.includes(".mp4") || item.name?.includes(".mp4");
+        const lowerUrl = (item.url || "").toLowerCase();
+        const lowerName = (item.name || "").toLowerCase();
+        const isVideo = lowerUrl.includes(".mp4") || lowerName.includes(".mp4");
+        const isPdf = lowerUrl.includes(".pdf") || lowerName.includes(".pdf");
+        const mediaType = isVideo ? "video" : isPdf ? "pdf" : "image";
         return (
           <div
             key={i}
-            onClick={() => onPreview?.({ url: item.url!, type: isVideo ? "video" : "image" })}
+            onClick={() => {
+              if (isPdf) {
+                window.open(item.url!, "_blank", "noopener,noreferrer");
+              } else {
+                onPreview?.({ url: item.url!, type: mediaType });
+              }
+            }}
             style={{
               cursor: "pointer",
               borderRadius: 12,
@@ -2044,6 +2054,23 @@ export function MediaGrid({ items, onPreview }: MediaGridProps) {
               >
                 <span style={{ fontSize: 40, color: COLORS.neonPink }}>▶</span>
                 <span style={{ fontSize: 10, color: COLORS.textSecondary, marginTop: 8 }}>Video</span>
+              </div>
+            ) : isPdf ? (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: COLORS.darkBg,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <span style={{ fontSize: 36 }}>📄</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: COLORS.neonOrange }}>PDF</span>
+                <span style={{ fontSize: 9, color: COLORS.textSecondary }}>Click to open</span>
               </div>
             ) : (
               <img
@@ -2127,6 +2154,12 @@ export function PreviewModal({ preview, onClose }: PreviewModalProps) {
             controls
             autoPlay
             style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: 16 }}
+          />
+        ) : preview.type === "pdf" ? (
+          <iframe
+            src={preview.url}
+            title="PDF Preview"
+            style={{ width: "80vw", height: "85vh", borderRadius: 16, border: "none", background: "#fff" }}
           />
         ) : (
           <img src={preview.url} alt="" style={{ maxWidth: "90vw", maxHeight: "85vh", borderRadius: 16 }} />
