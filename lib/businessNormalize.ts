@@ -382,7 +382,7 @@ export function normalizeToDiscoveryBusiness(
   const latitude = row.latitude ?? null;
   const longitude = row.longitude ?? null;
 
-  const isTrial = (row.billing_plan === "trial" && !!row.seeded_at) || row.id.startsWith("seed-");
+  const isTrial = row.billing_plan === "trial" && (!!row.seeded_at || row.id.startsWith("seed-"));
   const claimCode = row.claim_code || null;
 
   const chainId = row.chain_id || null;
