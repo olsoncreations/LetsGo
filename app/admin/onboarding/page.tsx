@@ -1172,12 +1172,12 @@ export default function OnboardingPage() {
       let businessId: string;
 
       if (claimBusinessId) {
-        // ─── CLAIM MODE: Update existing business — preserve existing data, only add what's missing ───
+        // ─── CLAIM MODE: Onboarding data is PRIMARY, seed extras (photos, geocode) are preserved ───
         const selectedPlan = (payload.plan as string) || "basic";
         const payoutPreset = (payload.payoutPreset as string) || "standard";
         const payoutBps = (payload.payoutBps as number[]) || [500, 750, 1000, 1250, 1500, 1750, 2000];
 
-        // Fetch existing business to know what data is already there
+        // Fetch existing seed to preserve its photos, geocode, and other seed-only data
         const { data: existingBiz, error: fetchErr } = await supabaseBrowser
           .from("business")
           .select("*")
@@ -1189,38 +1189,98 @@ export default function OnboardingPage() {
           return;
         }
 
-        // Build update: only fill in fields that are currently empty/null on the seed record
-        // NEVER overwrite existing business name, phone, website, address, photos, etc.
+        // Merge config: onboarding values overwrite, but KEEP seed's images (photos from Google)
+        const seedConfig = (existingBiz.config || {}) as Record<string, unknown>;
+        const mergedConfig: Record<string, unknown> = {
+          // Preserve seed-only data
+          images: seedConfig.images || [],
+          // Onboarding data takes priority for everything else
+          businessType: (payload.businessTypeTag as string) || (payload.businessType as string) || seedConfig.businessType,
+          priceLevel: (payload.priceLevel as string) || seedConfig.priceLevel,
+          payoutPreset,
+          tags: payload.selectedTags || seedConfig.tags || [],
+        };
+
+        // Build hours from onboarding payload
+        const hoursPayload = payload.hours as Record<string, { enabled: boolean; open: string; close: string }> | undefined;
+        const hoursUpdate: Record<string, string | null> = {};
+        if (hoursPayload) {
+          const dayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+          for (const day of dayKeys) {
+            const h = hoursPayload[day];
+            if (h?.enabled && h.open && h.close) {
+              hoursUpdate[`${day}_open`] = h.open.length === 5 ? `${h.open}:00` : h.open;
+              hoursUpdate[`${day}_close`] = h.close.length === 5 ? `${h.close}:00` : h.close;
+            } else {
+              hoursUpdate[`${day}_open`] = null;
+              hoursUpdate[`${day}_close`] = null;
+            }
+          }
+        }
+
+        // Onboarding data is the primary source — overwrite seed fields
+        const applicantEmail = (payload.email as string) || selected.contact_email;
+        const applicantPhone = (payload.phone as string);
+        const businessPhone = (payload.businessPhone as string);
+
         const bizUpdate: Record<string, unknown> = {
-          // Always update: convert from trial to active plan
+          // Status: convert from trial to active
           billing_plan: selectedPlan,
           seeded_at: null,
           claim_code: null,
           trial_expires_at: null,
-          payout_preset: payoutPreset,
           is_active: true,
+
+          // Business details from onboarding (primary source)
+          business_name: (payload.businessName as string) || existingBiz.business_name,
+          public_business_name: (payload.publicBusinessName as string) || (payload.businessName as string) || existingBiz.public_business_name,
+          category_main: (payload.businessType as string) || existingBiz.category_main,
+          age_restriction: (payload.ageRestriction as string) || existingBiz.age_restriction,
+          tags: (payload.selectedTags as string[]) || existingBiz.tags || [],
+          config: mergedConfig,
+          payout_preset: payoutPreset,
+          payout_tiers: payoutBps,
+
+          // Contact info from applicant
+          contact_email: applicantEmail || existingBiz.contact_email,
+          contact_phone: businessPhone || existingBiz.contact_phone,
+          customer_email: (payload.customerEmail as string) || existingBiz.customer_email,
+          login_email: applicantEmail || existingBiz.login_email,
+          rep_name: (payload.fullName as string) || existingBiz.rep_name,
+          rep_email: applicantEmail || existingBiz.rep_email,
+          rep_phone: applicantPhone || existingBiz.rep_phone,
+          rep_title: (payload.role as string) || existingBiz.rep_title,
+          verifier_name: (payload.verifierName as string) || existingBiz.verifier_name,
+          verifier_email: (payload.verifierEmail as string) || existingBiz.verifier_email,
+          verifier_phone: (payload.verifierPhone as string) || existingBiz.verifier_phone,
+
+          // Website from onboarding
+          website: (payload.website as string) || existingBiz.website,
+
+          // Address from onboarding (or keep seed's)
+          street_address: (payload.streetAddress as string) || existingBiz.street_address,
+          city: (payload.city as string) || existingBiz.city,
+          state: (payload.state as string) || existingBiz.state,
+          zip: (payload.zip as string) || existingBiz.zip,
+
+          // Marketing & auto-approval from onboarding
+          marketing_permissions: payload.marketingPermissions || existingBiz.marketing_permissions,
+          addons: payload.premiumAddons || existingBiz.addons,
+          auto_approval_enabled: payload.autoApprovalEnabled ?? existingBiz.auto_approval_enabled,
+          auto_approval_max: payload.autoApprovalMax ?? existingBiz.auto_approval_max,
+
+          // Logo from onboarding (if uploaded)
+          ...((payload.businessLogoFile as Record<string, unknown>)?.url
+            ? { logo_url: (payload.businessLogoFile as Record<string, unknown>).url }
+            : {}),
+
+          // Stripe from onboarding
+          ...(payload.stripeCustomerId ? { stripe_customer_id: payload.stripeCustomerId } : {}),
+          ...(payload.stripePaymentMethodId ? { stripe_payment_method_id: payload.stripePaymentMethodId } : {}),
+
+          // Hours from onboarding
+          ...hoursUpdate,
         };
-
-        // Contact info from applicant — only add if missing on seed
-        const applicantEmail = (payload.email as string) || selected.contact_email;
-        const applicantPhone = (payload.phone as string) || (payload.businessPhone as string);
-        const applicantFullName = payload.fullName as string;
-        const applicantRole = payload.role as string;
-
-        if (!existingBiz.contact_email && applicantEmail) bizUpdate.contact_email = applicantEmail;
-        if (!existingBiz.contact_phone && applicantPhone) bizUpdate.contact_phone = applicantPhone;
-        if (!existingBiz.rep_name && applicantFullName) bizUpdate.rep_name = applicantFullName;
-        if (!existingBiz.rep_email && applicantEmail) bizUpdate.rep_email = applicantEmail;
-        if (!existingBiz.rep_phone && applicantPhone) bizUpdate.rep_phone = applicantPhone;
-        if (!existingBiz.rep_title && applicantRole) bizUpdate.rep_title = applicantRole;
-        if (!existingBiz.login_email && applicantEmail) bizUpdate.login_email = applicantEmail;
-
-        // Only fill these if the seed has no data for them
-        if (!existingBiz.business_name && payload.businessName) bizUpdate.business_name = payload.businessName;
-        if (!existingBiz.public_business_name && (payload.publicBusinessName || payload.businessName)) {
-          bizUpdate.public_business_name = (payload.publicBusinessName as string) || (payload.businessName as string);
-        }
-        if (!existingBiz.website && !existingBiz.website_url && payload.website) bizUpdate.website = payload.website;
 
         const { error: bizErr } = await supabaseBrowser
           .from("business")
