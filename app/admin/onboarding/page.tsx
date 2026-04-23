@@ -1198,7 +1198,12 @@ export default function OnboardingPage() {
           businessType: (payload.businessTypeTag as string) || (payload.businessType as string) || seedConfig.businessType,
           priceLevel: (payload.priceLevel as string) || seedConfig.priceLevel,
           payoutPreset,
-          tags: payload.selectedTags || seedConfig.tags || [],
+          tags: (() => {
+            const selected = (payload.selectedTags as string[]) || (seedConfig.tags as string[]) || [];
+            const typeTag = (payload.businessTypeTag as string) || "";
+            if (typeTag && !selected.includes(typeTag)) return [...selected, typeTag];
+            return selected;
+          })(),
         };
 
         // Build hours from onboarding payload
@@ -1239,7 +1244,13 @@ export default function OnboardingPage() {
           business_type: (payload.businessTypeTag as string) || (payload.businessType as string) || existingBiz.business_type,
           price_level: (payload.priceLevel as string) || existingBiz.price_level,
           age_restriction: (payload.ageRestriction as string) || existingBiz.age_restriction,
-          tags: (payload.selectedTags as string[]) || existingBiz.tags || [],
+          tags: (() => {
+            const selected = (payload.selectedTags as string[]) || existingBiz.tags || [];
+            const typeTag = (payload.businessTypeTag as string) || "";
+            // Ensure the business type tag (e.g. "Entertainment") is in the tags array for category filtering
+            if (typeTag && !selected.includes(typeTag)) return [...selected, typeTag];
+            return selected;
+          })(),
           config: mergedConfig,
           payout_preset: payoutPreset,
           payout_tiers: payoutBps,
