@@ -139,6 +139,14 @@ function ChainsPage() {
     onConfirm: () => void;
   } | null>(null);
 
+  // Bulk link state
+  const [showBulkLink, setShowBulkLink] = useState(false);
+  const [bulkSearch, setBulkSearch] = useState("");
+  const [bulkResults, setBulkResults] = useState<{ id: string; business_name: string | null; street_address: string | null; city: string | null; state: string | null; chain_id: string | null }[]>([]);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkSearching, setBulkSearching] = useState(false);
+  const [bulkLinking, setBulkLinking] = useState(false);
+
   // -- Session / user id ---
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -297,6 +305,71 @@ function ChainsPage() {
     setIsEditing(false);
     setEditedChain({});
     await loadChains();
+  }
+
+  // -- Bulk link: search for unlinked businesses ---
+  async function bulkSearchBusinesses() {
+    if (!bulkSearch.trim()) return;
+    setBulkSearching(true);
+    const { data } = await supabaseBrowser
+      .from("business")
+      .select("id, business_name, street_address, city, state, chain_id")
+      .ilike("business_name", `%${bulkSearch.trim()}%`)
+      .order("business_name")
+      .limit(100);
+    setBulkResults(data || []);
+    setBulkSearching(false);
+  }
+
+  // -- Bulk link: assign selected businesses to this chain ---
+  async function bulkLinkBusinesses() {
+    if (!selectedId || bulkSelected.size === 0) return;
+    setBulkLinking(true);
+
+    // Get current max store number
+    const existingNumbers = locations.map((l) => parseInt(l.store_number || "0")).filter((n) => !isNaN(n));
+    let nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+
+    for (const bizId of bulkSelected) {
+      await supabaseBrowser
+        .from("business")
+        .update({ chain_id: selectedId, store_number: String(nextNumber) })
+        .eq("id", bizId);
+      nextNumber++;
+    }
+
+    // Recount and update chain
+    const { count } = await supabaseBrowser
+      .from("business")
+      .select("id", { count: "exact", head: true })
+      .eq("chain_id", selectedId);
+
+    const locationCount = count ?? 0;
+    let pricingTier = "local";
+    let premiumRateCents = 40000;
+    for (const t of TIER_THRESHOLDS) {
+      if (locationCount <= t.max) {
+        pricingTier = t.tier;
+        premiumRateCents = t.rateCents;
+        break;
+      }
+    }
+
+    await supabaseBrowser
+      .from("chains")
+      .update({ location_count: locationCount, pricing_tier: pricingTier, premium_rate_cents: premiumRateCents })
+      .eq("id", selectedId);
+
+    if (userId) {
+      logAudit({ action: "bulk_link_businesses", tab: "Chains", targetType: "chain", targetId: selectedId, details: `Bulk linked ${bulkSelected.size} businesses` });
+    }
+
+    setBulkSelected(new Set());
+    setBulkResults([]);
+    setBulkSearch("");
+    setShowBulkLink(false);
+    setBulkLinking(false);
+    await Promise.all([loadChains(), loadChainDetail(selectedId)]);
   }
 
   // -- Review link request ---
@@ -576,7 +649,15 @@ function ChainsPage() {
         </div>
 
         {/* Locations */}
-        <SectionTitle icon="📍">Locations ({locations.length})</SectionTitle>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <SectionTitle icon="📍">Locations ({locations.length})</SectionTitle>
+          <button
+            onClick={() => { setShowBulkLink(true); setBulkSearch(""); setBulkResults([]); setBulkSelected(new Set()); }}
+            style={{ padding: "8px 16px", background: COLORS.gradient3, border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+          >
+            + Link Businesses
+          </button>
+        </div>
         <Card>
           {locations.length === 0 ? (
             <div style={{ color: COLORS.textSecondary, textAlign: "center", padding: 32 }}>
@@ -626,9 +707,10 @@ function ChainsPage() {
                           onClick={() => {
                             setConfirmModal({
                               title: "Unlink Business",
-                              message: `Remove "${loc.public_business_name || loc.business_name}" (Store #${loc.store_number}) from this chain? The business will become independent.`,
+                              message: `Remove "${loc.street_address || loc.public_business_name || loc.business_name}" (Store #${loc.store_number}) from ${c.brand_name}? This business will become independent. Type the store number to confirm.`,
                               type: "danger",
                               confirmText: "Unlink",
+                              requireText: loc.store_number || "",
                               onConfirm: () => { unlinkBusiness(loc.id, loc.business_name || ""); setConfirmModal(null); },
                             });
                           }}
@@ -673,6 +755,123 @@ function ChainsPage() {
             </div>
           </Card>
         </div>
+
+        {/* Bulk Link Modal */}
+        {showBulkLink && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowBulkLink(false); }}
+          >
+            <div style={{ background: COLORS.cardBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 16, padding: 32, width: 640, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, color: COLORS.textPrimary }}>
+                Link Businesses to {c.brand_name}
+              </h2>
+              <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
+                Search for businesses by name, select the ones that belong to this chain, and link them all at once. Store numbers are auto-assigned.
+              </p>
+
+              {/* Search */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <input
+                  type="text"
+                  placeholder="Search business name..."
+                  value={bulkSearch}
+                  onChange={(e) => setBulkSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") bulkSearchBusinesses(); }}
+                  style={{ flex: 1, padding: "10px 14px", background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: COLORS.textPrimary, fontSize: 14, outline: "none" }}
+                />
+                <button
+                  onClick={bulkSearchBusinesses}
+                  disabled={bulkSearching}
+                  style={{ padding: "10px 20px", background: COLORS.neonPurple, border: "none", borderRadius: 8, color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+                >
+                  {bulkSearching ? "..." : "Search"}
+                </button>
+              </div>
+
+              {/* Results */}
+              <div style={{ flex: 1, overflowY: "auto", marginBottom: 16 }}>
+                {bulkResults.length === 0 && !bulkSearching && (
+                  <div style={{ textAlign: "center", padding: 32, color: COLORS.textSecondary, fontSize: 13 }}>
+                    {bulkSearch ? "No businesses found" : "Enter a business name to search"}
+                  </div>
+                )}
+                {bulkResults.map((biz) => {
+                  const isLinked = !!biz.chain_id;
+                  const isLinkedHere = biz.chain_id === selectedId;
+                  const isChecked = bulkSelected.has(biz.id);
+
+                  return (
+                    <label
+                      key={biz.id}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12, padding: "10px 12px",
+                        borderBottom: `1px solid ${COLORS.cardBorder}20`,
+                        cursor: isLinked ? "not-allowed" : "pointer",
+                        opacity: isLinked ? 0.5 : 1,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={isLinked}
+                        onChange={() => {
+                          setBulkSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(biz.id)) next.delete(biz.id);
+                            else next.add(biz.id);
+                            return next;
+                          });
+                        }}
+                        style={{ accentColor: COLORS.neonPurple, flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
+                          {biz.business_name || "Unnamed"}
+                        </div>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                          {biz.street_address || "No address"} &bull; {[biz.city, biz.state].filter(Boolean).join(", ")}
+                        </div>
+                      </div>
+                      {isLinkedHere && (
+                        <span style={{ fontSize: 11, color: COLORS.neonGreen, fontWeight: 600 }}>Already linked</span>
+                      )}
+                      {isLinked && !isLinkedHere && (
+                        <span style={{ fontSize: 11, color: COLORS.neonYellow, fontWeight: 600 }}>In another chain</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                  {bulkSelected.size > 0 ? `${bulkSelected.size} selected` : ""}
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => setShowBulkLink(false)}
+                    style={{ padding: "10px 20px", background: COLORS.cardBg, border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, color: COLORS.textPrimary, cursor: "pointer", fontSize: 13 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={bulkLinkBusinesses}
+                    disabled={bulkSelected.size === 0 || bulkLinking}
+                    style={{
+                      padding: "10px 20px", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: bulkSelected.size > 0 ? "pointer" : "not-allowed",
+                      background: bulkSelected.size > 0 ? COLORS.gradient3 : COLORS.cardBg,
+                      color: bulkSelected.size > 0 ? "#fff" : COLORS.textSecondary,
+                    }}
+                  >
+                    {bulkLinking ? "Linking..." : `Link ${bulkSelected.size} Business${bulkSelected.size !== 1 ? "es" : ""}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {confirmModal && (
           <ConfirmModal
