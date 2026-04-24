@@ -53,7 +53,7 @@ export default function SmsConsentPage() {
           <ul style={{ paddingLeft: 20, marginBottom: 24 }}>
             <li style={{ marginBottom: 12 }}>The sending user explicitly chooses which contacts to invite. No messages are sent automatically.</li>
             <li style={{ marginBottom: 12 }}>Before sending, the user sees a confirmation screen showing exactly who will receive a text.</li>
-            <li style={{ marginBottom: 12 }}>Before sending, the user must check a consent checkbox that reads: <em style={{ color: "#fff" }}>&ldquo;I agree to send a one-time SMS invite to the selected contacts. Recipients can reply STOP to opt out. Msg &amp; data rates may apply. By sending, I agree to the Terms of Service and Privacy Policy.&rdquo;</em></li>
+            <li style={{ marginBottom: 12 }}>Before sending, the user must check a consent checkbox that reads: <em style={{ color: "#fff" }}>&ldquo;I agree to send a one-time SMS invite to the selected contacts. Message frequency: one message per contact. No recurring messages. Recipients can reply STOP to opt out or HELP for help. Msg &amp; data rates may apply. By sending, I agree to the Terms of Service and Privacy Policy.&rdquo;</em></li>
             <li style={{ marginBottom: 12 }}>The &ldquo;Send Invites&rdquo; button is disabled until the checkbox is checked.</li>
           </ul>
 
