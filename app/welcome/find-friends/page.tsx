@@ -756,6 +756,7 @@ export default function FindFriendsPage() {
                   />
                   <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
                     I agree to send a one-time SMS invite to the selected contacts.
+                    Message frequency: one message per contact. No recurring messages.
                     Recipients can reply STOP to opt out or HELP for help. Msg &amp; data rates may apply.
                     By sending, I agree to the{" "}
                     <a href="/terms" target="_blank" style={{ color: PINK, textDecoration: "underline" }}>Terms of Service</a>
