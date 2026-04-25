@@ -10,6 +10,8 @@ import { ModeDiscoveryAnim, ModeDateNightAnim, Mode531Anim, ModeGroupVoteAnim, M
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import OpportunityCTA from "@/components/OpportunityCTA";
+import RecruitmentSpotlightCard from "@/components/RecruitmentSpotlightCard";
+import { isChallengeLive } from "@/lib/recruiterChallenge";
 
 // ============================================================================
 // Mode definitions
@@ -1000,6 +1002,9 @@ export default function HomePage() {
           >
             <MarqueeText text="GO. PLAY. EAT. GET PAID TO LIVE YOUR BEST LIFE." speed={25} />
           </div>
+
+          {/* ========== RECRUITMENT CHALLENGE SECTION ========== */}
+          {isChallengeLive() && <RecruitmentSpotlightCard />}
 
           {/* ========== PRIORITY ADS / SPOTLIGHT SECTION ========== */}
           <div
