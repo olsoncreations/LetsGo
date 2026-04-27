@@ -16,6 +16,7 @@ import { loadFilterPreferences } from "@/lib/filterPreferences";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { CategoryGridAnim, FilterAnim, FriendSelectAnim, PickFiveAnim, MiniGamesAnim, FunnelGameAnim, PickWinnerAnim, CelebrationAnim, GameHistoryAnim } from "@/components/TourIllustrations";
+import { autolink } from "@/lib/autolink";
 
 // ═══════════════════════════════════════════════════
 // LETSGO 5v3v1 GAME
@@ -2941,7 +2942,7 @@ function ResultStep({ business, friend, onPlayAgain, visitThresholds = DEFAULT_V
 
               {business.slogan && (
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5, marginBottom: 14, fontStyle: "italic" }}>
-                  &ldquo;{business.slogan}&rdquo;
+                  &ldquo;{autolink(business.slogan)}&rdquo;
                 </div>
               )}
 

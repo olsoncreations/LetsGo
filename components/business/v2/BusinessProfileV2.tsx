@@ -341,9 +341,16 @@ export default function BusinessProfileV2({ businessId }: BusinessProfileV2Props
     };
 
     // Call server-side API to bypass RLS
+    const { data: { session } } = await supabaseBrowser.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error("Your session has expired. Please sign out and sign back in, then try again.");
+    }
     const res = await fetch(`/api/businesses/${businessId}/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify(payload),
     });
 

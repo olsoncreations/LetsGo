@@ -13,6 +13,7 @@ import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, 
 import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import { loadFilterPreferences } from "@/lib/filterPreferences";
+import { autolink } from "@/lib/autolink";
 import {
   type BusinessRow, type MediaRow, type DiscoveryImage, type DiscoveryBusiness,
   buildMediaUrl, getBusinessGradient, getBusinessEmoji, formatBusinessType,
@@ -928,7 +929,7 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
       <div style={{ padding: "90px 20px 40px", maxWidth: 480, margin: "0 auto" }}>
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 32, fontWeight: 900, color: "#fff", margin: 0, lineHeight: 1.1, fontFamily: "'Dela Gothic One', sans-serif", letterSpacing: -0.5 }}>{biz.name}</h1>
-          <p style={{ fontSize: 15, color: COLORS.textSecondary, marginTop: 10, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}>&ldquo;{biz.slogan}&rdquo;</p>
+          <p style={{ fontSize: 15, color: COLORS.textSecondary, marginTop: 10, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}>&ldquo;{autolink(biz.slogan)}&rdquo;</p>
         </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>

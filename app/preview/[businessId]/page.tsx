@@ -9,6 +9,7 @@ import {
   normalizeToDiscoveryBusiness,
 } from "@/lib/businessNormalize";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
+import { autolink } from "@/lib/autolink";
 
 // ═══════════════════════════════════════════════════
 // PREVIEW PAGE — mirrors Discovery swipe card for a single business
@@ -155,7 +156,7 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 32, fontWeight: 900, color: "#fff", margin: 0, lineHeight: 1.1, fontFamily: "'Dela Gothic One', sans-serif", letterSpacing: -0.5 }}>{biz.name}</h1>
           {biz.slogan && (
-            <p style={{ fontSize: 15, color: COLORS.textSecondary, marginTop: 10, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}>&ldquo;{biz.slogan}&rdquo;</p>
+            <p style={{ fontSize: 15, color: COLORS.textSecondary, marginTop: 10, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}>&ldquo;{autolink(biz.slogan)}&rdquo;</p>
           )}
         </div>
 
