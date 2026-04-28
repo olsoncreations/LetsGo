@@ -58,6 +58,34 @@ export default function SmsConsentPage() {
           </ul>
 
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 16 }}>
+            Consent Checkbox Screenshot
+          </h2>
+          <p style={{ marginBottom: 16, color: "rgba(255,255,255,0.65)" }}>
+            Below is a screenshot of the actual opt-in consent checkbox as it appears in the LetsGo app. The checkbox is unchecked by default and the &ldquo;Send Invites&rdquo; button is disabled until the user manually checks it.
+          </p>
+          <div style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 12,
+            padding: 8,
+            marginBottom: 24,
+            textAlign: "center",
+          }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Twilio/sms-consent-screenshot.jpg"
+              alt="LetsGo SMS consent checkbox — unchecked by default"
+              style={{
+                maxWidth: "100%",
+                height: "auto",
+                borderRadius: 8,
+                display: "block",
+                margin: "0 auto",
+              }}
+            />
+          </div>
+
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 16 }}>
             Message Details
           </h2>
           <ul style={{ paddingLeft: 20, marginBottom: 24 }}>
