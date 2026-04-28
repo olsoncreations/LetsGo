@@ -80,7 +80,7 @@ export default function SmsConsentPage() {
             fontStyle: "italic",
             marginBottom: 24,
           }}>
-            &ldquo;Chris Olson invited you to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: https://www.useletsgo.com/welcome Reply STOP to opt out or HELP for help. Msg &amp; data rates may apply.&rdquo;
+            &ldquo;Alex Morgan invited you to join LetsGo — discover restaurants, earn rewards, and play games with friends! Sign up here: https://www.useletsgo.com/welcome Reply STOP to opt out or HELP for help. Msg &amp; data rates may apply.&rdquo;
           </div>
 
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 16 }}>
@@ -89,6 +89,7 @@ export default function SmsConsentPage() {
           <ul style={{ paddingLeft: 20 }}>
             <li style={{ marginBottom: 8 }}><a href="/privacy" style={{ color: "#FF2D78", textDecoration: "underline" }}>Privacy Policy</a></li>
             <li style={{ marginBottom: 8 }}><a href="/terms" style={{ color: "#FF2D78", textDecoration: "underline" }}>Terms of Service</a></li>
+            <li style={{ marginBottom: 8 }}><a href="/Twilio/sms-consent-screenshot.jpg" target="_blank" rel="noopener noreferrer" style={{ color: "#FF2D78", textDecoration: "underline" }}>Consent Checkbox Screenshot</a></li>
           </ul>
         </div>
 
