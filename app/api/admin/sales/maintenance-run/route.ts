@@ -128,14 +128,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // place_id → business row (with existing tags + blurb)
-    const businessByPlace = new Map<string, { id: string; existingTags: string[]; blurb: string | null }>();
+    // place_id → business row (with existing tags + blurb + name for the
+    // classifier name fallback, used when Google's primaryType is generic)
+    const businessByPlace = new Map<string, { id: string; name: string; existingTags: string[]; blurb: string | null }>();
     for (const biz of eligibleBusinesses) {
       const key = `${biz.business_name}||${biz.zip}`;
       const placeId = placeIdByBizKey.get(key);
       if (placeId) {
         businessByPlace.set(placeId, {
           id: biz.id as string,
+          name: ((biz.public_business_name as string | null) || (biz.business_name as string | null) || "") ?? "",
           existingTags: Array.isArray(biz.tags) ? (biz.tags as string[]) : [],
           blurb: (biz.blurb as string | null) ?? null,
         });
@@ -266,14 +268,15 @@ export async function POST(req: NextRequest) {
           outdoorSeating: (detailsData.outdoorSeating as boolean | null) ?? null,
           allowsDogs: (detailsData.allowsDogs as boolean | null) ?? null,
           editorialSummary: (detailsData.editorialSummary as { text?: string | null } | null) ?? null,
-          // We don't have the business_name handy here; the bulk-seed run that
-          // created this business already had the chance to do name extraction.
-          businessName: null,
+          // Pass the business name so cuisine + subtype name fallbacks can
+          // catch places where Google's primaryType is generic ("store" etc.)
+          businessName: biz.name,
         };
 
-        const newSubtype = googleClassInput
-          ? mapBusinessSubtype(googleClassInput)
-          : (biz.existingTags[0] || "Activity");
+        // Run the classifier with name fallback. The classifier returns
+        // "Activity" only when neither type nor name matches — so this
+        // covers SalonCentric and similar misclassifications.
+        const newSubtype = mapBusinessSubtype(googleClassInput || "", biz.name);
         const oldSubtype = biz.existingTags[0] || "";
         result.subtypeBefore = oldSubtype;
         result.subtypeAfter = newSubtype;
@@ -289,12 +292,16 @@ export async function POST(req: NextRequest) {
           mergedTags.length !== biz.existingTags.length ||
           mergedTags.some((t, i) => biz.existingTags[i]?.toLowerCase() !== t.toLowerCase());
 
-        const newCategory = googleClassInput ? mapBusinessTypeToCategory(googleClassInput) : null;
+        const newCategory = mapBusinessTypeToCategory(googleClassInput || "", biz.name);
         const subtypeChanged = newSubtype !== oldSubtype;
+        // Only write the category when subtype is non-default — the mapper
+        // falls back to "activity" for unmatched, which would clobber any
+        // existing owner-curated category if we wrote it unconditionally.
+        const subtypeIsConfident = newSubtype !== "Activity";
 
         const updates: Record<string, unknown> = {};
         if (tagsChanged) updates.tags = mergedTags;
-        if (newCategory && subtypeChanged) {
+        if (subtypeChanged && subtypeIsConfident) {
           updates.category_main = newCategory;
           updates.business_type = newCategory;
         }

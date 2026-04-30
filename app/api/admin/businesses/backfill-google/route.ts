@@ -183,7 +183,9 @@ export async function POST(req: NextRequest) {
       // catches misclassifications from older seeds that pre-date newer
       // mappings (e.g. "wedding venue" / "zoo" / "axe throwing").
       const googleClassInput = pickGoogleClassificationInput(placeForTags.primaryType, placeForTags.types);
-      const newSubtype = googleClassInput ? mapBusinessSubtype(googleClassInput) : (existingTags[0] || "Activity");
+      // Pass businessName so the name fallback catches places where Google's
+      // primaryType is generic (e.g. "store" for SalonCentric).
+      const newSubtype = mapBusinessSubtype(googleClassInput || "", businessName);
       const oldSubtype = existingTags[0] || "";
       const subtypeChanged = newSubtype !== oldSubtype;
 
@@ -202,12 +204,17 @@ export async function POST(req: NextRequest) {
         mergedTags.length !== existingTags.length ||
         mergedTags.some((t, i) => existingTags[i]?.toLowerCase() !== t.toLowerCase());
 
-      // Compute new category_main / business_type alongside subtype
-      const newCategory = googleClassInput ? mapBusinessTypeToCategory(googleClassInput) : null;
-      // Skip category update if Google didn't help — don't overwrite with junk
+      // Compute new category_main / business_type alongside subtype. Run the
+      // mapper even when googleClassInput is empty so the name fallback can
+      // still classify (e.g. SalonCentric → salon_beauty by name). Only write
+      // the category if the subtype is non-default — the mapper's fallback is
+      // "activity", so writing it when nothing classified would clobber any
+      // existing owner-curated category.
+      const newCategory = mapBusinessTypeToCategory(googleClassInput || "", businessName);
+      const subtypeIsConfident = newSubtype !== "Activity";
       const updates: Record<string, unknown> = {};
       if (tagsChanged) updates.tags = mergedTags;
-      if (newCategory && subtypeChanged) {
+      if (subtypeChanged && subtypeIsConfident) {
         updates.category_main = newCategory;
         updates.business_type = newCategory;
       }

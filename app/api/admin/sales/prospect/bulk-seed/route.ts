@@ -207,13 +207,15 @@ export async function POST(req: NextRequest) {
 
         // Config
         const googleType = lead.business_type || "Restaurant";
-        const subtype = mapBusinessSubtype(googleType);
+        const leadName = lead.business_name || "";
+        const subtype = mapBusinessSubtype(googleType, leadName);
         // Merge subtype with everything we extracted from Google (cuisine, dietary,
         // Extras). Subtype goes first so `tags[0]` stays the primary category that
         // legacy discovery filters keyed off of.
         const seededTags = mergeTags([subtype], extractedTags);
+        const resolvedCategory = mapBusinessTypeToCategory(googleType, leadName);
         const config: Record<string, unknown> = {
-          businessType: mapBusinessTypeToCategory(googleType),
+          businessType: resolvedCategory,
           googleBusinessType: googleType,
           subtype,
           priceLevel,
@@ -244,8 +246,8 @@ export async function POST(req: NextRequest) {
             phone_number: lead.phone || "",
             website: lead.website || "",
             website_url: lead.website || "",
-            category_main: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
-            business_type: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
+            category_main: resolvedCategory,
+            business_type: resolvedCategory,
             config,
             tags: seededTags,
             ...(editorialSummary ? { blurb: editorialSummary } : {}),

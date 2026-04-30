@@ -8,6 +8,7 @@ import {
   mergeTags,
   type GooglePlaceForTags,
 } from "@/lib/googlePlacesMapper";
+import { mapBusinessTypeToCategory } from "@/lib/businessClassify";
 
 // Verify caller is authenticated staff
 async function requireStaff(req: NextRequest): Promise<{ userId: string } | Response> {
@@ -194,8 +195,11 @@ export async function POST(req: NextRequest) {
 
     // 5. Build config JSONB. Subtype is the broad category (e.g. "Restaurant");
     // mergeTags layers in cuisine/dietary/Extras from the Google extraction so
-    // the discovery filters work on the new business right away.
-    const subtypeCategory = mapBusinessTypeToCategory(lead.business_type || "Restaurant");
+    // the discovery filters work on the new business right away. Pass the
+    // business name so the classifier's name fallback can rescue places where
+    // Google's primaryType is generic ("store" / "point_of_interest").
+    const leadName = lead.business_name || "";
+    const subtypeCategory = mapBusinessTypeToCategory(lead.business_type || "Restaurant", leadName);
     const seededTags = mergeTags([subtypeCategory], extractedTags);
     const config: Record<string, unknown> = {
       businessType: subtypeCategory,
@@ -270,7 +274,7 @@ export async function POST(req: NextRequest) {
         phone_number: lead.phone || "",
         website: lead.website || "",
         website_url: lead.website || "",
-        category_main: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
+        category_main: subtypeCategory,
         config,
         tags: seededTags,
         ...(editorialSummary ? { blurb: editorialSummary } : {}),
@@ -504,12 +508,3 @@ function parseAddress(fullAddress: string): {
   return { street: fullAddress, city: "", state: "", zip: "" };
 }
 
-function mapBusinessTypeToCategory(googleType: string): string {
-  const t = googleType.toLowerCase();
-  if (t.includes("restaurant") || t.includes("food") || t.includes("diner")) return "restaurant_bar";
-  if (t.includes("bar") || t.includes("pub") || t.includes("brewery") || t.includes("lounge") || t.includes("nightclub") || t.includes("winery")) return "restaurant_bar";
-  if (t.includes("coffee") || t.includes("cafe") || t.includes("bakery") || t.includes("ice cream") || t.includes("juice") || t.includes("deli")) return "restaurant_bar";
-  if (t.includes("salon") || t.includes("beauty") || t.includes("spa") || t.includes("barber") || t.includes("nail") || t.includes("yoga")) return "salon_beauty";
-  if (t.includes("gym") || t.includes("fitness")) return "activity";
-  return "activity";
-}
