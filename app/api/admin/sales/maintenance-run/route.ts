@@ -263,7 +263,6 @@ export async function POST(req: NextRequest) {
           primaryType,
           types,
           servesVegetarianFood: (detailsData.servesVegetarianFood as boolean | null) ?? null,
-          servesVeganFood: (detailsData.servesVeganFood as boolean | null) ?? null,
           outdoorSeating: (detailsData.outdoorSeating as boolean | null) ?? null,
           allowsDogs: (detailsData.allowsDogs as boolean | null) ?? null,
           editorialSummary: (detailsData.editorialSummary as { text?: string | null } | null) ?? null,

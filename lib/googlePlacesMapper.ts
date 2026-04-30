@@ -13,7 +13,6 @@ export interface GooglePlaceForTags {
   primaryType?: string | null;
   types?: string[] | null;
   servesVegetarianFood?: boolean | null;
-  servesVeganFood?: boolean | null;
   outdoorSeating?: boolean | null;
   allowsDogs?: boolean | null;
   editorialSummary?: { text?: string | null } | null;
@@ -140,7 +139,9 @@ export function cuisineFromPlace(place: GooglePlaceForTags): string | null {
 export function dietaryTagsFromPlace(place: GooglePlaceForTags): string[] {
   const out = new Set<string>();
   if (place.servesVegetarianFood === true) out.add("Vegetarian");
-  if (place.servesVeganFood === true) out.add("Vegan");
+  // Note: Google Places (New) has servesVegetarianFood but no servesVeganFood
+  // field. Vegan signal only comes from primaryType (vegan_restaurant) or
+  // types[]. Owner can add Vegan tag manually via business profile editor.
   if (place.primaryType && PRIMARY_TYPE_TO_DIETARY[place.primaryType]) {
     out.add(PRIMARY_TYPE_TO_DIETARY[place.primaryType]);
   }
@@ -192,7 +193,6 @@ export function extractTagsFromPlace(place: GooglePlaceForTags): {
 export const TAG_EXTRACTION_FIELD_MASK = [
   "primaryType",
   "servesVegetarianFood",
-  "servesVeganFood",
   "outdoorSeating",
   "allowsDogs",
   "editorialSummary",

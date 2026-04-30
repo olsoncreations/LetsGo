@@ -171,7 +171,6 @@ export async function POST(req: NextRequest) {
         primaryType: (detailsData.primaryType as string | null) ?? null,
         types: Array.isArray(detailsData.types) ? (detailsData.types as string[]) : null,
         servesVegetarianFood: (detailsData.servesVegetarianFood as boolean | null) ?? null,
-        servesVeganFood: (detailsData.servesVeganFood as boolean | null) ?? null,
         outdoorSeating: (detailsData.outdoorSeating as boolean | null) ?? null,
         allowsDogs: (detailsData.allowsDogs as boolean | null) ?? null,
         editorialSummary: (detailsData.editorialSummary as { text?: string | null } | null) ?? null,

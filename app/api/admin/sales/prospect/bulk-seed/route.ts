@@ -145,7 +145,6 @@ export async function POST(req: NextRequest) {
               primaryType: primaryTypeForLead,
               types: Array.isArray(detailsData.types) ? detailsData.types : null,
               servesVegetarianFood: detailsData.servesVegetarianFood ?? null,
-              servesVeganFood: detailsData.servesVeganFood ?? null,
               outdoorSeating: detailsData.outdoorSeating ?? null,
               allowsDogs: detailsData.allowsDogs ?? null,
               editorialSummary: detailsData.editorialSummary ?? null,
