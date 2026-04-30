@@ -3011,12 +3011,20 @@ export default function GroupVote() {
   }, [token]);
 
   // ── Fetch ALL nearby businesses via discover API ──
+  // CRITICAL: pass stable sort=Newest + seed across every page in this loop.
+  // Without it the discover API's default Random sort re-shuffles per request
+  // and the same business shows up in multiple pages → duplicate cards in the
+  // selection picker downstream (same bug fixed in 5v3v1).
   const fetchBusinesses = useCallback(async () => {
     if (!parentCoords && !parentZip) return;
     try {
       const allBiz: Business[] = [];
       let page = 1;
       let hasMore = true;
+      const paginationSeed = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+      const seenIds = new Set<string>();
 
       while (hasMore) {
         const params = new URLSearchParams({ page: String(page), limit: "100" });
@@ -3026,6 +3034,8 @@ export default function GroupVote() {
         }
         if (parentZip) params.set("userZip", parentZip);
         params.set("distance", "50");
+        params.set("sort", "Newest");
+        params.set("seed", paginationSeed);
 
         const res = await fetch(`/api/businesses/discover?${params}`);
         if (!res.ok) break;
@@ -3044,6 +3054,9 @@ export default function GroupVote() {
         }
 
         for (const b of rows) {
+          const bizId = b.id as string;
+          if (seenIds.has(bizId)) continue; // defensive dedupe by id
+          seenIds.add(bizId);
           const cfg = (b.config as Record<string, unknown>) ?? {};
           const subtype = (cfg.subtype as string) || "";
           const type = subtype || (cfg.businessType as string) || (b.category_main as string) || "";

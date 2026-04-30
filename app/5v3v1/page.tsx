@@ -3116,7 +3116,12 @@ function FiveThreeOne() {
 
   // ─── Fetch ALL businesses within max distance via discover API ───
   // Server handles: distance bounding box → category → tags → pagination
-  // We fetch all pages so client has the full nearby set for filtering
+  // We fetch all pages so client has the full nearby set for filtering.
+  //
+  // CRITICAL: pass a stable `sort=Newest` AND `seed` across every page in
+  // this loop, otherwise the discover API's default Random sort re-shuffles
+  // per request and the same business appears in multiple pages — causing
+  // duplicate cards in the Pick 3 picker downstream.
   useEffect(() => {
     if (!user) return;
     if (!locationCoords && !locationZip) return; // Wait for location
@@ -3128,6 +3133,11 @@ function FiveThreeOne() {
         const allTiers: { business_id: string; percent_bps: number }[] = [];
         let page = 1;
         let hasMore = true;
+        // Same seed across all pagination calls — makes the order stable so a
+        // business appears in exactly one page, not multiple.
+        const paginationSeed = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2);
 
         while (hasMore) {
           const params = new URLSearchParams({ page: String(page), limit: "100" });
@@ -3138,6 +3148,11 @@ function FiveThreeOne() {
           if (locationZip) params.set("userZip", locationZip);
           params.set("distance", "50");
           if (filters.hasRewards) params.set("hasRewards", "true");
+          // Force deterministic ordering across the entire pagination so each
+          // business appears once. Sort=Newest is stable across requests;
+          // seed is also passed for any future random tie-breaking.
+          params.set("sort", "Newest");
+          params.set("seed", paginationSeed);
 
           const res = await fetch(`/api/businesses/discover?${params}`);
           if (!res.ok) break;
@@ -3168,7 +3183,19 @@ function FiveThreeOne() {
           tierMap.get(t.business_id)!.push(Number(t.percent_bps) || 0);
         }
 
-        const normalized = allRows.map((r: BusinessRow) =>
+        // Defensive dedupe by id — even with stable pagination, if anything
+        // upstream produces duplicates (chain dedup misses, race conditions),
+        // we never want the same business to render twice in the picker.
+        const seenIds = new Set<string>();
+        const dedupedRows: BusinessRow[] = [];
+        for (const r of allRows) {
+          const id = r.id as string;
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          dedupedRows.push(r);
+        }
+
+        const normalized = dedupedRows.map((r: BusinessRow) =>
           normalizeToDiscoveryBusiness(r, mediaMap.get(r.id as string) ?? [], tierMap.get(r.id as string))
         );
         setBusinesses(normalized);
