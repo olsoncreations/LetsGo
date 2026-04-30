@@ -385,6 +385,17 @@ function CardImageCarousel({ images, gradient, emoji, height }: { images: { url:
     setImgIdx(idx);
   };
 
+  // Programmatic navigation for desktop (where overflow-x: auto can't be
+  // mouse-dragged). On touch devices, native swipe still works alongside.
+  // stopPropagation to avoid triggering the parent <button>'s onClick.
+  const scrollToIdx = (e: React.MouseEvent, idx: number) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: el.clientWidth * idx, behavior: "smooth" });
+  };
+
   if (!hasImages) {
     return (
       <div style={{
@@ -424,19 +435,57 @@ function CardImageCarousel({ images, gradient, emoji, height }: { images: { url:
           </div>
         ))}
       </div>
-      {/* Dot indicators */}
+      {/* Prev / next arrows for desktop (touchscreens still get native swipe). */}
+      {images.length > 1 && imgIdx > 0 && (
+        <button
+          type="button"
+          onClick={(e) => scrollToIdx(e, imgIdx - 1)}
+          aria-label="Previous image"
+          style={{
+            position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+            width: 32, height: 32, borderRadius: "50%",
+            background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.2)",
+            color: "#fff", fontSize: 18, lineHeight: 1, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 6, padding: 0, backdropFilter: "blur(6px)",
+          }}
+        >‹</button>
+      )}
+      {images.length > 1 && imgIdx < images.length - 1 && (
+        <button
+          type="button"
+          onClick={(e) => scrollToIdx(e, imgIdx + 1)}
+          aria-label="Next image"
+          style={{
+            position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+            width: 32, height: 32, borderRadius: "50%",
+            background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.2)",
+            color: "#fff", fontSize: 18, lineHeight: 1, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 6, padding: 0, backdropFilter: "blur(6px)",
+          }}
+        >›</button>
+      )}
+      {/* Dot indicators — also clickable to jump directly to that image. */}
       {images.length > 1 && (
         <div style={{
           position: "absolute", bottom: 6, left: 0, right: 0,
           display: "flex", justifyContent: "center", gap: 4, zIndex: 5,
         }}>
           {images.map((_, i) => (
-            <span key={i} style={{
-              width: imgIdx === i ? 12 : 5, height: 5, borderRadius: 3,
-              background: imgIdx === i ? "#fff" : "rgba(255,255,255,0.45)",
-              transition: "all 0.25s ease",
-              boxShadow: imgIdx === i ? "0 0 4px rgba(255,255,255,0.6)" : "none",
-            }} />
+            <button
+              key={i}
+              type="button"
+              onClick={(e) => scrollToIdx(e, i)}
+              aria-label={`Go to image ${i + 1}`}
+              style={{
+                width: imgIdx === i ? 12 : 5, height: 5, borderRadius: 3,
+                background: imgIdx === i ? "#fff" : "rgba(255,255,255,0.45)",
+                transition: "all 0.25s ease",
+                boxShadow: imgIdx === i ? "0 0 4px rgba(255,255,255,0.6)" : "none",
+                border: "none", padding: 0, cursor: "pointer",
+              }}
+            />
           ))}
         </div>
       )}
