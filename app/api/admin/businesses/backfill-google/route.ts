@@ -175,6 +175,7 @@ export async function POST(req: NextRequest) {
         outdoorSeating: (detailsData.outdoorSeating as boolean | null) ?? null,
         allowsDogs: (detailsData.allowsDogs as boolean | null) ?? null,
         editorialSummary: (detailsData.editorialSummary as { text?: string | null } | null) ?? null,
+        businessName: businessName,
       };
 
       // ── 1. Reclassify subtype from fresh Google primaryType/types ──────

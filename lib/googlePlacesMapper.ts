@@ -17,6 +17,13 @@ export interface GooglePlaceForTags {
   outdoorSeating?: boolean | null;
   allowsDogs?: boolean | null;
   editorialSummary?: { text?: string | null } | null;
+  /**
+   * Business name (e.g. "Yutan Kitchen | Chinese Restaurant"). Used as a
+   * fallback signal when Google's primaryType / types[] don't carry cuisine
+   * info — many small/local places don't have rich Google data. We do simple
+   * keyword matching against the name to pick up obvious cases.
+   */
+  businessName?: string | null;
 }
 
 /**
@@ -58,9 +65,56 @@ const PRIMARY_TYPE_TO_DIETARY: Record<string, string> = {
 };
 
 /**
- * Look up a cuisine tag name from a Google place's types. Checks primaryType
- * first (most specific Google classification), falls back to types[] which may
- * contain a more specific entry alongside generic ones like "restaurant".
+ * High-confidence cuisine keywords that we can extract from a business name
+ * when Google's structured data is thin. Order matters — more specific patterns
+ * appear first so e.g. "Pizza Italian" matches Pizza, not Italian. We skip
+ * ambiguous patterns (El/La/Los/Las prefixes, "Mama's", etc.) because they
+ * misclassify too often (El Chaparro could be Mexican OR Spanish OR a name).
+ *
+ * The keyword is matched as a word boundary substring, case-insensitive.
+ */
+const NAME_CUISINE_PATTERNS: { pattern: RegExp; cuisine: string }[] = [
+  { pattern: /\bsteakhouse\b/i, cuisine: "Steakhouse" },
+  { pattern: /\bbarbecue\b|\bbbq\b|\bbar-?b-?q\b/i, cuisine: "BBQ" },
+  { pattern: /\bsushi\b/i, cuisine: "Sushi" },
+  { pattern: /\bramen\b/i, cuisine: "Ramen" },
+  { pattern: /\bpho\b/i, cuisine: "Vietnamese" },
+  { pattern: /\bvietnamese\b/i, cuisine: "Vietnamese" },
+  { pattern: /\bchinese\b/i, cuisine: "Chinese" },
+  { pattern: /\bjapanese\b/i, cuisine: "Japanese" },
+  { pattern: /\bkorean\b/i, cuisine: "Korean" },
+  { pattern: /\bthai\b/i, cuisine: "Thai" },
+  { pattern: /\bindian\b/i, cuisine: "Indian" },
+  { pattern: /\bitalian\b/i, cuisine: "Italian" },
+  { pattern: /\bmexican\b/i, cuisine: "Mexican" },
+  { pattern: /\btaqueria\b/i, cuisine: "Mexican" },
+  { pattern: /\bmediterranean\b/i, cuisine: "Mediterranean" },
+  { pattern: /\bgreek\b/i, cuisine: "Greek" },
+  { pattern: /\bfrench\b/i, cuisine: "French" },
+  { pattern: /\bspanish\b/i, cuisine: "Spanish" },
+  { pattern: /\bmiddle\s+eastern\b/i, cuisine: "Middle Eastern" },
+  { pattern: /\bmoroccan\b/i, cuisine: "Moroccan" },
+  { pattern: /\bethiopian\b/i, cuisine: "Ethiopian" },
+  { pattern: /\bperuvian\b/i, cuisine: "Peruvian" },
+  { pattern: /\bbrazilian\b/i, cuisine: "Brazilian" },
+  { pattern: /\bcaribbean\b/i, cuisine: "Caribbean" },
+  { pattern: /\bcajun\b/i, cuisine: "Cajun" },
+  { pattern: /\bsouthern\b/i, cuisine: "Southern" },
+  { pattern: /\bseafood\b/i, cuisine: "Seafood" },
+  { pattern: /\bpizza\b|\bpizzeria\b/i, cuisine: "Pizza" },
+  { pattern: /\bburger\b|\bburgers\b/i, cuisine: "Burgers" },
+  { pattern: /\btacos?\b/i, cuisine: "Tacos" },
+  { pattern: /\bpoke\b/i, cuisine: "Poke" },
+  { pattern: /\bramen\b/i, cuisine: "Ramen" },
+  { pattern: /\bfusion\b/i, cuisine: "Fusion" },
+];
+
+/**
+ * Look up a cuisine tag name from a Google place's data. Strategy:
+ *   1. Google primaryType (most specific structured signal)
+ *   2. Google types[] array (may have a specific cuisine entry alongside generics)
+ *   3. Business name keyword match (catches small places like "Chinese
+ *      Restaurant" / "Joe's Pizza" that Google didn't classify with rich data)
  */
 export function cuisineFromPlace(place: GooglePlaceForTags): string | null {
   if (place.primaryType && PRIMARY_TYPE_TO_CUISINE[place.primaryType]) {
@@ -68,6 +122,12 @@ export function cuisineFromPlace(place: GooglePlaceForTags): string | null {
   }
   for (const t of place.types ?? []) {
     if (PRIMARY_TYPE_TO_CUISINE[t]) return PRIMARY_TYPE_TO_CUISINE[t];
+  }
+  const name = place.businessName ?? "";
+  if (name) {
+    for (const { pattern, cuisine } of NAME_CUISINE_PATTERNS) {
+      if (pattern.test(name)) return cuisine;
+    }
   }
   return null;
 }

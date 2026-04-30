@@ -152,6 +152,7 @@ export async function POST(req: NextRequest) {
           outdoorSeating: detailsData.outdoorSeating ?? null,
           allowsDogs: detailsData.allowsDogs ?? null,
           editorialSummary: detailsData.editorialSummary ?? null,
+          businessName: lead.business_name ?? null,
         };
         extractedTags = extractTagsFromPlace(placeForTags).allTags;
         const summaryText = detailsData.editorialSummary?.text;

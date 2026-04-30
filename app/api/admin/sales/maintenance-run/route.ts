@@ -267,6 +267,9 @@ export async function POST(req: NextRequest) {
           outdoorSeating: (detailsData.outdoorSeating as boolean | null) ?? null,
           allowsDogs: (detailsData.allowsDogs as boolean | null) ?? null,
           editorialSummary: (detailsData.editorialSummary as { text?: string | null } | null) ?? null,
+          // We don't have the business_name handy here; the bulk-seed run that
+          // created this business already had the chance to do name extraction.
+          businessName: null,
         };
 
         const newSubtype = googleClassInput
