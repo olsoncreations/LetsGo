@@ -116,6 +116,19 @@ export async function POST(req: NextRequest) {
             { headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": detailsFieldMask } }
           );
 
+          // Log non-OK responses to Vercel function logs so we can diagnose
+          // why bulk seeds aren't getting Google data (SKU restrictions, key
+          // restrictions, rate limits, dead place_ids, etc.). The bulk-seed
+          // continues with whatever lead.business_type already had.
+          if (!detailsRes.ok) {
+            const errBody = await detailsRes.text().catch(() => "(no body)");
+            console.error(
+              `[bulk-seed] Google Places fetch failed: status=${detailsRes.status} ` +
+              `place_id=${placeId} business=${lead.business_name} ` +
+              `body=${errBody.slice(0, 500)}`
+            );
+          }
+
           if (detailsRes.ok) {
             const detailsData = await detailsRes.json();
             const openingHours = detailsData.regularOpeningHours;
