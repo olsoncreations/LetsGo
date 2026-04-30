@@ -425,9 +425,36 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     }
 
-    // 7. Fetch media for all candidate businesses
+    // 7. Fetch media for all candidate businesses. Discovery merges two sources
+    //    (config.images for seeded/Google URLs, business_media for owner uploads).
+    //    Mirror that here so seeded businesses don't render as a single hero.
     const allCandidateIds = [...restaurants, ...activities].map(r => r.id);
-    let mediaMap = new Map<string, string[]>();
+    const mediaMap = new Map<string, string[]>();
+    const seenPerBiz = new Map<string, Set<string>>();
+    const pushImage = (bizId: string, url: string) => {
+      if (!url) return;
+      let seen = seenPerBiz.get(bizId);
+      if (!seen) { seen = new Set(); seenPerBiz.set(bizId, seen); }
+      if (seen.has(url)) return;
+      seen.add(url);
+      const existing = mediaMap.get(bizId) || [];
+      existing.push(url);
+      mediaMap.set(bizId, existing);
+    };
+
+    // 7a. config.images first (seeded/Google photos live here, no storage row)
+    for (const row of [...restaurants, ...activities]) {
+      const cfg = (row.config ?? {}) as Record<string, unknown>;
+      const cfgImages = cfg.images;
+      if (Array.isArray(cfgImages)) {
+        for (const img of cfgImages) {
+          const url = typeof img === "string" ? img : "";
+          if (url) pushImage(row.id, url);
+        }
+      }
+    }
+
+    // 7b. business_media (owner-uploaded photos in the storage bucket)
     if (allCandidateIds.length > 0) {
       const { data: mediaRows } = await supabaseServer
         .from("business_media")
@@ -440,9 +467,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       for (const m of mediaRows ?? []) {
         const bizId = m.business_id as string;
         const url = buildMediaUrl(m.bucket as string, m.path as string);
-        const existing = mediaMap.get(bizId) || [];
-        existing.push(url);
-        mediaMap.set(bizId, existing);
+        pushImage(bizId, url);
       }
     }
 
