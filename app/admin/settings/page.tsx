@@ -324,18 +324,22 @@ export default function SettingsPage() {
   const [newRole, setNewRole] = useState<{ name: string; permissions: string[] }>({ name: "", permissions: [] });
 
   // Tag management state
-  interface TagCategory { id: string; name: string; icon: string; scope: string[]; requires_food: boolean }
-  interface TagItem { id: string; name: string; slug: string; color: string | null; icon: string | null; sort_order: number; is_food: boolean; category_id: string; category_name: string; category_icon: string }
+  type TopType = "eat" | "drink" | "play" | "pamper";
+  interface TagCategory { id: string; name: string; icon: string; scope: string[]; requires_food: boolean; is_active: boolean }
+  interface TagItem { id: string; name: string; slug: string; color: string | null; icon: string | null; sort_order: number; is_food: boolean; is_active: boolean; is_date_night_activity: boolean; top_type: TopType | null; category_id: string; category_name: string; category_icon: string }
   const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
   const [tagItems, setTagItems] = useState<TagItem[]>([]);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
+  const [showArchivedTags, setShowArchivedTags] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagCategory, setNewTagCategory] = useState("");
   const [newTagColor, setNewTagColor] = useState("#39ff14");
   const [newTagIcon, setNewTagIcon] = useState("");
   const [newTagSortOrder, setNewTagSortOrder] = useState(0);
   const [newTagIsFood, setNewTagIsFood] = useState(false);
+  const [newTagTopType, setNewTagTopType] = useState<TopType | "">("");
+  const [newTagIsDateNight, setNewTagIsDateNight] = useState(false);
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editTagName, setEditTagName] = useState("");
   const [editTagColor, setEditTagColor] = useState("");
@@ -343,6 +347,8 @@ export default function SettingsPage() {
   const [editTagIcon, setEditTagIcon] = useState("");
   const [editTagSortOrder, setEditTagSortOrder] = useState(0);
   const [editTagIsFood, setEditTagIsFood] = useState(false);
+  const [editTagTopType, setEditTagTopType] = useState<TopType | "">("");
+  const [editTagIsDateNight, setEditTagIsDateNight] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [newCatIcon, setNewCatIcon] = useState("");
   const [newCatScope, setNewCatScope] = useState<string[]>(["business"]);
@@ -562,19 +568,20 @@ export default function SettingsPage() {
   const fetchTags = useCallback(async () => {
     setTagsLoading(true);
     try {
-      const { data: cats } = await supabaseBrowser.from("tag_categories").select("id, name, icon, scope, requires_food").order("name");
+      const { data: cats } = await supabaseBrowser.from("tag_categories").select("id, name, icon, scope, requires_food, is_active").order("name");
       setTagCategories((cats ?? []).map((c: Record<string, unknown>) => ({
         id: c.id as string,
         name: c.name as string,
         icon: (c.icon as string) ?? "🏷️",
         scope: (c.scope as string[]) ?? ["business"],
         requires_food: (c.requires_food as boolean) ?? false,
+        is_active: (c.is_active as boolean) ?? true,
       })));
       if (cats && cats.length > 0 && !newTagCategory) setNewTagCategory((cats[0] as { id: string }).id);
 
       const { data: tags } = await supabaseBrowser
         .from("tags")
-        .select("id, name, slug, color, icon, sort_order, is_food, category_id, tag_categories ( name, icon )")
+        .select("id, name, slug, color, icon, sort_order, is_food, is_active, top_type, is_date_night_activity, category_id, tag_categories ( name, icon )")
         .order("sort_order")
         .order("name");
       const mapped = (tags ?? []).map((t: Record<string, unknown>) => {
@@ -587,6 +594,9 @@ export default function SettingsPage() {
           icon: t.icon as string | null,
           sort_order: (t.sort_order as number) ?? 0,
           is_food: (t.is_food as boolean) ?? false,
+          is_active: (t.is_active as boolean) ?? true,
+          is_date_night_activity: (t.is_date_night_activity as boolean) ?? false,
+          top_type: (t.top_type as TopType | null) ?? null,
           category_id: t.category_id as string,
           category_name: cat?.name ?? "Uncategorized",
           category_icon: cat?.icon ?? "",
@@ -603,17 +613,29 @@ export default function SettingsPage() {
   useEffect(() => { if (settingsSection === "tags") fetchTags(); }, [settingsSection, fetchTags]);
   useEffect(() => { if (settingsSection === "bonus_pool") fetchBonusPoolData(); }, [settingsSection, fetchBonusPoolData]);
 
+  // top_type is meaningful only for Business Type tags. For other categories we
+  // null it out so it doesn't leak into the new "Type" filter incorrectly.
+  const isBusinessTypeCategory = useCallback((catId: string): boolean => {
+    return tagCategories.find(c => c.id === catId)?.name === "Business Type";
+  }, [tagCategories]);
+
   const addTag = async () => {
     const trimmed = newTagName.trim().toLowerCase();
     if (!trimmed || !newTagCategory) return;
     const slug = trimmed.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const isBT = isBusinessTypeCategory(newTagCategory);
+    const top_type = isBT ? (newTagTopType || null) : null;
+    // is_date_night_activity is meaningful only for Business Type tags (drives
+    // the Date Night Generator activity allow-list).
+    const is_date_night_activity = isBT ? newTagIsDateNight : false;
     const { error } = await supabaseBrowser.from("tags").insert({
       name: trimmed, slug, color: newTagColor, category_id: newTagCategory,
       icon: newTagIcon || null, sort_order: newTagSortOrder, is_food: newTagIsFood,
+      top_type, is_date_night_activity,
     });
     if (error) { alert(error.message); return; }
     logAudit({ action: "add_tag", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag", entityName: trimmed, details: `Added tag "${trimmed}"` });
-    setNewTagName(""); setNewTagIcon(""); setNewTagSortOrder(0); setNewTagIsFood(false);
+    setNewTagName(""); setNewTagIcon(""); setNewTagSortOrder(0); setNewTagIsFood(false); setNewTagTopType(""); setNewTagIsDateNight(false);
     fetchTags();
   };
 
@@ -621,9 +643,13 @@ export default function SettingsPage() {
     const trimmed = editTagName.trim().toLowerCase();
     if (!trimmed) return;
     const slug = trimmed.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const isBT = isBusinessTypeCategory(editTagCategory);
+    const top_type = isBT ? (editTagTopType || null) : null;
+    const is_date_night_activity = isBT ? editTagIsDateNight : false;
     const { error } = await supabaseBrowser.from("tags").update({
       name: trimmed, slug, color: editTagColor, category_id: editTagCategory,
       icon: editTagIcon || null, sort_order: editTagSortOrder, is_food: editTagIsFood,
+      top_type, is_date_night_activity,
     }).eq("id", id);
     if (error) { alert(error.message); return; }
     logAudit({ action: "update_tag", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag", targetId: id, entityName: trimmed, details: `Updated tag "${trimmed}"` });
@@ -632,10 +658,38 @@ export default function SettingsPage() {
   };
 
   const deleteTag = async (id: string, name: string) => {
-    if (!confirm(`Delete tag "${name}"? This will remove it from the available tags list.`)) return;
+    if (!confirm(`Delete tag "${name}"? This permanently removes it from the database. To hide it without deleting, use Archive instead.`)) return;
     const { error } = await supabaseBrowser.from("tags").delete().eq("id", id);
     if (error) { alert(error.message); return; }
     logAudit({ action: "delete_tag", tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management", targetType: "tag", targetId: id, entityName: name, details: `Deleted tag "${name}"` });
+    fetchTags();
+  };
+
+  // Archive vs delete: archive flips is_active=false (preserves data, hides from
+  // user-facing filter UIs); delete removes the row permanently. Cut categories
+  // (Vibe, Amenities, Popular, Price Range) live archived in the DB so business
+  // records that still hold those tag values aren't orphaned.
+  const setTagActive = async (id: string, name: string, active: boolean) => {
+    const { error } = await supabaseBrowser.from("tags").update({ is_active: active }).eq("id", id);
+    if (error) { alert(error.message); return; }
+    logAudit({
+      action: active ? "restore_tag" : "archive_tag",
+      tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management",
+      targetType: "tag", targetId: id, entityName: name,
+      details: `${active ? "Restored" : "Archived"} tag "${name}"`,
+    });
+    fetchTags();
+  };
+
+  const setCategoryActive = async (id: string, name: string, active: boolean) => {
+    const { error } = await supabaseBrowser.from("tag_categories").update({ is_active: active }).eq("id", id);
+    if (error) { alert(error.message); return; }
+    logAudit({
+      action: active ? "restore_tag_category" : "archive_tag_category",
+      tab: AUDIT_TABS.SETTINGS, subTab: "Tag Management",
+      targetType: "tag_category", targetId: id, entityName: name,
+      details: `${active ? "Restored" : "Archived"} category "${name}"`,
+    });
     fetchTags();
   };
 
@@ -2238,10 +2292,11 @@ export default function SettingsPage() {
           ) : (
             <>
               {/* Stats row */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
                 {[
-                  { label: "Total Tags", value: tagItems.length, color: COLORS.neonGreen },
-                  { label: "Categories", value: tagCategories.length, color: COLORS.neonBlue },
+                  { label: "Active Tags", value: tagItems.filter(t => t.is_active).length, color: COLORS.neonGreen },
+                  { label: "Active Categories", value: tagCategories.filter(c => c.is_active).length, color: COLORS.neonBlue },
+                  { label: "Archived", value: tagItems.filter(t => !t.is_active).length + tagCategories.filter(c => !c.is_active).length, color: COLORS.textSecondary },
                   { label: "Uncategorized", value: tagItems.filter(t => !t.category_id).length, color: COLORS.neonOrange },
                 ].map(s => (
                   <div key={s.label} style={{ padding: 20, background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 12, textAlign: "center" }}>
@@ -2249,6 +2304,17 @@ export default function SettingsPage() {
                     <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>{s.label}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Show Archived toggle — controls visibility of inactive categories + tags. */}
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  Hidden categories and tags stay in the database so business records that still reference them aren&apos;t orphaned.
+                </span>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: showArchivedTags ? COLORS.neonOrange : COLORS.textSecondary, cursor: "pointer", padding: "6px 12px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 8 }}>
+                  <input type="checkbox" checked={showArchivedTags} onChange={() => setShowArchivedTags(v => !v)} />
+                  Show archived
+                </label>
               </div>
 
               {/* ── Categories Card ── */}
@@ -2296,11 +2362,13 @@ export default function SettingsPage() {
 
                 {/* Category list */}
                 <div style={{ display: "grid", gap: 8 }}>
-                  {tagCategories.map(cat => {
+                  {tagCategories
+                    .filter(cat => showArchivedTags || cat.is_active)
+                    .map(cat => {
                     const count = tagItems.filter(t => t.category_id === cat.id).length;
                     const isEditing = editingCatId === cat.id;
                     return (
-                      <div key={cat.id} style={{ padding: "12px 16px", background: COLORS.darkBg, borderRadius: 10 }}>
+                      <div key={cat.id} style={{ padding: "12px 16px", background: COLORS.darkBg, borderRadius: 10, opacity: cat.is_active ? 1 : 0.55 }}>
                         {isEditing ? (
                           <div style={{ display: "grid", gap: 8 }}>
                             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -2334,9 +2402,17 @@ export default function SettingsPage() {
                               {cat.requires_food && (
                                 <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(255,107,53,0.15)", color: COLORS.neonOrange }}>food-only</span>
                               )}
+                              {!cat.is_active && (
+                                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(160,160,160,0.15)", color: COLORS.textSecondary, fontWeight: 700 }}>ARCHIVED</span>
+                              )}
                             </div>
                             <span style={{ fontSize: 12, color: COLORS.textSecondary, background: "rgba(255,255,255,0.05)", padding: "4px 10px", borderRadius: 20 }}>{count} tag{count !== 1 ? "s" : ""}</span>
                             <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); setEditCatIcon(cat.icon); setEditCatScope(cat.scope); setEditCatRequiresFood(cat.requires_food); }} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: COLORS.neonBlue, fontSize: 12, cursor: "pointer" }}>Edit</button>
+                            {cat.is_active ? (
+                              <button onClick={() => setCategoryActive(cat.id, cat.name, false)} title="Hide from filter UIs while preserving the data" style={{ padding: "6px 12px", background: "transparent", border: "1px solid rgba(160,160,160,0.4)", borderRadius: 6, color: COLORS.textSecondary, fontSize: 12, cursor: "pointer" }}>Archive</button>
+                            ) : (
+                              <button onClick={() => setCategoryActive(cat.id, cat.name, true)} style={{ padding: "6px 12px", background: "transparent", border: "1px solid rgba(57,255,20,0.4)", borderRadius: 6, color: COLORS.neonGreen, fontSize: 12, cursor: "pointer" }}>Restore</button>
+                            )}
                             <button onClick={() => deleteCategory(cat.id, cat.name)} style={{ padding: "6px 12px", background: "transparent", border: "1px solid rgba(255,49,49,0.3)", borderRadius: 6, color: COLORS.neonRed, fontSize: 12, cursor: "pointer" }}>Delete</button>
                           </div>
                         )}
@@ -2401,6 +2477,26 @@ export default function SettingsPage() {
                     <input type="checkbox" checked={newTagIsFood} onChange={() => setNewTagIsFood(!newTagIsFood)} />
                     Food type
                   </label>
+                  {/* top_type only meaningful for Business Type tags (drives the discovery feed Type filter) */}
+                  {isBusinessTypeCategory(newTagCategory) && (
+                    <>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: COLORS.neonPurple }}>
+                        Top Type:
+                        <select value={newTagTopType} onChange={e => setNewTagTopType(e.target.value as TopType | "")} style={{ padding: "4px 8px", background: COLORS.darkBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 6, color: "#fff", fontSize: 12 }}>
+                          <option value="">(none)</option>
+                          <option value="eat">Eat</option>
+                          <option value="drink">Drink</option>
+                          <option value="play">Play</option>
+                          <option value="pamper">Pamper</option>
+                        </select>
+                      </label>
+                      {/* is_date_night_activity drives the Date Night Generator allow-list. */}
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: COLORS.neonPink, cursor: "pointer" }} title="Show this subtype as a possible Date Night activity">
+                        <input type="checkbox" checked={newTagIsDateNight} onChange={() => setNewTagIsDateNight(!newTagIsDateNight)} />
+                        Date Night
+                      </label>
+                    </>
+                  )}
                 </div>
 
                 {/* Search filter */}
@@ -2412,17 +2508,23 @@ export default function SettingsPage() {
                 />
 
                 {/* Tags grouped by category */}
-                {tagCategories.map(cat => {
+                {tagCategories
+                  .filter(cat => showArchivedTags || cat.is_active)
+                  .map(cat => {
                   const catTags = tagItems
                     .filter(t => t.category_id === cat.id)
+                    .filter(t => showArchivedTags || t.is_active)
                     .filter(t => !tagSearch || t.name.includes(tagSearch.toLowerCase()));
                   if (catTags.length === 0 && tagSearch) return null;
                   return (
-                    <div key={cat.id} style={{ marginBottom: 24 }}>
+                    <div key={cat.id} style={{ marginBottom: 24, opacity: cat.is_active ? 1 : 0.55 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                         <span style={{ fontSize: 16 }}>{cat.icon}</span>
                         <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.neonBlue }}>{cat.name}</span>
                         <span style={{ fontSize: 11, color: COLORS.textSecondary }}>({catTags.length})</span>
+                        {!cat.is_active && (
+                          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: "rgba(160,160,160,0.15)", color: COLORS.textSecondary, fontWeight: 700 }}>ARCHIVED</span>
+                        )}
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                         {catTags.map(tag => {
@@ -2442,7 +2544,27 @@ export default function SettingsPage() {
                                   <input type="checkbox" checked={editTagIsFood} onChange={() => setEditTagIsFood(!editTagIsFood)} />
                                   Food
                                 </label>
+                                {isBusinessTypeCategory(editTagCategory) && (
+                                  <>
+                                    <select value={editTagTopType} onChange={e => setEditTagTopType(e.target.value as TopType | "")} title="Top type for the discovery feed Type filter" style={{ padding: "4px 6px", background: COLORS.cardBg, border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.neonPurple, fontSize: 11 }}>
+                                      <option value="">type…</option>
+                                      <option value="eat">Eat</option>
+                                      <option value="drink">Drink</option>
+                                      <option value="play">Play</option>
+                                      <option value="pamper">Pamper</option>
+                                    </select>
+                                    <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: COLORS.neonPink, cursor: "pointer" }} title="Date Night Generator picks from this subtype">
+                                      <input type="checkbox" checked={editTagIsDateNight} onChange={() => setEditTagIsDateNight(!editTagIsDateNight)} />
+                                      Date
+                                    </label>
+                                  </>
+                                )}
                                 <button onClick={() => updateTag(tag.id)} style={{ padding: "4px 10px", background: COLORS.neonGreen, border: "none", borderRadius: 4, color: "#000", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Save</button>
+                                {tag.is_active ? (
+                                  <button onClick={() => setTagActive(tag.id, tag.name, false)} title="Hide from filter UIs while preserving the tag" style={{ padding: "4px 8px", background: "transparent", border: "1px solid rgba(160,160,160,0.4)", borderRadius: 4, color: COLORS.textSecondary, fontSize: 11, cursor: "pointer" }}>Archive</button>
+                                ) : (
+                                  <button onClick={() => setTagActive(tag.id, tag.name, true)} style={{ padding: "4px 8px", background: "transparent", border: "1px solid rgba(57,255,20,0.4)", borderRadius: 4, color: COLORS.neonGreen, fontSize: 11, cursor: "pointer" }}>Restore</button>
+                                )}
                                 <button onClick={() => setEditingTagId(null)} style={{ padding: "4px 8px", background: "transparent", border: "1px solid " + COLORS.cardBorder, borderRadius: 4, color: COLORS.textSecondary, fontSize: 11, cursor: "pointer" }}>X</button>
                               </div>
                             );
@@ -2450,21 +2572,15 @@ export default function SettingsPage() {
                           return (
                             <div
                               key={tag.id}
-                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: color + "18", border: "1px solid " + color + "40", borderRadius: 20, fontSize: 13, color, cursor: "pointer" }}
-                              onClick={() => { setEditingTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color || COLORS.neonGreen); setEditTagCategory(tag.category_id); setEditTagIcon(tag.icon || ""); setEditTagSortOrder(tag.sort_order); setEditTagIsFood(tag.is_food); }}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: color + "18", border: "1px solid " + color + "40", borderRadius: 20, fontSize: 13, color, cursor: "pointer", opacity: tag.is_active ? 1 : 0.5, textDecoration: tag.is_active ? "none" : "line-through" }}
+                              onClick={() => { setEditingTagId(tag.id); setEditTagName(tag.name); setEditTagColor(tag.color || COLORS.neonGreen); setEditTagCategory(tag.category_id); setEditTagIcon(tag.icon || ""); setEditTagSortOrder(tag.sort_order); setEditTagIsFood(tag.is_food); setEditTagTopType(tag.top_type || ""); setEditTagIsDateNight(tag.is_date_night_activity); }}
                               title="Click to edit"
                             >
                               {tag.icon && <span style={{ fontSize: 14 }}>{tag.icon}</span>}
                               {!tag.icon && <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />}
                               {tag.name}
                               {tag.is_food && <span style={{ fontSize: 9, opacity: 0.6 }} title="Food type">🍴</span>}
-                              <button
-                                onClick={e => { e.stopPropagation(); deleteTag(tag.id, tag.name); }}
-                                style={{ background: "transparent", border: "none", color: "rgba(255,49,49,0.6)", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}
-                                title="Delete tag"
-                              >
-                                ×
-                              </button>
+                              {tag.top_type && <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 700, marginLeft: 2 }} title={`Top type: ${tag.top_type}`}>{tag.top_type.toUpperCase()}</span>}
                             </div>
                           );
                         })}

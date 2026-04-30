@@ -1391,6 +1391,23 @@ export default function OnboardingPage() {
         }
 
         businessId = data as string;
+
+        // The RPC creates the business but doesn't pull selectedTags out of the
+        // submission payload, so freshly-onboarded businesses ended up with empty
+        // tags arrays — which broke every discovery filter that reads tags.
+        // Merge the wizard's Step-1 picks into the tags column here so the
+        // discovery feed can find the business by Cuisine/Dietary/Extras.
+        const selectedTagsArr = Array.isArray(payload.selectedTags) ? (payload.selectedTags as string[]) : [];
+        const typeTag = (payload.businessTypeTag as string | undefined) ?? "";
+        const mergedTags = typeTag && !selectedTagsArr.includes(typeTag)
+          ? [...selectedTagsArr, typeTag]
+          : selectedTagsArr;
+        if (businessId && mergedTags.length > 0) {
+          await supabaseBrowser
+            .from("business")
+            .update({ tags: mergedTags })
+            .eq("id", businessId);
+        }
       }
 
       // Copy Stripe payment IDs from submission payload to the business record

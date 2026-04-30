@@ -3,6 +3,7 @@
  * Returns null if not authenticated or no preferences saved.
  */
 export async function loadFilterPreferences(token: string | null): Promise<{
+  topTypes: string[];
   categories: string[];
   price: string;
   distance: number;
@@ -18,6 +19,7 @@ export async function loadFilterPreferences(token: string | null): Promise<{
     const data = await res.json();
     if (!data.preferences) return null;
     return {
+      topTypes: Array.isArray(data.preferences.topTypes) ? data.preferences.topTypes : [],
       categories: data.preferences.categories || [],
       price: data.preferences.price || "Any",
       distance: data.preferences.distance || 15,

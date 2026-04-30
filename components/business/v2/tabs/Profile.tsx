@@ -214,8 +214,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
   // Hours and tags are controlled state
   const [hours, setHours] = useState<BusinessHours>({ ...DEFAULT_HOURS });
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
-  const [tagInputFocused, setTagInputFocused] = useState(false);
   const [selectedBusinessType, setSelectedBusinessType] = useState("restaurant_bar");
   const [tagCategories, setTagCategories] = useState<TagCategory[]>([]);
 
@@ -628,12 +626,20 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
     }
   }
 
-  function addTag(tag: string) {
-    const normalized = tag.toLowerCase().trim();
-    if (normalized && !tags.includes(normalized)) {
-      setTags((prev) => [...prev, normalized]);
-    }
-    setTagInput("");
+  // Tag matching against the DB tag list is case-sensitive (Postgres array
+  // contains check), so always store the exact name from the picker. We still
+  // de-dupe case-insensitively so we don't end up with both "italian" and
+  // "Italian" if a legacy lowercase value is still on the business.
+  function toggleTag(tagName: string) {
+    const trimmed = tagName.trim();
+    if (!trimmed) return;
+    setTags((prev) => {
+      const lowerSet = new Set(prev.map(t => t.toLowerCase()));
+      if (lowerSet.has(trimmed.toLowerCase())) {
+        return prev.filter(t => t.toLowerCase() !== trimmed.toLowerCase());
+      }
+      return [...prev, trimmed];
+    });
   }
 
   function removeTag(index: number) {
@@ -704,29 +710,6 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
       cuisineRef.current.value = loadedData.fields.cuisineType;
     }
   }, [businessTypeOptions, cuisineOptions, loadedData]);
-
-  // Grouped suggestions filtered by input text (show all when focused with empty input)
-  const groupedSuggestions = useMemo(() => {
-    if (!tagInputFocused || !visibleCategories.length) return [] as { category: string; icon: string; tags: string[] }[];
-    const lower = tagInput.toLowerCase();
-    const tagsLower = new Set(tags.map(t => t.toLowerCase()));
-    const groups: { category: string; icon: string; tags: string[] }[] = [];
-    for (const cat of visibleCategories) {
-      const matching = cat.tags
-        .filter(t => {
-          if (tagsLower.has(t.name.toLowerCase())) return false; // already added
-          if (!lower) return true; // no filter text — show all
-          return t.name.toLowerCase().includes(lower);
-        })
-        .map(t => t.name);
-      if (matching.length > 0) {
-        groups.push({ category: cat.name, icon: cat.icon, tags: matching.slice(0, 8) });
-      }
-    }
-    return groups;
-  }, [tagInput, tagInputFocused, tags, visibleCategories]);
-
-  const hasSuggestions = groupedSuggestions.some(g => g.tags.length > 0);
 
   // ============================================================================
   // Team Members
@@ -1222,6 +1205,7 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               Tags & Keywords
             </div>
 
+            {/* Selected tags */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
               {tags.map((tag, idx) => (
                 <span
@@ -1257,84 +1241,75 @@ export default function Profile({ businessId, isPremium }: BusinessTabProps) {
               ))}
               {tags.length === 0 && (
                 <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.875rem" }}>
-                  No tags yet. Add some below.
+                  No tags yet. Pick from the categories below.
                 </span>
               )}
             </div>
 
-            <div style={{ position: "relative" }}>
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onFocus={() => setTagInputFocused(true)}
-                onBlur={() => setTimeout(() => setTagInputFocused(false), 200)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && tagInput.trim()) {
-                    e.preventDefault();
-                    addTag(tagInput);
-                  }
-                }}
-                placeholder="Click to browse tags or type to search..."
-                style={inputStyle}
-              />
-              {hasSuggestions && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    right: 0,
-                    background: "#1e293b",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "8px",
-                    marginTop: "4px",
-                    zIndex: 50,
-                    overflow: "hidden",
-                    maxHeight: "350px",
-                    overflowY: "auto",
-                  }}
-                >
-                  {groupedSuggestions.map((group) => (
-                    <div key={group.category}>
-                      <div
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.7rem",
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          color: "rgba(255,255,255,0.45)",
-                          borderTop: "1px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
-                        {group.icon} {group.category}
-                      </div>
-                      {group.tags.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => addTag(tag)}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "0.6rem 1rem 0.6rem 1.5rem",
-                            background: "transparent",
-                            border: "none",
-                            color: "white",
-                            textAlign: "left",
-                            cursor: "pointer",
-                            fontSize: "0.875rem",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          {tag}
-                        </button>
-                      ))}
+            {/* Guided multi-select: each visible category shows all its tags as
+                toggleable pills. Categories are filtered by Business Type via
+                getVisibleCategories — Cuisine/Dietary only show for food types.
+                Price Range is excluded because there's a dedicated Price selector. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {visibleCategories
+                .filter((cat) => cat.name.toLowerCase() !== "price range")
+                .map((cat) => {
+                const selectedLowerSet = new Set(tags.map(t => t.toLowerCase()));
+                const activeCount = cat.tags.filter(t => selectedLowerSet.has(t.name.toLowerCase())).length;
+                return (
+                  <div key={cat.id}>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: "0.5rem",
+                      fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
+                      letterSpacing: "0.05em", color: "rgba(255,255,255,0.55)",
+                      marginBottom: "0.6rem",
+                    }}>
+                      <span style={{ fontSize: "1rem" }}>{cat.icon}</span>
+                      <span>{cat.name}</span>
+                      {activeCount > 0 && (
+                        <span style={{
+                          fontSize: "0.65rem", fontWeight: 700, padding: "1px 7px",
+                          borderRadius: 50, background: `${colors.primary}30`,
+                          color: colors.primary, marginLeft: 4,
+                        }}>{activeCount}</span>
+                      )}
                     </div>
-                  ))}
-                </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                      {cat.tags.map((tag) => {
+                        const active = selectedLowerSet.has(tag.name.toLowerCase());
+                        return (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => toggleTag(tag.name)}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: "0.35rem",
+                              padding: "0.4rem 0.75rem", borderRadius: 20,
+                              border: `1px solid ${active ? colors.primary : "rgba(255,255,255,0.15)"}`,
+                              background: active ? `${colors.primary}25` : "rgba(255,255,255,0.04)",
+                              color: active ? colors.primary : "rgba(255,255,255,0.75)",
+                              fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            {tag.icon && <span>{tag.icon}</span>}
+                            {tag.name}
+                          </button>
+                        );
+                      })}
+                      {cat.tags.length === 0 && (
+                        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", fontStyle: "italic" }}>
+                          No tags configured in this category
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {visibleCategories.length === 0 && (
+                <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.875rem" }}>
+                  Pick a Business Type above to see relevant tag categories.
+                </span>
               )}
             </div>
           </div>

@@ -22,7 +22,6 @@ type PickResult = {
   id: string;
   name: string;
   type: string;
-  vibe: string;
   price: string;
   address: string;
   neighborhood: string;
@@ -378,7 +377,7 @@ async function callGenerate(exclude: string[] = [], userLat?: number, userLng?: 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const body: Record<string, unknown> = { vibes: [], budget: "$$", cuisines: [], location: "", exclude, hasRewards };
+  const body: Record<string, unknown> = { budget: "$$", cuisines: [], location: "", exclude, hasRewards };
   if (userLat != null && userLng != null) {
     body.userLat = userLat;
     body.userLng = userLng;

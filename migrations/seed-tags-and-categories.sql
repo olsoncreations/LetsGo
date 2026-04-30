@@ -13,51 +13,72 @@ INSERT INTO tag_categories (name, icon, scope, requires_food) VALUES
   ('Amenities',     '🏷️', ARRAY['business'],        false),
   ('Dietary',       '🥗', ARRAY['business'],        true),
   ('Popular',       '🔥', ARRAY['business'],        false),
+  ('Extras',        '✨', ARRAY['business'],        false),
   ('Event Type',    '📅', ARRAY['event'],            false),
   ('Event Vibe',    '🎉', ARRAY['event'],            false)
 ON CONFLICT (name) DO UPDATE SET
   icon = EXCLUDED.icon,
   scope = EXCLUDED.scope,
   requires_food = EXCLUDED.requires_food;
+-- Note: is_active is intentionally not in this INSERT. The
+-- tag-system-pr2-cleanup migration sets is_active=false on Vibe, Amenities,
+-- Popular, and Price Range; re-running this seed must NOT un-archive them.
+-- The ON CONFLICT clause above only updates icon/scope/requires_food, so the
+-- is_active flag is preserved across re-runs.
 
 -- ══════════════════════════════════════════════════════════════
 -- 2. BUSINESS TYPE TAGS (with icons + is_food flag)
 -- ══════════════════════════════════════════════════════════════
 
-INSERT INTO tags (name, slug, icon, is_food, sort_order, category_id)
-SELECT t.name, t.slug, t.icon, t.is_food, t.sort_order, c.id
+INSERT INTO tags (name, slug, icon, is_food, sort_order, is_date_night_activity, category_id)
+SELECT t.name, t.slug, t.icon, t.is_food, t.sort_order, t.is_date_night, c.id
 FROM (VALUES
-  ('Restaurant',    'restaurant',     '🍽️', true,  1),
-  ('Bar',           'bar',            '🍸', true,  2),
-  ('Coffee',        'coffee',         '☕', true,  3),
-  ('Bakery',        'bakery',         '🧁', true,  4),
-  ('Deli',          'deli',           '🥪', true,  5),
-  ('Ice Cream',     'ice-cream',      '🍦', true,  6),
-  ('Juice Bar',     'juice-bar',      '🧃', true,  7),
-  ('Food Truck',    'food-truck',     '🚚', true,  8),
-  ('Brewery',       'brewery',        '🍺', true,  9),
-  ('Winery',        'winery',         '🍷', true,  10),
-  ('Lounge',        'lounge',         '🛋️', true,  11),
-  ('Pub',           'pub',            '🍻', true,  12),
-  ('Sports Bar',    'sports-bar',     '📺', true,  13),
-  ('Entertainment', 'entertainment',  '🎬', false, 14),
-  ('Activity',      'activity',       '🎯', false, 15),
-  ('Nightclub',     'nightclub',      '🪩', false, 16),
-  ('Karaoke',       'karaoke',        '🎤', false, 17),
-  ('Arcade',        'arcade',         '🕹️', false, 18),
-  ('Bowling',       'bowling',        '🎳', false, 19),
-  ('Mini Golf',     'mini-golf',      '⛳', false, 20),
-  ('Escape Room',   'escape-room',    '🔐', false, 21),
-  ('Theater',       'theater',        '🎭', false, 22),
-  ('Comedy Club',   'comedy-club',    '😂', false, 23),
-  ('Art Gallery',   'art-gallery',    '🖼️', false, 24),
-  ('Museum',        'museum',         '🏛️', false, 25),
-  ('Spa',           'spa',            '🧖', false, 26),
-  ('Gym',           'gym',            '💪', false, 27),
-  ('Yoga Studio',   'yoga-studio',    '🧘', false, 28),
-  ('Dance Studio',  'dance-studio',   '💃', false, 29),
-  ('Salon/Beauty',  'salon-beauty',   '💇', false, 30)
-) AS t(name, slug, icon, is_food, sort_order)
+  -- Eat
+  ('Restaurant',       'restaurant',        '🍽️', true,  1,  false),
+  ('Bar',              'bar',               '🍸', true,  2,  false),
+  ('Coffee',           'coffee',            '☕', true,  3,  false),
+  ('Bakery',           'bakery',            '🧁', true,  4,  false),
+  ('Deli',             'deli',              '🥪', true,  5,  false),
+  ('Ice Cream',        'ice-cream',         '🍦', true,  6,  false),
+  ('Juice Bar',        'juice-bar',         '🧃', true,  7,  false),
+  ('Food Truck',       'food-truck',        '🚚', true,  8,  false),
+  ('Brewery',          'brewery',           '🍺', true,  9,  false),
+  ('Winery',           'winery',            '🍷', true,  10, false),
+  ('Lounge',           'lounge',            '🛋️', true,  11, false),
+  ('Pub',              'pub',               '🍻', true,  12, false),
+  ('Sports Bar',       'sports-bar',        '📺', true,  13, false),
+  -- Play (date-friendly)
+  ('Entertainment',    'entertainment',     '🎬', false, 14, true),
+  ('Activity',         'activity',          '🎯', false, 15, false),
+  ('Nightclub',        'nightclub',         '🪩', false, 16, false),
+  ('Karaoke',          'karaoke',           '🎤', false, 17, false),
+  ('Arcade',           'arcade',            '🕹️', false, 18, true),
+  ('Bowling',          'bowling',           '🎳', false, 19, true),
+  ('Mini Golf',        'mini-golf',         '⛳', false, 20, true),
+  ('Escape Room',      'escape-room',       '🔐', false, 21, true),
+  ('Theater',          'theater',           '🎭', false, 22, true),
+  ('Comedy Club',      'comedy-club',       '😂', false, 23, true),
+  ('Art Gallery',      'art-gallery',       '🖼️', false, 24, true),
+  ('Museum',           'museum',            '🏛️', false, 25, true),
+  -- Pamper / wellness (NOT date-friendly per product decision)
+  ('Spa',              'spa',               '🧖', false, 26, false),
+  ('Gym',              'gym',               '💪', false, 27, false),
+  ('Yoga Studio',      'yoga-studio',       '🧘', false, 28, false),
+  ('Dance Studio',     'dance-studio',      '💃', false, 29, false),
+  ('Salon/Beauty',     'salon-beauty',      '💇', false, 30, false),
+  -- Play additions (date-friendly)
+  ('Aquarium',         'aquarium',          '🐠', false, 31, true),
+  ('Zoo',              'zoo',               '🦁', false, 32, true),
+  ('Botanical Garden', 'botanical-garden',  '🌷', false, 33, true),
+  ('Axe Throwing',     'axe-throwing',      '🪓', false, 34, true),
+  ('VR Arcade',        'vr-arcade',         '🥽', false, 35, true),
+  ('Laser Tag',        'laser-tag',         '🔫', false, 36, true),
+  ('Ice Skating',      'ice-skating',       '⛸️', false, 37, true),
+  ('Roller Skating',   'roller-skating',    '🛼', false, 38, true),
+  -- Venue tags (NOT date-friendly; no top_type — they don't fit Eat/Drink/Play/Pamper)
+  ('Wedding Venue',    'wedding-venue',     '💒', false, 39, false),
+  ('Event Venue',      'event-venue',       '🎪', false, 40, false)
+) AS t(name, slug, icon, is_food, sort_order, is_date_night)
 CROSS JOIN tag_categories c
 WHERE c.name = 'Business Type'
 ON CONFLICT (slug) DO UPDATE SET
@@ -65,7 +86,11 @@ ON CONFLICT (slug) DO UPDATE SET
   icon = EXCLUDED.icon,
   is_food = EXCLUDED.is_food,
   sort_order = EXCLUDED.sort_order,
+  is_date_night_activity = EXCLUDED.is_date_night_activity,
   category_id = EXCLUDED.category_id;
+-- Note: top_type is NOT in this INSERT — the datenight-activity-allowlist
+-- migration sets it (eat/drink/play/pamper or NULL) based on the new
+-- categorization. ON CONFLICT preserves existing top_type values across re-runs.
 
 -- ══════════════════════════════════════════════════════════════
 -- 3. CUISINE TAGS
@@ -163,7 +188,7 @@ FROM (VALUES
   ('Takeout',                'takeout',                5),
   ('Delivery',               'delivery',               6),
   ('Dine-in',                'dine-in',                7),
-  ('Patio Seating',          'patio-seating',          8),
+  -- Patio Seating removed — moved to Extras as "Patio" via tag-system-pr2-cleanup
   ('Private Rooms',          'private-rooms',          9),
   ('Full Bar',               'full-bar',               10),
   ('Beer Garden',            'beer-garden',            11),
@@ -223,7 +248,7 @@ FROM (VALUES
   ('Outdoor',             'outdoor',             5),
   ('Late Night',          'late-night',          6),
   ('Brunch',              'brunch',              7),
-  ('Pet Friendly',        'pet-friendly',        8),
+  -- Pet Friendly removed — moved to Extras via tag-system-pr2-cleanup
   ('Kid Friendly',        'kid-friendly',        9),
   ('Group Friendly',      'group-friendly',      10),
   ('Solo Dining',         'solo-dining',         11),
@@ -255,7 +280,25 @@ ON CONFLICT (slug) DO UPDATE SET
   category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
--- 8. EVENT TYPE TAGS (with per-tag icons)
+-- 8. EXTRAS TAGS (small set of high-signal amenities surfaced as toggles)
+-- ══════════════════════════════════════════════════════════════
+
+INSERT INTO tags (name, slug, icon, sort_order, category_id)
+SELECT t.name, t.slug, t.icon, t.sort_order, c.id
+FROM (VALUES
+  ('Pet Friendly', 'pet-friendly', '🐾', 1),
+  ('Patio',        'patio',        '🌿', 2)
+) AS t(name, slug, icon, sort_order)
+CROSS JOIN tag_categories c
+WHERE c.name = 'Extras'
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  icon = EXCLUDED.icon,
+  sort_order = EXCLUDED.sort_order,
+  category_id = EXCLUDED.category_id;
+
+-- ══════════════════════════════════════════════════════════════
+-- 9. EVENT TYPE TAGS (with per-tag icons)
 -- ══════════════════════════════════════════════════════════════
 
 INSERT INTO tags (name, slug, icon, sort_order, category_id)
@@ -279,7 +322,7 @@ ON CONFLICT (slug) DO UPDATE SET
   category_id = EXCLUDED.category_id;
 
 -- ══════════════════════════════════════════════════════════════
--- 9. EVENT VIBE TAGS (event-specific vibes not in base Vibe list)
+-- 10. EVENT VIBE TAGS (event-specific vibes not in base Vibe list)
 -- ══════════════════════════════════════════════════════════════
 
 INSERT INTO tags (name, slug, sort_order, category_id)

@@ -532,6 +532,8 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
   const [filterOutreach, setFilterOutreach] = useState("all");
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [reclassifyProgress, setReclassifyProgress] = useState({ done: 0, total: 0, errors: 0 });
 
   // ---------- Appointment state ----------
@@ -1232,6 +1234,149 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
     } finally {
       setSeedingInProgress(false);
       setSeedProgress(null);
+    }
+  }
+
+  // ---------- Backfill: re-fetch Google data for already-seeded businesses
+  //            and (1) reclassify their subtype using the current mapper —
+  //            catches "Wedding Venue" misclassified as "Entertainment", "Zoo"
+  //            misclassified as "Activity", etc. — and (2) merge new
+  //            cuisine/dietary/Extras tags from the expanded Google fieldMask.
+  //            Owner-curated businesses (>1 tag) are skipped server-side.
+  async function handleBackfillSeededTags() {
+    if (backfillRunning) return;
+    if (!confirm(
+      "Re-fetch Google Places data for all seeded businesses?\n\n" +
+      "Two passes happen in one go:\n" +
+      "  1. RECLASSIFY subtype — fixes 'Wedding Venue' tagged as 'Entertainment', " +
+      "'Zoo' tagged as 'Activity', etc.\n" +
+      "  2. ENRICH tags — adds cuisine, dietary, Pet Friendly, Patio from the " +
+      "new Google fields.\n\n" +
+      "Owner-curated businesses (those with more than the default subtype tag) " +
+      "are skipped automatically. May take a moment for large batches."
+    )) return;
+
+    setBackfillRunning(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { alert("Session expired. Please log in again."); return; }
+
+      const res = await fetch("/api/admin/businesses/backfill-google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ limit: 500 }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: "Unknown error" }));
+        alert(`Backfill failed: ${errData.error}`);
+        return;
+      }
+
+      const data = await res.json();
+      await logAudit({
+        action: "backfill_google_tags",
+        tab: AUDIT_TABS.SALES,
+        targetType: "business",
+        details: `Reclassified subtypes + enriched ${data.updated} seeded businesses (${data.skipped} skipped, ${data.processed} total)`,
+      });
+
+      // Summarize subtype reclassifications so the user can see what changed.
+      type ResultRow = { status: string; subtypeBefore?: string; subtypeAfter?: string };
+      const reclassified = ((data.results as ResultRow[]) ?? []).filter(
+        (r) => r.status === "updated" && r.subtypeBefore !== undefined && r.subtypeAfter !== undefined && r.subtypeBefore !== r.subtypeAfter
+      );
+      const reclassifySummary = reclassified.length > 0
+        ? `\n\nSubtypes reclassified: ${reclassified.length}\n` +
+          reclassified.slice(0, 8).map((r) => `  ${r.subtypeBefore || "(none)"} → ${r.subtypeAfter}`).join("\n") +
+          (reclassified.length > 8 ? `\n  …and ${reclassified.length - 8} more` : "")
+        : "";
+
+      alert(
+        `Backfill complete!\n\n` +
+        `✓ Updated: ${data.updated}\n` +
+        `⊘ Skipped: ${data.skipped}\n` +
+        `Total processed: ${data.processed}` +
+        reclassifySummary
+      );
+    } catch (err) {
+      console.error("Backfill error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setBackfillRunning(false);
+    }
+  }
+
+  // ---------- Run Maintenance: the combined classification fix.
+  //            Hits ONE Google API call per unique google_place_id, then applies
+  //            the result to BOTH the lead (verifies type) AND the seeded
+  //            business (reclassifies subtype + enriches tags). Saves money
+  //            when a lead has been seeded — no double-fetching.
+  async function handleRunMaintenance() {
+    if (maintenanceRunning) return;
+    if (!confirm(
+      "Run combined classification maintenance?\n\n" +
+      "This single pass:\n" +
+      "  • Verifies business types on unverified leads\n" +
+      "  • Reclassifies seeded businesses' subtypes (e.g. Wedding Venue, Zoo)\n" +
+      "  • Enriches seeded businesses with cuisine/dietary/Pet Friendly/Patio\n\n" +
+      "Deduplicates Google API calls when a lead and a seeded business share " +
+      "the same place — so you only pay for each place once. Owner-curated " +
+      "businesses (>1 tag) are skipped automatically."
+    )) return;
+
+    setMaintenanceRunning(true);
+    try {
+      const { data: { session } } = await supabaseBrowser.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { alert("Session expired. Please log in again."); return; }
+
+      const res = await fetch("/api/admin/sales/maintenance-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ limit: 500 }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: "Unknown error" }));
+        alert(`Maintenance run failed: ${errData.error}`);
+        return;
+      }
+
+      const data = await res.json();
+      await logAudit({
+        action: "maintenance_run",
+        tab: AUDIT_TABS.SALES,
+        targetType: "business",
+        details: `Maintenance run: ${data.leadsUpdated} leads verified, ${data.businessesUpdated} businesses updated, ${data.savedApiCalls} API calls saved via dedupe`,
+      });
+
+      type ResultRow = { status?: string; subtypeBefore?: string; subtypeAfter?: string; businessStatus?: string };
+      const reclassified = ((data.results as ResultRow[]) ?? []).filter(
+        (r) => r.businessStatus === "updated" && r.subtypeBefore !== undefined && r.subtypeAfter !== undefined && r.subtypeBefore !== r.subtypeAfter
+      );
+      const reclassifySummary = reclassified.length > 0
+        ? `\n\nSubtypes reclassified: ${reclassified.length}\n` +
+          reclassified.slice(0, 8).map((r) => `  ${r.subtypeBefore || "(none)"} → ${r.subtypeAfter}`).join("\n") +
+          (reclassified.length > 8 ? `\n  …and ${reclassified.length - 8} more` : "")
+        : "";
+
+      alert(
+        `Maintenance complete!\n\n` +
+        `✓ Leads verified: ${data.leadsUpdated}\n` +
+        `✓ Businesses updated: ${data.businessesUpdated}\n` +
+        `Total places processed: ${data.processed}\n` +
+        `💰 API calls saved via dedupe: ${data.savedApiCalls} ` +
+        `(${data.naiveCallCount || 0} naive → ${data.dedupedCallCount || 0} actual)` +
+        reclassifySummary
+      );
+      fetchLeads();
+    } catch (err) {
+      console.error("Maintenance run error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "unknown"}`);
+    } finally {
+      setMaintenanceRunning(false);
     }
   }
 
@@ -2853,71 +2998,137 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         </div>
       </Card>
 
-      {/* Bulk Actions */}
-      <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <button
-          onClick={handleBulkScrape}
-          disabled={bulkScraping}
-          style={{
-            ...btnPrimary,
-            background: bulkScraping ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
-            color: "#000",
-            opacity: bulkScraping ? 0.6 : 1,
-          }}
-        >
-          {bulkScraping
-            ? `Scraping... ${bulkScrapeProgress.current}/${bulkScrapeProgress.total} (${bulkScrapeProgress.found} found)`
-            : `Bulk Scrape Emails (${filteredLeads.filter((l) => l.website && !l.email && (l.scrape_attempts || 0) < 5).length} leads)`}
-        </button>
-        <select
-          value={selectedTemplate}
-          onChange={(e) => setSelectedTemplate(e.target.value)}
-          style={{ ...selectStyle, minWidth: 160 }}
-        >
-          <option value="initial_outreach">Initial Outreach</option>
-          <option value="follow_up">Follow Up</option>
-          <option value="preview_share">Preview Share</option>
-        </select>
-        <button
-          onClick={handleBulkSend}
-          disabled={bulkSending}
-          style={{
-            ...btnPrimary,
-            background: bulkSending ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonOrange}, ${COLORS.neonPink})`,
-            opacity: bulkSending ? 0.6 : 1,
-          }}
-        >
-          {bulkSending
-            ? `Sending... ${bulkSendProgress.current}/${bulkSendProgress.total} (${bulkSendProgress.sent} sent)`
-            : `Bulk Send Email (${filteredLeads.filter((l) => l.email && !l.unsubscribed_at).length} leads)`}
-        </button>
-        <button
-          onClick={handleCleanupJunk}
-          disabled={cleanupRunning || reclassifying}
-          style={{
-            ...btnPrimary,
-            background: cleanupRunning ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonYellow}, ${COLORS.neonOrange})`,
-            color: "#000",
-            opacity: cleanupRunning ? 0.6 : 1,
-          }}
-          title="Scan lead names for obvious non-targets (fire departments, churches, medical, etc.) and flag as Excluded"
-        >
-          {cleanupRunning ? "Scanning..." : "Flag Junk Leads"}
-        </button>
-        <button
-          onClick={handleReclassify}
-          disabled={reclassifying || cleanupRunning}
-          style={{
-            ...btnPrimary,
-            background: reclassifying ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonPurple})`,
-            opacity: reclassifying ? 0.6 : 1,
-          }}
-          title="Re-fetch each lead's business type from Google Places API (costs ~$5 per 1000 leads)"
-        >
-          {reclassifying
-            ? `Reclassifying... ${reclassifyProgress.done}/${reclassifyProgress.total}${reclassifyProgress.errors ? ` (${reclassifyProgress.errors} err)` : ""}`
-            : "Reclassify Types"}
-        </button>
+      {/* Bulk Actions — split into two columns: Classification (left) / Outreach (right).
+          Each column has a section header + a primary CTA + secondary granular buttons. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+        {/* ── LEFT: Business Type Classification ─────────────────────── */}
+        <div style={{
+          padding: 16, borderRadius: 12, background: "rgba(0,212,255,0.04)",
+          border: `1px solid ${COLORS.cardBorder}`,
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: COLORS.neonBlue, textTransform: "uppercase",
+            letterSpacing: 1.5, marginBottom: 10,
+          }}>
+            Business Type Classification
+          </div>
+          {/* Primary CTA: combined Run Maintenance — deduplicates Google calls
+              across leads + seeded businesses, saving API spend. */}
+          <button
+            onClick={handleRunMaintenance}
+            disabled={maintenanceRunning || cleanupRunning || reclassifying || backfillRunning}
+            style={{
+              ...btnPrimary,
+              width: "100%",
+              background: maintenanceRunning
+                ? COLORS.cardBorder
+                : `linear-gradient(135deg, ${COLORS.neonBlue}, ${COLORS.neonPurple})`,
+              opacity: maintenanceRunning ? 0.6 : 1,
+              fontWeight: 700,
+              marginBottom: 10,
+            }}
+            title="One-click combined fix: verifies lead types, reclassifies seeded business subtypes, and enriches tags. Dedupes Google API calls when a lead and seeded business share the same place."
+          >
+            {maintenanceRunning ? "Running maintenance…" : "▶ Run Maintenance (combined)"}
+          </button>
+          {/* Granular buttons */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button
+              onClick={handleReclassify}
+              disabled={reclassifying || cleanupRunning || maintenanceRunning}
+              style={{
+                ...btnSecondary,
+                fontSize: 12,
+                opacity: reclassifying ? 0.6 : 1,
+              }}
+              title="Re-fetch each lead's business type from Google Places API (costs ~$5 per 1000 leads)"
+            >
+              {reclassifying
+                ? `Reclassifying… ${reclassifyProgress.done}/${reclassifyProgress.total}${reclassifyProgress.errors ? ` (${reclassifyProgress.errors} err)` : ""}`
+                : "Reclassify Types (leads only)"}
+            </button>
+            <button
+              onClick={handleBackfillSeededTags}
+              disabled={backfillRunning || maintenanceRunning}
+              title="Re-fetch Google data for all seeded businesses and merge new tags (cuisine, dietary, Pet Friendly, Patio). Owner-curated businesses are skipped."
+              style={{
+                ...btnSecondary,
+                fontSize: 12,
+                opacity: backfillRunning ? 0.5 : 1,
+              }}
+            >
+              {backfillRunning ? "Re-enriching…" : "Re-enrich Seeded (businesses only)"}
+            </button>
+            <button
+              onClick={handleCleanupJunk}
+              disabled={cleanupRunning || reclassifying || maintenanceRunning}
+              style={{
+                ...btnSecondary,
+                fontSize: 12,
+                opacity: cleanupRunning ? 0.6 : 1,
+              }}
+              title="Scan lead names for obvious non-targets (fire departments, churches, medical, etc.) and flag as Excluded"
+            >
+              {cleanupRunning ? "Scanning…" : "Flag Junk Leads"}
+            </button>
+          </div>
+        </div>
+
+        {/* ── RIGHT: Email Outreach ──────────────────────────────────── */}
+        <div style={{
+          padding: 16, borderRadius: 12, background: "rgba(255,107,53,0.04)",
+          border: `1px solid ${COLORS.cardBorder}`,
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: COLORS.neonOrange, textTransform: "uppercase",
+            letterSpacing: 1.5, marginBottom: 10,
+          }}>
+            Email Outreach
+          </div>
+          {/* Step 1: scrape emails from websites */}
+          <button
+            onClick={handleBulkScrape}
+            disabled={bulkScraping}
+            style={{
+              ...btnPrimary,
+              width: "100%",
+              background: bulkScraping ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonGreen}, ${COLORS.neonBlue})`,
+              color: "#000",
+              opacity: bulkScraping ? 0.6 : 1,
+              marginBottom: 10,
+            }}
+          >
+            {bulkScraping
+              ? `Scraping… ${bulkScrapeProgress.current}/${bulkScrapeProgress.total} (${bulkScrapeProgress.found} found)`
+              : `1. Bulk Scrape Emails (${filteredLeads.filter((l) => l.website && !l.email && (l.scrape_attempts || 0) < 5).length} leads)`}
+          </button>
+          {/* Step 2: pick template + send (kept as separate action per product decision) */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+              style={{ ...selectStyle, flex: 1, minWidth: 130 }}
+            >
+              <option value="initial_outreach">Initial Outreach</option>
+              <option value="follow_up">Follow Up</option>
+              <option value="preview_share">Preview Share</option>
+            </select>
+            <button
+              onClick={handleBulkSend}
+              disabled={bulkSending}
+              style={{
+                ...btnPrimary,
+                fontSize: 12,
+                background: bulkSending ? COLORS.cardBorder : `linear-gradient(135deg, ${COLORS.neonOrange}, ${COLORS.neonPink})`,
+                opacity: bulkSending ? 0.6 : 1,
+              }}
+            >
+              {bulkSending
+                ? `Sending… ${bulkSendProgress.current}/${bulkSendProgress.total} (${bulkSendProgress.sent} sent)`
+                : `2. Send (${filteredLeads.filter((l) => l.email && !l.unsubscribed_at).length})`}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Seed Controls */}
@@ -2969,6 +3180,9 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
               : `Unseed Selected (${unseedLeadIds.size})`}
           </button>
         )}
+        {/* Re-enrich Seeded Tags moved into the Classification column above —
+            it lives next to Reclassify Types since they're the same kind of
+            data-hygiene operation. */}
         {selectedLeadIds.size > 0 && !seedingInProgress && (
           <span style={{ color: COLORS.textSecondary, fontSize: 12 }}>
             Selected businesses will appear in the discovery feed as unclaimed trial listings with 0% payouts

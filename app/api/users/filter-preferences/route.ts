@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 /**
  * PUT /api/users/filter-preferences
  * Saves the user's filter preferences.
- * Body: { preferences: { categories, price, distance, openNow, tags } }
+ * Body: { preferences: { topTypes, categories, price, distance, openNow, tags } }
  */
 export async function PUT(req: NextRequest) {
   const user = await authenticate(req);
@@ -46,8 +46,14 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "preferences object required" }, { status: 400 });
     }
 
-    // Sanitize — only allow known fields
+    // Sanitize — only allow known fields. topTypes restricted to the 4 valid values.
+    const ALLOWED_TOP_TYPES = ["eat", "drink", "play", "pamper"] as const;
     const sanitized: Record<string, unknown> = {};
+    if (Array.isArray(prefs.topTypes)) {
+      sanitized.topTypes = prefs.topTypes.filter((t: unknown): t is string =>
+        typeof t === "string" && (ALLOWED_TOP_TYPES as readonly string[]).includes(t)
+      );
+    }
     if (Array.isArray(prefs.categories)) sanitized.categories = prefs.categories.filter((c: unknown) => typeof c === "string");
     if (typeof prefs.price === "string") sanitized.price = prefs.price;
     if (typeof prefs.distance === "number") sanitized.distance = Math.min(50, Math.max(1, prefs.distance));

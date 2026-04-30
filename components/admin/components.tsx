@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 
 // Google Maps types - simplified to avoid conflicts
 interface PlacePrediction {
@@ -1722,99 +1723,46 @@ interface TagsProps {
   onChange?: (tags: string[]) => void;
 }
 
-interface TagData {
-  id: string;
-  name: string;
-  slug: string;
-  color: string | null;
-  category_name: string;
-  category_icon: string;
-}
+export function Tags({ tags, editable, onChange }: TagsProps) {
+  const [tagCats, setTagCats] = useState<TagCategory[]>([]);
 
-export function Tags({ tags, editable, businessId, onChange }: TagsProps) {
-  const [allTags, setAllTags] = useState<TagData[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>(tags || []);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  // Fetch all available tags from Supabase
+  // Pull active categories + tags from the shared lib (archived ones are
+  // filtered out automatically). Price Range is excluded because there's a
+  // dedicated price_level field on the business.
   useEffect(() => {
-    async function fetchTags() {
-      setLoading(true);
-      try {
-        const { data, error } = await supabaseBrowser
-          .from("tags")
-          .select(`
-            id,
-            name,
-            slug,
-            color,
-            tag_categories (
-              name,
-              icon
-            )
-          `)
-          .order("name");
-
-        if (!error && data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const formattedTags: TagData[] = (data as any[]).map((t) => ({
-            id: t.id,
-            name: t.name,
-            slug: t.slug,
-            color: t.color,
-            category_name: t.tag_categories?.name || "Other",
-            category_icon: t.tag_categories?.icon || "🏷️",
-          }));
-          setAllTags(formattedTags);
-        }
-      } catch (err) {
-        console.error("Error fetching tags:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchTags();
+    fetchTagsByCategory("business")
+      .then(cats => setTagCats(cats.filter(c => c.name.toLowerCase() !== "price range")))
+      .catch(err => console.error("[admin Tags] failed to load categories:", err));
   }, []);
 
-  // Update selectedTags when tags prop changes
-  useEffect(() => {
-    setSelectedTags(tags || []);
-  }, [tags]);
+  // Fully controlled: parent owns the tag list. Toggle/remove call onChange so
+  // we don't have to mirror the prop into local state.
+  const selectedTags = tags || [];
 
-  const filteredTags = allTags.filter(
-    (t) =>
-      t.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !selectedTags.includes(t.name)
-  );
+  // Tag matching against the DB tag list is case-sensitive (Postgres array
+  // contains check), so always store the exact name from the picker. We dedupe
+  // case-insensitively so legacy lowercase values don't collide with new picks.
+  function toggleTag(tagName: string) {
+    const trimmed = tagName.trim();
+    if (!trimmed) return;
+    const lowerSet = new Set(selectedTags.map(t => t.toLowerCase()));
+    const next = lowerSet.has(trimmed.toLowerCase())
+      ? selectedTags.filter(t => t.toLowerCase() !== trimmed.toLowerCase())
+      : [...selectedTags, trimmed];
+    onChange?.(next);
+  }
 
-  // Group filtered tags by category
-  const groupedTags = filteredTags.reduce((acc, tag) => {
-    if (!acc[tag.category_name]) {
-      acc[tag.category_name] = { icon: tag.category_icon, tags: [] };
+  function removeTag(tagName: string) {
+    onChange?.(selectedTags.filter(t => t !== tagName));
+  }
+
+  function getTagColor(tagName: string): string {
+    for (const cat of tagCats) {
+      const found = cat.tags.find(t => t.name === tagName);
+      if (found?.color) return found.color;
     }
-    acc[tag.category_name].tags.push(tag);
-    return acc;
-  }, {} as Record<string, { icon: string; tags: TagData[] }>);
-
-  const addTag = (tagName: string) => {
-    const newTags = [...selectedTags, tagName];
-    setSelectedTags(newTags);
-    onChange?.(newTags);
-    setSearchQuery("");
-  };
-
-  const removeTag = (tagName: string) => {
-    const newTags = selectedTags.filter((t) => t !== tagName);
-    setSelectedTags(newTags);
-    onChange?.(newTags);
-  };
-
-  const getTagColor = (tagName: string) => {
-    const tag = allTags.find((t) => t.name === tagName);
-    return tag?.color || COLORS.neonGreen;
-  };
+    return COLORS.neonGreen;
+  }
 
   if (!editable) {
     if (!tags || tags.length === 0) {
@@ -1840,6 +1788,8 @@ export function Tags({ tags, editable, businessId, onChange }: TagsProps) {
       </div>
     );
   }
+
+  const selectedLowerSet = new Set(selectedTags.map(t => t.toLowerCase()));
 
   return (
     <div>
@@ -1877,115 +1827,73 @@ export function Tags({ tags, editable, businessId, onChange }: TagsProps) {
             </button>
           </span>
         ))}
-      </div>
-
-      {/* Search Input */}
-      <div style={{ position: "relative" }}>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            setShowDropdown(true);
-          }}
-          onFocus={() => setShowDropdown(true)}
-          placeholder="Search tags..."
-          style={{
-            width: "100%",
-            padding: "12px 14px",
-            border: "1px solid " + COLORS.cardBorder,
-            borderRadius: 8,
-            fontSize: 13,
-            background: COLORS.darkBg,
-            color: COLORS.textPrimary,
-          }}
-        />
-        <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: COLORS.neonBlue }}>🔍</span>
-
-        {/* Dropdown */}
-        {showDropdown && (searchQuery || filteredTags.length > 0) && (
-          <div
-            style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              right: 0,
-              marginTop: 8,
-              background: COLORS.cardBg,
-              border: "1px solid " + COLORS.cardBorder,
-              borderRadius: 12,
-              maxHeight: 300,
-              overflowY: "auto",
-              zIndex: 100,
-              boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
-            }}
-          >
-            {loading ? (
-              <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>Loading tags...</div>
-            ) : Object.keys(groupedTags).length > 0 ? (
-              Object.entries(groupedTags).map(([category, { icon, tags: categoryTags }]) => (
-                <div key={category}>
-                  <div
-                    style={{
-                      padding: "8px 14px",
-                      background: COLORS.darkBg,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: COLORS.textSecondary,
-                      textTransform: "uppercase",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <span>{icon}</span> {category}
-                  </div>
-                  {categoryTags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      onClick={() => addTag(tag.name)}
-                      style={{
-                        padding: "10px 14px",
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        borderBottom: "1px solid " + COLORS.cardBorder,
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = COLORS.darkBg)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <span style={{ color: tag.color || COLORS.textPrimary }}>{tag.name}</span>
-                      <span style={{ fontSize: 11, color: COLORS.neonGreen }}>+ Add</span>
-                    </div>
-                  ))}
-                </div>
-              ))
-            ) : searchQuery ? (
-              <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>
-                No tags found matching "{searchQuery}"
-              </div>
-            ) : (
-              <div style={{ padding: 20, textAlign: "center", color: COLORS.textSecondary }}>
-                Start typing to search tags
-              </div>
-            )}
-          </div>
+        {selectedTags.length === 0 && (
+          <span style={{ color: COLORS.textSecondary, fontSize: 12, fontStyle: "italic" }}>
+            No tags selected. Pick from the categories below.
+          </span>
         )}
       </div>
 
-      {/* Footer */}
-      <div style={{ marginTop: 12, fontSize: 11, color: COLORS.textSecondary, textAlign: "right" }}>
-        Tags are managed in Supabase • {allTags.length} available
+      {/* Guided multi-select: each category shows all its tags as toggle pills. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {tagCats.map(cat => {
+          const activeCount = cat.tags.filter(t => selectedLowerSet.has(t.name.toLowerCase())).length;
+          return (
+            <div key={cat.id}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                fontSize: 11, fontWeight: 700, textTransform: "uppercase",
+                letterSpacing: 1.5, color: COLORS.textSecondary, marginBottom: 8,
+              }}>
+                <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                <span>{cat.name}</span>
+                {activeCount > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: "2px 7px",
+                    borderRadius: 50, background: `${COLORS.neonBlue}25`,
+                    color: COLORS.neonBlue,
+                  }}>{activeCount}</span>
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {cat.tags.map(tag => {
+                  const active = selectedLowerSet.has(tag.name.toLowerCase());
+                  const color = tag.color || COLORS.neonGreen;
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.name)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        padding: "5px 12px", borderRadius: 20,
+                        border: `1px solid ${active ? color : COLORS.cardBorder}`,
+                        background: active ? `${color}25` : "transparent",
+                        color: active ? color : COLORS.textSecondary,
+                        fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      {tag.icon && <span>{tag.icon}</span>}
+                      {tag.name}
+                    </button>
+                  );
+                })}
+                {cat.tags.length === 0 && (
+                  <span style={{ color: COLORS.textSecondary, fontSize: 11, fontStyle: "italic" }}>
+                    No tags in this category
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {tagCats.length === 0 && (
+          <div style={{ color: COLORS.textSecondary, fontSize: 12, padding: 12 }}>
+            Loading tag categories…
+          </div>
+        )}
       </div>
-
-      {/* Click outside to close */}
-      {showDropdown && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 99 }}
-          onClick={() => setShowDropdown(false)}
-        />
-      )}
     </div>
   );
 }

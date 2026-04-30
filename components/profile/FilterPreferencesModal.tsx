@@ -18,10 +18,16 @@ const COLORS = {
   neonPink: "#FF2D78",
 };
 
-const DEFAULT_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Deli", "Ice Cream", "Juice Bar", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym", "Yoga Studio", "Dance Studio"];
 const PRICE_OPTIONS = ["Any", "$", "$$", "$$$", "$$$$"];
+const TOP_TYPE_OPTIONS: { value: "eat" | "drink" | "play" | "pamper"; label: string }[] = [
+  { value: "eat", label: "Eat" },
+  { value: "drink", label: "Drink" },
+  { value: "play", label: "Play" },
+  { value: "pamper", label: "Pamper" },
+];
 
 interface FilterPrefs {
+  topTypes: string[];
   categories: string[];
   price: string;
   distance: number;
@@ -35,7 +41,7 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
   token: string | null;
 }) {
   const [prefs, setPrefs] = useState<FilterPrefs>({
-    categories: [], price: "Any", distance: 15, openNow: false, tags: [],
+    topTypes: [], categories: [], price: "Any", distance: 15, openNow: false, tags: [],
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,6 +73,7 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
       .then(([prefsData, profileRes]) => {
         if (prefsData?.preferences) {
           setPrefs({
+            topTypes: prefsData.preferences.topTypes || [],
             categories: prefsData.preferences.categories || [],
             price: prefsData.preferences.price || "Any",
             distance: prefsData.preferences.distance || 15,
@@ -126,9 +133,43 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
     }));
   }
 
-  const selectedCatIsFood = prefs.categories.length === 0 || prefs.categories.some(c =>
-    ["Restaurant", "Bar", "Coffee", "Bakery", "Deli", "Ice Cream", "Juice Bar", "Food Truck", "Brewery", "Winery", "Pub", "Sports Bar", "Lounge", "Nightclub", "Karaoke"].includes(c)
-  );
+  function toggleTopType(value: "eat" | "drink" | "play" | "pamper") {
+    setPrefs(p => ({
+      ...p,
+      topTypes: p.topTypes.includes(value)
+        ? p.topTypes.filter(t => t !== value)
+        : [...p.topTypes, value],
+      // Reset category subtype picks when toggling Type — they were valid for the
+      // old Type set and probably aren't for the new one.
+      categories: [],
+    }));
+  }
+
+  // Subtypes shown in the Category grid are contextual on selected top types.
+  // Empty topTypes → show all Business Type tags; otherwise only matching ones.
+  const filteredCategories = (() => {
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (!bt || bt.tags.length === 0) return [];
+    const matched = prefs.topTypes.length === 0
+      ? bt.tags
+      : bt.tags.filter(t => t.top_type && prefs.topTypes.includes(t.top_type));
+    return matched.map(t => t.name);
+  })();
+
+  // Show Cuisine/Dietary only when filtering for food (Eat top type or a food
+  // subtype). With nothing selected at all, default to visible.
+  const selectedCatIsFood = (() => {
+    if (prefs.topTypes.length === 0 && prefs.categories.length === 0) return true;
+    if (prefs.topTypes.includes("eat")) return true;
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (prefs.categories.length > 0) {
+      return prefs.categories.some(catName => {
+        const tag = bt?.tags.find(t => t.name === catName);
+        return tag?.is_food ?? true;
+      });
+    }
+    return false;
+  })();
 
   if (!open) return null;
 
@@ -184,6 +225,17 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
           <div style={{ padding: 40, textAlign: "center", color: COLORS.textSecondary }}>Loading...</div>
         ) : (
           <>
+            {/* Type — primary axis (Eat / Drink / Play / Pamper). Multi-select.
+                Empty = show all. Drives contextual filtering on Category below. */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Type</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {TOP_TYPE_OPTIONS.map(({ value, label }) => (
+                  <button key={value} onClick={() => toggleTopType(value)} style={pillStyle(prefs.topTypes.includes(value))}>{label}</button>
+                ))}
+              </div>
+            </div>
+
             {/* Price — always visible */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>Price</div>
@@ -226,23 +278,31 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
               </button>
             </div>
 
-            {/* Category — collapsible */}
+            {/* Category — collapsible. Subtypes are filtered contextually by
+                the Type pills above. */}
             <div style={{ marginTop: 8 }}>
               {sectionHeader("Category", prefs.categories.length)}
               {!collapsedSections.has("Category") && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {DEFAULT_CATEGORIES.map(cat => (
-                    <button key={cat} onClick={() => toggleCategory(cat)} style={pillStyle(
-                      cat === "All" ? prefs.categories.length === 0 : prefs.categories.includes(cat)
-                    )}>{cat}</button>
+                  <button key="All" onClick={() => toggleCategory("All")} style={pillStyle(prefs.categories.length === 0)}>All</button>
+                  {filteredCategories.map(cat => (
+                    <button key={cat} onClick={() => toggleCategory(cat)} style={pillStyle(prefs.categories.includes(cat))}>{cat}</button>
                   ))}
+                  {filteredCategories.length === 0 && (
+                    <span style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic", padding: "7px 0" }}>
+                      No subtypes for the selected Type
+                    </span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Dynamic tag sections — collapsible */}
+            {/* Dynamic tag sections (Cuisine, Dietary, Extras…) — collapsible.
+                Price Range is excluded because the dedicated Price selector
+                above already covers it. */}
             {tagCats
               .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
+              .filter(c => c.name.toLowerCase() !== "price range")
               .filter(c => !c.requires_food || selectedCatIsFood)
               .map(c => {
                 const catTags = c.tags.map(t => t.name);
@@ -264,7 +324,7 @@ export default function FilterPreferencesModal({ open, onClose, token }: {
 
             {/* Save / Clear */}
             <div style={{ display: "flex", gap: 12, marginTop: 24, paddingTop: 16, borderTop: `1px solid ${COLORS.cardBorder}` }}>
-              <button onClick={() => setPrefs({ categories: [], price: "Any", distance: 15, openNow: false, tags: [] })} style={{
+              <button onClick={() => setPrefs({ topTypes: [], categories: [], price: "Any", distance: 15, openNow: false, tags: [] })} style={{
                 flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
                 border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
                 color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",

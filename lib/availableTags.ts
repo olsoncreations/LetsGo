@@ -7,6 +7,8 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 // ── Types ──────────────────────────────────────────────────────
 
+export type TopType = "eat" | "drink" | "play" | "pamper";
+
 export type TagItem = {
   id: string;
   name: string;
@@ -15,6 +17,9 @@ export type TagItem = {
   icon: string | null;
   sort_order: number;
   is_food: boolean;
+  is_active: boolean;
+  is_date_night_activity: boolean;
+  top_type: TopType | null;
   category_id: string;
   category_name: string;
   category_icon: string;
@@ -26,12 +31,19 @@ export type TagCategory = {
   icon: string;
   scope: string[];
   requires_food: boolean;
+  is_active: boolean;
   tags: TagItem[];
 };
 
-// ── Cache ──────────────────────────────────────────────────────
+export type FetchTagsOptions = {
+  /** Include archived (is_active=false) categories + tags. Default false. Admin-only. */
+  includeArchived?: boolean;
+};
 
-let cachedTags: string[] | null = null;
+// ── Cache ──────────────────────────────────────────────────────
+// The cache stores ALL categories + tags (active + archived). Consumers filter
+// at read time via the `includeArchived` flag — keeps the cache canonical.
+
 let cachedCategories: TagCategory[] | null = null;
 let cacheTime = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -40,60 +52,31 @@ function isCacheValid(): boolean {
   return cacheTime > 0 && Date.now() - cacheTime < CACHE_TTL;
 }
 
-// ── Fetch: flat tag names (backward compat) ────────────────────
-
-/**
- * Fetch all tag names from the DB. Cached for 5 minutes.
- */
-export async function fetchAvailableTags(): Promise<string[]> {
-  if (cachedTags && isCacheValid()) return cachedTags;
-
-  const { data } = await supabaseBrowser
-    .from("tags")
-    .select("name")
-    .order("name");
-
-  cachedTags = (data ?? []).map((t: { name: string }) => t.name);
-  cacheTime = Date.now();
-  return cachedTags;
-}
-
-// ── Fetch: tags grouped by category ────────────────────────────
-
-/**
- * Fetch all tags grouped by category. Optionally filter by scope.
- * Returns categories with their tags sorted by sort_order then name.
- */
-export async function fetchTagsByCategory(
-  scope?: "business" | "event" | "game"
-): Promise<TagCategory[]> {
-  if (cachedCategories && isCacheValid()) {
-    return scope
-      ? cachedCategories.filter((c) => c.scope.includes(scope))
-      : cachedCategories;
-  }
+async function ensureCache(): Promise<TagCategory[]> {
+  if (cachedCategories && isCacheValid()) return cachedCategories;
 
   const { data: catRows } = await supabaseBrowser
     .from("tag_categories")
-    .select("id, name, icon, scope, requires_food")
+    .select("id, name, icon, scope, requires_food, is_active")
     .order("name");
 
   const { data: tagRows } = await supabaseBrowser
     .from("tags")
-    .select("id, name, slug, color, icon, sort_order, is_food, category_id")
+    .select("id, name, slug, color, icon, sort_order, is_food, is_active, top_type, is_date_night_activity, category_id")
     .order("sort_order")
     .order("name");
 
   const categories: TagCategory[] = (catRows ?? []).map(
-    (c: { id: string; name: string; icon: string; scope: string[] | null; requires_food: boolean | null }) => ({
+    (c: { id: string; name: string; icon: string; scope: string[] | null; requires_food: boolean | null; is_active: boolean | null }) => ({
       id: c.id,
       name: c.name,
       icon: c.icon ?? "🏷️",
       scope: c.scope ?? ["business"],
       requires_food: c.requires_food ?? false,
+      is_active: c.is_active ?? true,
       tags: (tagRows ?? [])
         .filter((t: { category_id: string }) => t.category_id === c.id)
-        .map((t: { id: string; name: string; slug: string; color: string | null; icon: string | null; sort_order: number | null; is_food: boolean | null }) => ({
+        .map((t: { id: string; name: string; slug: string; color: string | null; icon: string | null; sort_order: number | null; is_food: boolean | null; is_active: boolean | null; top_type: string | null; is_date_night_activity: boolean | null }) => ({
           id: t.id,
           name: t.name,
           slug: t.slug,
@@ -101,6 +84,9 @@ export async function fetchTagsByCategory(
           icon: t.icon,
           sort_order: t.sort_order ?? 0,
           is_food: t.is_food ?? false,
+          is_active: t.is_active ?? true,
+          is_date_night_activity: t.is_date_night_activity ?? false,
+          top_type: (t.top_type as TopType | null) ?? null,
           category_id: c.id,
           category_name: c.name,
           category_icon: c.icon ?? "🏷️",
@@ -109,13 +95,50 @@ export async function fetchTagsByCategory(
   );
 
   cachedCategories = categories;
-  // Also update the flat cache for backward compat
-  cachedTags = (tagRows ?? []).map((t: { name: string }) => t.name);
   cacheTime = Date.now();
+  return categories;
+}
 
-  return scope
-    ? categories.filter((c) => c.scope.includes(scope))
-    : categories;
+// ── Fetch: flat tag names (backward compat) ────────────────────
+
+/**
+ * Fetch all active tag names from the DB. Cached for 5 minutes.
+ * Archived tags are excluded.
+ */
+export async function fetchAvailableTags(): Promise<string[]> {
+  const categories = await ensureCache();
+  const names: string[] = [];
+  for (const c of categories) {
+    if (!c.is_active) continue;
+    for (const t of c.tags) {
+      if (t.is_active) names.push(t.name);
+    }
+  }
+  return names;
+}
+
+// ── Fetch: tags grouped by category ────────────────────────────
+
+/**
+ * Fetch tags grouped by category. Optionally filter by scope.
+ * By default, archived (is_active=false) categories and tags are excluded.
+ * Pass `{ includeArchived: true }` for admin-side tools that need to see/restore them.
+ */
+export async function fetchTagsByCategory(
+  scope?: "business" | "event" | "game",
+  options?: FetchTagsOptions
+): Promise<TagCategory[]> {
+  const all = await ensureCache();
+  const includeArchived = options?.includeArchived === true;
+
+  let categories = all;
+  if (!includeArchived) {
+    categories = categories
+      .filter((c) => c.is_active)
+      .map((c) => ({ ...c, tags: c.tags.filter((t) => t.is_active) }));
+  }
+
+  return scope ? categories.filter((c) => c.scope.includes(scope)) : categories;
 }
 
 // ── Helper: smart category visibility ──────────────────────────
@@ -143,11 +166,25 @@ export function getVisibleCategories(
     .filter((c) => !c.requires_food || hasFood);
 }
 
+// ── Helper: lookup tags by Top Type (Eat / Drink / Play / Pamper) ──
+
+/**
+ * Get all active Business Type tags whose `top_type` matches the given value.
+ * Used by the discovery feed's new "Type" filter (Eat/Drink/Play/Pamper).
+ *
+ * Returns an empty array if Business Type category isn't found or no tags match.
+ */
+export async function getTagsByTopType(topType: TopType): Promise<TagItem[]> {
+  const all = await fetchTagsByCategory();
+  const businessType = all.find((c) => c.name === "Business Type");
+  if (!businessType) return [];
+  return businessType.tags.filter((t) => t.top_type === topType);
+}
+
 // ── Cache invalidation ─────────────────────────────────────────
 
-/** Invalidate the cache (e.g. after admin adds/removes tags). */
+/** Invalidate the cache (e.g. after admin adds/removes/archives tags). */
 export function invalidateTagCache(): void {
-  cachedTags = null;
   cachedCategories = null;
   cacheTime = 0;
 }

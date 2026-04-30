@@ -18,7 +18,7 @@ import {
   type BusinessRow, type MediaRow, type DiscoveryImage, type DiscoveryBusiness,
   buildMediaUrl, getBusinessGradient, getBusinessEmoji, formatBusinessType,
   normalizeHoursForDisplay, computeOpenStatus, normalizePayoutFromBps,
-  normalizeToDiscoveryBusiness, shuffleArray,
+  normalizeToDiscoveryBusiness,
 } from "@/lib/businessNormalize";
 
 // ═══════════════════════════════════════════════════
@@ -45,6 +45,7 @@ const COLORS = {
 
 type FilterState = {
   search: string;
+  topTypes: string[]; // "eat" | "drink" | "play" | "pamper" — multi-select, empty = show all
   categories: string[];
   price: string;
   sort: string;
@@ -54,11 +55,22 @@ type FilterState = {
   tags: string[];
 };
 
+// Top-level type filter — the new "Eat / Drink / Play / Pamper" primary axis.
+// Each Business Type tag has a top_type field that maps it to one of these.
+const TOP_TYPE_OPTIONS: { value: "eat" | "drink" | "play" | "pamper"; label: string }[] = [
+  { value: "eat", label: "Eat" },
+  { value: "drink", label: "Drink" },
+  { value: "play", label: "Play" },
+  { value: "pamper", label: "Pamper" },
+];
+
 // ─── Filter options (fallbacks if DB fetch fails) ───
 
 const DEFAULT_FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Deli", "Ice Cream", "Juice Bar", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym", "Yoga Studio", "Dance Studio"];
 const PRICE_FILTERS = ["Any", "$", "$$", "$$$", "$$$$"];
-const SORT_OPTIONS = ["Nearest", "Most Popular", "Highest Payout", "Newest", "Highest Rated", "Most Reviewed", "Trending", "Recently Updated"];
+// Empty sort = Random (server picks a stable seeded shuffle for the session).
+// Random is the discovery default — no pill is highlighted until the user picks one.
+const SORT_OPTIONS = ["Nearest", "Newest", "Highest Payout"];
 const DEFAULT_CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "Spanish", "Caribbean", "Ethiopian", "Peruvian", "Brazilian", "Middle Eastern", "Moroccan", "Southern", "Cajun", "BBQ", "Seafood", "Steakhouse", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Poke", "Farm-to-Table", "Fusion"];
 const DEFAULT_VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rustic", "Industrial", "Bohemian", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
 const DEFAULT_AMENITY_FILTERS = ["Free WiFi", "Parking", "Wheelchair Accessible", "Reservations", "Takeout", "Delivery", "Dine-in", "Patio Seating", "Private Rooms", "Full Bar", "Beer Garden", "Fireplace", "Pool Table", "Dart Board", "TV Screens", "Projector", "Stage", "Dance Floor", "Valet", "EV Charging"];
@@ -82,7 +94,7 @@ const DEFAULT_PAYOUT_LEVELS = buildPayoutLevels(DEFAULT_VISIT_THRESHOLDS);
 
 // ─── Helpers (buildMediaUrl, getBusinessGradient, getBusinessEmoji, formatBusinessType,
 //     normalizeHoursForDisplay, computeOpenStatus, normalizePayoutFromBps,
-//     normalizeToDiscoveryBusiness, shuffleArray imported from @/lib/businessNormalize) ───
+//     normalizeToDiscoveryBusiness imported from @/lib/businessNormalize) ───
 
 // ─── Zip-to-distance calculation ───
 
@@ -206,19 +218,35 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
   // DB-driven tag categories
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
   useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
+
+  // Subtypes shown in the Category grid are contextual on selected top types.
+  // No top types selected → show every Business Type tag. With selections → only
+  // show tags whose top_type matches one of the selected types.
   const FILTER_CATEGORIES = useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
-    return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
-  }, [tagCats]);
-  // Smart visibility: hide Cuisine/Dietary when non-food category selected
+    if (!bt || bt.tags.length === 0) return DEFAULT_FILTER_CATEGORIES;
+    const filtered = filters.topTypes.length === 0
+      ? bt.tags
+      : bt.tags.filter(t => t.top_type && filters.topTypes.includes(t.top_type));
+    return ["All", ...filtered.map(t => t.name)];
+  }, [tagCats, filters.topTypes]);
+
+  // Smart visibility: show Cuisine/Dietary only when the user is filtering for food.
+  // The signal is either (a) "Eat" is in the selected top types, or (b) a food
+  // subtype was picked in the Category grid. With no filters at all, default to
+  // visible (matches old behavior).
   const selectedCatIsFood = useMemo(() => {
-    if (filters.categories.length === 0) return true;
+    if (filters.topTypes.length === 0 && filters.categories.length === 0) return true;
+    if (filters.topTypes.includes("eat")) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
-    return filters.categories.some(cat => {
-      const tag = bt?.tags.find(t => t.name === cat);
-      return tag?.is_food ?? true;
-    });
-  }, [filters.categories, tagCats]);
+    if (filters.categories.length > 0) {
+      return filters.categories.some(cat => {
+        const tag = bt?.tags.find(t => t.name === cat);
+        return tag?.is_food ?? true;
+      });
+    }
+    return false;
+  }, [filters.topTypes, filters.categories, tagCats]);
 
   const ZIP_LOOKUP: Record<string, [string, string]> = {
     "68102": ["Omaha", "NE"], "68131": ["Omaha", "NE"], "68124": ["Omaha", "NE"], "68114": ["Omaha", "NE"], "68106": ["Omaha", "NE"],
@@ -572,6 +600,37 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
           </button>
         </div>
 
+        {/* Type — primary filter (Eat/Drink/Play/Pamper). Multi-select.
+            Empty = show all. The Category grid below filters contextually based
+            on what's selected here. */}
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10, fontFamily: "'DM Sans', sans-serif" }}>
+            Type
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {TOP_TYPE_OPTIONS.map(({ value, label }) => {
+              const active = filters.topTypes.includes(value);
+              return (
+                <GlassPill
+                  key={value}
+                  active={active}
+                  onClick={() => setFilters(prev => ({
+                    ...prev,
+                    topTypes: active
+                      ? prev.topTypes.filter(t => t !== value)
+                      : [...prev.topTypes, value],
+                    // Clear category subtype picks when toggling Type so stale
+                    // selections from a different Type don't linger filtered out.
+                    categories: [],
+                  }))}
+                >
+                  {label}
+                </GlassPill>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Price — always visible */}
         <FilterSection label="Price" items={PRICE_FILTERS} filters={filters} setFilters={setFilters} type="price" />
 
@@ -588,18 +647,25 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
         {/* Category — collapsible, multi-select */}
         <FilterSection label="Category" items={FILTER_CATEGORIES} filters={filters} setFilters={setFilters} type="category" collapsible />
 
-        {/* Sort By — collapsible */}
-        <CollapsibleSection label="Sort By" count={filters.sort !== "Nearest" ? 1 : 0}>
+        {/* Sort By — collapsible. Empty sort = Random (the default). Tapping a pill
+            toggles it on/off; tapping the active pill returns to Random. */}
+        <CollapsibleSection label="Sort By" count={filters.sort ? 1 : 0}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {SORT_OPTIONS.map(s => (
-              <GlassPill key={s} active={filters.sort === s} onClick={() => setFilters(prev => ({ ...prev, sort: s }))}>{s}</GlassPill>
+              <GlassPill
+                key={s}
+                active={filters.sort === s}
+                onClick={() => setFilters(prev => ({ ...prev, sort: prev.sort === s ? "" : s }))}
+              >{s}</GlassPill>
             ))}
           </div>
         </CollapsibleSection>
 
-        {/* Dynamic tag filter sections — collapsible */}
+        {/* Dynamic tag filter sections — collapsible. Price Range is excluded
+            because the dedicated Price selector above already covers it. */}
         {tagCats
           .filter(c => c.name !== "Business Type" && c.scope.includes("business"))
+          .filter(c => c.name.toLowerCase() !== "price range")
           .filter(c => !c.requires_food || selectedCatIsFood)
           .map(c => (
             <TagFilterSection key={c.id} label={`${c.icon} ${c.name}`} items={c.tags.map(t => t.name)} filters={filters} setFilters={setFilters} collapsible />
@@ -614,7 +680,7 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
 
         {/* Apply & Clear buttons */}
         <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>
-          <button onClick={() => { setFilters({ search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [] }); setShowMyPlacesOnly(false); }} style={{
+          <button onClick={() => { setFilters({ search: "", topTypes: [], categories: [], price: "Any", sort: "", openNow: false, hasRewards: false, distance: 15, tags: [] }); setShowMyPlacesOnly(false); }} style={{
             flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
             border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
             color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
@@ -1391,7 +1457,16 @@ function DiscoveryPage() {
   const [totalBizCount, setTotalBizCount] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    search: "", categories: [], price: "Any", sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [],
+    search: "", topTypes: [], categories: [], price: "Any", sort: "", openNow: false, hasRewards: false, distance: 15, tags: [],
+  });
+  // Stable session seed for random ordering of the discovery feed. Generated once
+  // per app load — refreshes only when the user revisits, so they don't see the
+  // same businesses on top every time they open the app.
+  const [sessionSeed] = useState<string>(() => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
   });
   const [currentBiz, setCurrentBiz] = useState(0);
   const [locationZip, setLocationZip] = useState("68102");
@@ -1673,19 +1748,25 @@ function DiscoveryPage() {
     try {
       const params = new URLSearchParams({ page: String(pageNum), limit: "50" });
       if (currentFilters.search.trim()) params.set("search", currentFilters.search.trim());
+      if (currentFilters.topTypes.length > 0) params.set("topType", currentFilters.topTypes.join(","));
       if (currentFilters.categories.length > 0) params.set("category", currentFilters.categories.join(","));
       if (currentFilters.price !== "Any") params.set("price", currentFilters.price);
       if (currentFilters.openNow) params.set("openNow", "true");
       if (currentFilters.hasRewards) params.set("hasRewards", "true");
       if (currentFilters.tags.length > 0) params.set("tags", currentFilters.tags.join(","));
-      // Distance filtering — server-side bounding box
+      // Sort: empty = Random (server seeded shuffle). Anything else is a user override.
+      if (currentFilters.sort) params.set("sort", currentFilters.sort);
+      // Session seed makes the random ordering stable across pagination + re-fetches
+      // within a single session, but fresh on the next app open.
+      params.set("seed", sessionSeed);
+      // Pass user coordinates for the server-side Nearest sort + distance filter.
+      if (locationCoords) {
+        params.set("userLat", String(locationCoords[0]));
+        params.set("userLng", String(locationCoords[1]));
+      }
+      if (locationZip) params.set("userZip", locationZip);
       if (currentFilters.distance > 0) {
         params.set("distance", String(currentFilters.distance));
-        if (locationCoords) {
-          params.set("userLat", String(locationCoords[0]));
-          params.set("userLng", String(locationCoords[1]));
-        }
-        if (locationZip) params.set("userZip", locationZip);
       }
       if (followedOnly) {
         const uid = getUserId();
@@ -1737,11 +1818,9 @@ function DiscoveryPage() {
           return [...prev, ...newBiz];
         });
       } else {
-        // First page: sponsored first, then shuffle the rest
-        const sponsored = normalized.filter(b => sponsoredIds.has(b.id));
-        const rest = normalized.filter(b => !sponsoredIds.has(b.id));
-        shuffleArray(rest);
-        setBusinesses([...sponsored, ...rest]);
+        // Server returns rows already ordered (Spotlights pinned, then sorted/shuffled).
+        // Trust that order — don't re-sort or re-shuffle here.
+        setBusinesses(normalized);
       }
 
       setHasMore(data.hasMore ?? false);
@@ -1754,7 +1833,7 @@ function DiscoveryPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [locationCoords, locationZip, getUserId]);
+  }, [locationCoords, locationZip, getUserId, sessionSeed]);
 
   // Load saved filter preferences, then do initial fetch
   useEffect(() => {
@@ -1851,10 +1930,8 @@ function DiscoveryPage() {
       });
     }
 
-    // Sort
-    if (filters.sort === "Highest Payout") {
-      result = [...result].sort((a, b) => (b.payout[6] ?? 0) - (a.payout[6] ?? 0));
-    }
+    // Sort happens server-side — Spotlights pinned first, then Random (with session
+    // seed) / Nearest / Newest / Highest Payout. Client trusts server order.
 
     return result;
   }, [businesses, filters, spotlightId, locationZip, locationCoords]);

@@ -2,6 +2,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { generateClaimCode } from "@/lib/claimCode";
+import {
+  TAG_EXTRACTION_FIELD_MASK,
+  extractTagsFromPlace,
+  mergeTags,
+  type GooglePlaceForTags,
+} from "@/lib/googlePlacesMapper";
 
 // Verify caller is authenticated staff
 async function requireStaff(req: NextRequest): Promise<{ userId: string } | Response> {
@@ -98,12 +104,18 @@ export async function POST(req: NextRequest) {
     let photos: { url: string; focalX: number; focalY: number }[] = [];
     let googleHours: Record<string, { enabled: boolean; open: string; close: string }> | null = null;
 
+    let extractedTags: string[] = [];
+    let editorialSummary: string | null = null;
+
     if (placeId) {
-      // Fetch Place Details for photos and hours
+      // Fetch Place Details — baseline (photos/hours) + tag-extraction fields so
+      // the seed/preview business gets cuisine/dietary/Extras tags from the start.
       const detailsFieldMask = [
         "photos",
         "currentOpeningHours",
         "regularOpeningHours",
+        ...TAG_EXTRACTION_FIELD_MASK,
+        "types",
       ].join(",");
 
       const detailsRes = await fetch(
@@ -129,6 +141,22 @@ export async function POST(req: NextRequest) {
         const photoRefs = (detailsData.photos || []).slice(0, 5);
         if (photoRefs.length > 0) {
           photos = await fetchAndStorePhotos(placeId, photoRefs, apiKey);
+        }
+
+        // Tag extraction from the new fields
+        const placeForTags: GooglePlaceForTags = {
+          primaryType: detailsData.primaryType ?? null,
+          types: Array.isArray(detailsData.types) ? detailsData.types : null,
+          servesVegetarianFood: detailsData.servesVegetarianFood ?? null,
+          servesVeganFood: detailsData.servesVeganFood ?? null,
+          outdoorSeating: detailsData.outdoorSeating ?? null,
+          allowsDogs: detailsData.allowsDogs ?? null,
+          editorialSummary: detailsData.editorialSummary ?? null,
+        };
+        extractedTags = extractTagsFromPlace(placeForTags).allTags;
+        const summaryText = detailsData.editorialSummary?.text;
+        if (typeof summaryText === "string" && summaryText.trim()) {
+          editorialSummary = summaryText.trim();
         }
       }
     }
@@ -164,12 +192,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Build config JSONB
+    // 5. Build config JSONB. Subtype is the broad category (e.g. "Restaurant");
+    // mergeTags layers in cuisine/dietary/Extras from the Google extraction so
+    // the discovery filters work on the new business right away.
+    const subtypeCategory = mapBusinessTypeToCategory(lead.business_type || "Restaurant");
+    const seededTags = mergeTags([subtypeCategory], extractedTags);
     const config: Record<string, unknown> = {
-      businessType: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
+      businessType: subtypeCategory,
       priceLevel,
       payoutPreset: isSeedMode ? "trial" : "standard",
       images: photos.map(p => p.url),
+      tags: seededTags,
     };
 
     // 5b. For seed mode, read trial duration from platform_settings and generate claim code
@@ -239,6 +272,8 @@ export async function POST(req: NextRequest) {
         website_url: lead.website || "",
         category_main: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
         config,
+        tags: seededTags,
+        ...(editorialSummary ? { blurb: editorialSummary } : {}),
         payout_preset: isSeedMode ? "trial" : "standard",
         ...hourColumns,
       });

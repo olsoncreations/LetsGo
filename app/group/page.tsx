@@ -1951,16 +1951,8 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                         </div>
                       )}
                     </div>
-                    <div style={{ marginBottom: 16 }}>
-                      {sectionLabel("Vibe & Atmosphere")}
-                      {openSections["Vibe & Atmosphere"] && (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {DEFAULT_VIBE_FILTERS.map(t => glassPill(t, filters.tags.includes(t), () => setFilters(p => ({
-                            ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                          })), { fontSize: 11, padding: "6px 14px" }))}
-                        </div>
-                      )}
-                    </div>
+                    {/* Vibe fallback removed — Vibe was archived in PR 5b's
+                        allow-list cleanup. Active categories load from DB via tagCats. */}
                   </>
                 )}
               </div>

@@ -1183,15 +1183,8 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                   </div>
                 </CollapsibleSection5>
               )}
-              <CollapsibleSection5 label="Vibe & Atmosphere" count={DEFAULT_VIBE_FILTERS.filter(t => filters.tags.includes(t)).length}>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {DEFAULT_VIBE_FILTERS.map(t => (
-                    <GlassPill key={t} active={filters.tags.includes(t)} onClick={() => setFilters(p => ({
-                      ...p, tags: p.tags.includes(t) ? p.tags.filter(x => x !== t) : [...p.tags, t],
-                    }))} style={{ fontSize: 12, padding: "6px 14px" }}>{t}</GlassPill>
-                  ))}
-                </div>
-              </CollapsibleSection5>
+              {/* Vibe fallback removed — Vibe was archived in PR 5b's allow-list
+                  cleanup. Active categories load from DB via tagCats. */}
             </>
           )}
         </div>

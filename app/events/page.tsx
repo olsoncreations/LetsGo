@@ -1272,7 +1272,7 @@ const FiltersPanel = ({
             </div>
           </FilterSection>
           <div style={{ height: 1, background: CARD_BORDER }} />
-          <FilterSection title="Vibe & Style">
+          <FilterSection title="Style">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {VIBE_FILTERS.map((v) => (
                 <FilterPill key={v} label={v} active={filters.vibes.includes(v)}
@@ -1330,10 +1330,13 @@ export default function EventsPage() {
     return [{ id: "all", label: "All Events", icon: "◈" }, ...et.tags.map(t => ({ id: t.name, label: t.name, icon: t.icon || "📌" }))];
   }, [tagCats]);
   const VIBE_FILTERS = useMemo(() => {
-    const vibe = tagCats.find(c => c.name === "Vibe");
+    // Business-scoped Vibe was archived in PR 5b — only event-specific styles
+    // (Family Friendly, 21+, Intimate, etc.) remain. Tag fetcher already
+    // filters out archived categories, but this is explicit for clarity.
     const eventVibe = tagCats.find(c => c.name === "Event Vibe");
-    const combined = [...(vibe?.tags ?? []), ...(eventVibe?.tags ?? [])];
-    return combined.length > 0 ? combined.map(t => t.name) : DEFAULT_VIBE_FILTERS;
+    return eventVibe && eventVibe.tags.length > 0
+      ? eventVibe.tags.map(t => t.name)
+      : DEFAULT_VIBE_FILTERS;
   }, [tagCats]);
   const [view, setView] = useState<"list" | "detail">("list");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");

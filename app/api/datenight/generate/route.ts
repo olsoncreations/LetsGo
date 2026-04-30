@@ -16,7 +16,6 @@ import { getDistanceBetweenZips, haversineDistance, ZIP_COORDS } from "@/lib/zip
 // ── Types ──────────────────────────────────────────────────
 
 type GenerateRequest = {
-  vibes: string[];
   budget: string;
   cuisines: string[];
   location: string;
@@ -38,7 +37,6 @@ type PickResult = {
   id: string;
   name: string;
   type: string;
-  vibe: string;
   price: string;
   address: string;
   neighborhood: string;
@@ -63,37 +61,11 @@ const RESTAURANT_TYPES = new Set([
 ]);
 
 
-// Business types that should never appear as date night activities.
-// Checked against businessType (config or column) and category_main, case-insensitive.
-const DATE_NIGHT_EXCLUDED_TYPES = new Set([
-  // Fitness / wellness
-  "gym", "fitness_center", "fitness", "yoga_studio", "yoga studio",
-  "sports_club", "sports club", "swimming_pool", "swimming pool",
-  // Personal care
-  "salon_beauty", "salon/beauty", "beauty_salon", "beauty salon",
-  "hair_salon", "hair salon", "barber_shop", "barber shop",
-  "nail_salon", "nail salon", "tanning_studio", "tanning studio",
-  // Cannabis / smoke
-  "dispensary", "cannabis", "smoke_shop", "smoke shop",
-  "tobacco_shop", "tobacco shop", "vape_shop", "vape shop",
-  // Automotive
-  "auto_repair", "auto repair", "car_wash", "car wash",
-  "car_dealer", "car dealer", "gas_station", "gas station",
-  "parking", "towing",
-  // Medical / professional
-  "doctor", "dentist", "dental", "veterinary", "veterinarian",
-  "hospital", "clinic", "pharmacy", "optician",
-  "lawyer", "accountant", "insurance", "financial",
-  "bank", "atm", "real_estate", "real estate",
-  // Services / errands
-  "laundry", "dry_cleaning", "dry cleaning", "storage",
-  "locksmith", "plumber", "electrician", "moving_company",
-  "funeral_home", "funeral home", "cemetery",
-  // Retail (not date-worthy)
-  "convenience_store", "convenience store",
-  "hardware_store", "hardware store",
-  "electronics_store", "electronics store",
-]);
+// Date Night activity allow-list is now DB-driven — fetched at request time
+// from `tags` where category=Business Type AND is_date_night_activity=true AND
+// is_active=true. Admin Tag Management owns the source of truth. Default
+// behavior: a business type is NOT a date activity unless explicitly approved.
+// (Was previously a hardcoded deny-list — see git history pre-2026-04-29.)
 
 const MAX_RECENT_RESULTS = 30;
 const LOCATION_RADIUS_MILES = 20;
@@ -157,13 +129,6 @@ function getRowTags(row: BusinessRow): string[] {
   return Array.isArray(cfg.tags) ? (cfg.tags as string[]).map(t => String(t).toLowerCase()) : [];
 }
 
-function getRowVibe(row: BusinessRow): string {
-  // Prefer config.vibe (no standalone column for vibe), fallback to description
-  const cfg = row.config;
-  const vibe = String(cfg?.vibe ?? "").toLowerCase();
-  return vibe || String(row.description ?? "").toLowerCase().slice(0, 100);
-}
-
 function getRowBusinessType(row: BusinessRow): string {
   // 1. config.businessType (user-provided during onboarding, most accurate)
   const cfg = row.config;
@@ -184,15 +149,14 @@ function getRowPriceLevel(row: BusinessRow): string {
 }
 
 function buildHighlights(row: BusinessRow): string[] {
-  const highlights: string[] = [];
-  const vibe = getRowVibe(row);
-  if (vibe) highlights.push(vibe.charAt(0).toUpperCase() + vibe.slice(1));
+  // Pick up to 4 interesting tags (cuisine, dietary, Extras, etc.) — skip the
+  // generic subtype/category names so highlights surface what makes the place
+  // distinctive.
   const tags = getRowTags(row);
-  const interestingTags = tags.filter(t =>
-    !["restaurant", "bar", "food", "dining", "activity"].includes(t)
-  ).slice(0, 3);
-  highlights.push(...interestingTags.map(t => t.charAt(0).toUpperCase() + t.slice(1)));
-  return highlights.slice(0, 4);
+  return tags
+    .filter(t => !["restaurant", "bar", "food", "dining", "activity"].includes(t))
+    .slice(0, 4)
+    .map(t => t.charAt(0).toUpperCase() + t.slice(1));
 }
 
 function formatPhoneNumber(raw: string): string {
@@ -220,7 +184,6 @@ function buildPickResult(row: BusinessRow, score: number, reasons: string[], ima
   const name = row.public_business_name || row.business_name || "Unknown";
   const rawType = getRowBusinessType(row) || "restaurant";
   const type = formatBusinessType(rawType);
-  const vibe = getRowVibe(row);
   const price = getRowPriceLevel(row);
   const street = row.street_address || "";
   const cityStateZip = [row.city, row.state, row.zip].filter(Boolean).join(", ");
@@ -244,7 +207,6 @@ function buildPickResult(row: BusinessRow, score: number, reasons: string[], ima
     id: row.id,
     name,
     type,
-    vibe,
     price,
     address,
     neighborhood: row.city || "",
@@ -276,7 +238,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const body = await req.json() as GenerateRequest;
-    const { vibes = [], budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [], userLat, userLng, hasRewards = false } = body;
+    const { budget = "$$", cuisines = [], location: bodyLocation = "", timeSlot = "evening", exclude = [], userLat, userLng, hasRewards = false } = body;
 
     // Fall back to user's profile zip code when no location provided
     let location = bodyLocation;
@@ -342,7 +304,20 @@ export async function POST(req: NextRequest): Promise<Response> {
       return true;
     });
 
-    // 5. Separate restaurants vs activities
+    // 5a. Fetch the allow-list of date-night activity tag names from DB.
+    // Driven by `is_date_night_activity` on Business Type tags — admin owns it
+    // via Settings → Tag Management. Stored case-insensitively because the
+    // tags array on a business may have legacy lowercase values.
+    const { data: activityTagRows } = await supabaseServer
+      .from("tags")
+      .select("name")
+      .eq("is_active", true)
+      .eq("is_date_night_activity", true);
+    const allowedActivityTags = new Set(
+      (activityTagRows ?? []).map(r => String(r.name).toLowerCase())
+    );
+
+    // 5b. Separate restaurants vs activities
     const restaurants: BusinessRow[] = [];
     const activities: BusinessRow[] = [];
 
@@ -358,10 +333,15 @@ export async function POST(req: NextRequest): Promise<Response> {
       if (isRestaurantType(bt, cm, tags)) {
         restaurants.push(row);
       } else {
-        // Skip business types that don't make sense as date night activities
+        // Allow-list: keep only businesses whose tags array contains at least
+        // one Business Type tag flagged as a date-night activity. Anything not
+        // explicitly approved (gyms, wedding venues, salons, etc.) is excluded.
+        const tagsLower = tags.map(t => t.toLowerCase());
         const btLower = bt.toLowerCase();
-        const cmLower = cm.toLowerCase();
-        if (DATE_NIGHT_EXCLUDED_TYPES.has(btLower) || DATE_NIGHT_EXCLUDED_TYPES.has(cmLower)) continue;
+        const isAllowed =
+          tagsLower.some(t => allowedActivityTags.has(t)) ||
+          allowedActivityTags.has(btLower);
+        if (!isAllowed) continue;
         activities.push(row);
       }
     }
@@ -467,7 +447,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     // 8. Score restaurants
-    const vibesLower = vibes.map(v => v.toLowerCase());
     const cuisinesLower = cuisines.map(c => c.toLowerCase());
     const budgetStr = budget;
 
@@ -475,16 +454,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       let score = 0;
       const reasons: string[] = [];
       const tags = getRowTags(row);
-      const vibe = getRowVibe(row);
       const price = getRowPriceLevel(row);
-
-      // Vibe match (+3 each)
-      for (const v of vibesLower) {
-        if (vibe.includes(v) || tags.some(t => t.includes(v))) {
-          score += 3;
-          reasons.push(`Matches your ${v} vibe`);
-        }
-      }
 
       // Cuisine match (+3)
       for (const c of cuisinesLower) {
@@ -572,7 +542,6 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     // 9. Score activities with restaurant compatibility bonuses
     const restaurantTags = getRowTags(topRestaurant.row);
-    const restaurantVibe = getRowVibe(topRestaurant.row);
     const restaurantCity = (topRestaurant.row.city || "").toLowerCase();
     const restaurantZip = topRestaurant.row.zip || "";
     const restaurantCategory = (topRestaurant.row.category_main || "").toLowerCase();
@@ -583,13 +552,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         const { score: baseScore, reasons } = scoreBase(row);
         let score = baseScore;
         const tags = getRowTags(row);
-        const vibe = getRowVibe(row);
 
-        // Vibe-compatible with restaurant (+3)
-        if (restaurantVibe && (vibe.includes(restaurantVibe) ||
-            tags.some(t => restaurantTags.some(rt => t.includes(rt) || rt.includes(t))))) {
+        // Shared tags with the picked restaurant (+3). Now that businesses get
+        // populated cuisine / dietary / Extras tags from Google enrichment, this
+        // is a real signal — e.g., both "pet-friendly" pairs nicely.
+        if (restaurantTags.length > 0 && tags.some(t => restaurantTags.includes(t))) {
           score += 3;
-          reasons.push("Vibe-compatible with your restaurant");
+          reasons.push("Shares tags with your restaurant");
         }
 
         // Same city/zip (+2)
@@ -634,7 +603,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         .from("date_night_sessions")
         .insert({
           user_id: userId,
-          session_vibes: vibes,
+          // session_vibes column kept on the table for historical sessions; vibe
+          // input no longer exists in the algorithm so we always write an empty
+          // array. Safe to drop the column in a future cleanup migration.
+          session_vibes: [],
           session_budget: budget,
           session_cuisines: cuisines,
           session_location: location,

@@ -2,6 +2,13 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { generateClaimCode } from "@/lib/claimCode";
+import {
+  TAG_EXTRACTION_FIELD_MASK,
+  extractTagsFromPlace,
+  mergeTags,
+  type GooglePlaceForTags,
+} from "@/lib/googlePlacesMapper";
+import { mapBusinessSubtype, mapBusinessTypeToCategory } from "@/lib/businessClassify";
 
 // Verify caller is authenticated staff
 async function requireStaff(req: NextRequest): Promise<{ userId: string; userName: string } | Response> {
@@ -85,13 +92,24 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // Fetch Google Places details (photos + hours)
+        // Fetch Google Places details (photos + hours + tag-extraction fields)
         const placeId = lead.google_place_id;
         let photos: { url: string; focalX: number; focalY: number }[] = [];
         let googleHours: Record<string, { enabled: boolean; open: string; close: string }> | null = null;
+        let extractedTags: string[] = [];
+        let editorialSummary: string | null = null;
 
         if (placeId) {
-          const detailsFieldMask = ["photos", "currentOpeningHours", "regularOpeningHours"].join(",");
+          // FieldMask = baseline (photos/hours) + the tag-extraction fields. The
+          // tag fields drive the cuisine/dietary/Extras pre-population so the
+          // discovery filters work without an owner having to claim + curate first.
+          const detailsFieldMask = [
+            "photos",
+            "currentOpeningHours",
+            "regularOpeningHours",
+            ...TAG_EXTRACTION_FIELD_MASK,
+            "types",
+          ].join(",");
           const detailsRes = await fetch(
             `https://places.googleapis.com/v1/places/${placeId}`,
             { headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": detailsFieldMask } }
@@ -106,6 +124,21 @@ export async function POST(req: NextRequest) {
             const photoRefs = (detailsData.photos || []).slice(0, 5) as GooglePhotoRef[];
             if (photoRefs.length > 0) {
               photos = await fetchAndStorePhotos(placeId, photoRefs, apiKey);
+            }
+            // Tag extraction from the new fields
+            const placeForTags: GooglePlaceForTags = {
+              primaryType: detailsData.primaryType ?? null,
+              types: Array.isArray(detailsData.types) ? detailsData.types : null,
+              servesVegetarianFood: detailsData.servesVegetarianFood ?? null,
+              servesVeganFood: detailsData.servesVeganFood ?? null,
+              outdoorSeating: detailsData.outdoorSeating ?? null,
+              allowsDogs: detailsData.allowsDogs ?? null,
+              editorialSummary: detailsData.editorialSummary ?? null,
+            };
+            extractedTags = extractTagsFromPlace(placeForTags).allTags;
+            const summaryText = detailsData.editorialSummary?.text;
+            if (typeof summaryText === "string" && summaryText.trim()) {
+              editorialSummary = summaryText.trim();
             }
           }
         }
@@ -160,6 +193,10 @@ export async function POST(req: NextRequest) {
         // Config
         const googleType = lead.business_type || "Restaurant";
         const subtype = mapBusinessSubtype(googleType);
+        // Merge subtype with everything we extracted from Google (cuisine, dietary,
+        // Extras). Subtype goes first so `tags[0]` stays the primary category that
+        // legacy discovery filters keyed off of.
+        const seededTags = mergeTags([subtype], extractedTags);
         const config: Record<string, unknown> = {
           businessType: mapBusinessTypeToCategory(googleType),
           googleBusinessType: googleType,
@@ -167,7 +204,7 @@ export async function POST(req: NextRequest) {
           priceLevel,
           payoutPreset: "trial",
           images: photos.map(p => p.url),
-          tags: [subtype],
+          tags: seededTags,
         };
 
         // Insert business
@@ -195,7 +232,8 @@ export async function POST(req: NextRequest) {
             category_main: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
             business_type: mapBusinessTypeToCategory(lead.business_type || "Restaurant"),
             config,
-            tags: [subtype],
+            tags: seededTags,
+            ...(editorialSummary ? { blurb: editorialSummary } : {}),
             payout_preset: "trial",
             latitude: lead.latitude || null,
             longitude: lead.longitude || null,
@@ -458,54 +496,6 @@ function parseAddress(fullAddress: string): { street: string; city: string; stat
   return { street: fullAddress, city: "", state: "", zip: "" };
 }
 
-function mapBusinessTypeToCategory(googleType: string): string {
-  const t = googleType.toLowerCase();
-  if (t.includes("restaurant") || t.includes("food") || t.includes("diner")) return "restaurant_bar";
-  if (t.includes("bar") || t.includes("pub") || t.includes("brewery") || t.includes("lounge") || t.includes("nightclub") || t.includes("winery")) return "restaurant_bar";
-  if (t.includes("coffee") || t.includes("cafe") || t.includes("bakery") || t.includes("ice cream") || t.includes("juice") || t.includes("deli")) return "restaurant_bar";
-  if (t.includes("salon") || t.includes("beauty") || t.includes("spa") || t.includes("barber") || t.includes("nail") || t.includes("yoga")) return "salon_beauty";
-  if (t.includes("gym") || t.includes("fitness")) return "activity";
-  return "activity";
-}
-
-/** Map Google business type to granular subtype matching the discovery filter options */
-function mapBusinessSubtype(googleType: string): string {
-  const t = googleType.toLowerCase();
-  // Bars & nightlife
-  if (t.includes("nightclub") || t.includes("night_club")) return "Nightclub";
-  if (t.includes("brewery")) return "Brewery";
-  if (t.includes("winery")) return "Winery";
-  if (t.includes("lounge")) return "Lounge";
-  if (t.includes("sports bar")) return "Sports Bar";
-  if (t.includes("pub")) return "Pub";
-  if (t.includes("karaoke")) return "Karaoke";
-  if (t.includes("bar")) return "Bar";
-  // Coffee & quick serve
-  if (t.includes("coffee") || t.includes("cafe")) return "Coffee";
-  if (t.includes("bakery")) return "Bakery";
-  if (t.includes("ice cream")) return "Ice Cream";
-  if (t.includes("juice")) return "Juice Bar";
-  if (t.includes("deli")) return "Deli";
-  if (t.includes("food truck")) return "Food Truck";
-  // Restaurant
-  if (t.includes("restaurant") || t.includes("food") || t.includes("diner")) return "Restaurant";
-  // Beauty
-  if (t.includes("spa")) return "Spa";
-  if (t.includes("salon") || t.includes("beauty") || t.includes("barber") || t.includes("nail")) return "Spa";
-  if (t.includes("yoga")) return "Yoga Studio";
-  // Fitness
-  if (t.includes("gym") || t.includes("fitness")) return "Gym";
-  if (t.includes("dance")) return "Dance Studio";
-  // Entertainment
-  if (t.includes("bowling")) return "Bowling";
-  if (t.includes("arcade")) return "Arcade";
-  if (t.includes("escape")) return "Escape Room";
-  if (t.includes("mini golf") || t.includes("miniature golf")) return "Mini Golf";
-  if (t.includes("theater") || t.includes("theatre") || t.includes("cinema") || t.includes("movie")) return "Theater";
-  if (t.includes("comedy")) return "Comedy Club";
-  if (t.includes("museum")) return "Museum";
-  if (t.includes("art gallery") || t.includes("gallery")) return "Art Gallery";
-  // Generic
-  if (t.includes("entertainment") || t.includes("amusement")) return "Entertainment";
-  return "Activity";
-}
+// mapBusinessTypeToCategory + mapBusinessSubtype now live in
+// lib/businessClassify.ts so the backfill route can re-classify existing seeds
+// using the same logic.
