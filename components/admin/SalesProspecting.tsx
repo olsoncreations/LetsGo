@@ -1362,6 +1362,20 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
           (reclassified.length > 8 ? `\n  …and ${reclassified.length - 8} more` : "")
         : "";
 
+      // Error breakdown — if everything failed, the operator should know whether
+      // it's stale Google IDs (one-time fixable) or rate limits (just wait + retry).
+      const errorLines: string[] = [];
+      if (data.deadIds && data.deadIds > 0) {
+        errorLines.push(`⚠ Dead Google place IDs (404): ${data.deadIds} — leads auto-marked verified so they stop retrying`);
+      }
+      if (data.rateLimited && data.rateLimited > 0) {
+        errorLines.push(`⏸ Rate-limited (429): ${data.rateLimited} — wait ~1 minute and click again`);
+      }
+      if (data.otherErrors && data.otherErrors > 0) {
+        errorLines.push(`✕ Other Google errors: ${data.otherErrors}`);
+      }
+      const errorSummary = errorLines.length > 0 ? `\n\n${errorLines.join("\n")}` : "";
+
       alert(
         `Maintenance complete!\n\n` +
         `✓ Leads verified: ${data.leadsUpdated}\n` +
@@ -1369,6 +1383,7 @@ export default function SalesProspecting({ salesReps }: ProspectingProps) {
         `Total places processed: ${data.processed}\n` +
         `💰 API calls saved via dedupe: ${data.savedApiCalls} ` +
         `(${data.naiveCallCount || 0} naive → ${data.dedupedCallCount || 0} actual)` +
+        errorSummary +
         reclassifySummary
       );
       fetchLeads();

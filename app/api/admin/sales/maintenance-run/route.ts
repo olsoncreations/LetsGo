@@ -163,27 +163,70 @@ export async function POST(req: NextRequest) {
     const results: MaintenanceResult[] = [];
     let leadsUpdated = 0;
     let businessesUpdated = 0;
+    let deadIds = 0;       // 404 from Google — place_id retired
+    let rateLimited = 0;   // 429 — back off and stop the batch
+    let otherErrors = 0;
+    let rateLimitedHit = false;
 
     for (const placeId of allPlaceIds) {
+      // Bail out cleanly if Google rate-limited us — running 400 more requests
+      // will just hit the same wall and waste API budget. Operator re-clicks
+      // after the per-minute window resets.
+      if (rateLimitedHit) {
+        rateLimited++;
+        results.push({ placeId, reason: "skipped — earlier rate limit" });
+        continue;
+      }
+
       let detailsData: Record<string, unknown> | null = null;
+      let httpStatus = 0;
       try {
         const detailsRes = await fetch(
           `https://places.googleapis.com/v1/places/${placeId}`,
           { headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": detailsFieldMask } }
         );
+        httpStatus = detailsRes.status;
         if (detailsRes.ok) detailsData = await detailsRes.json();
       } catch {
-        // fall through
+        httpStatus = 0;
       }
 
       if (!detailsData) {
+        // Categorize the error so operator can see what's failing.
+        const lead = leadByPlace.get(placeId);
+        const biz = businessByPlace.get(placeId);
+        let reason = `Google Places API ${httpStatus || "error"}`;
+
+        if (httpStatus === 404) {
+          // Dead place_id — Google retired it. For leads, mark them verified
+          // (with their existing type) so this row stops being a forever-retry
+          // candidate. For businesses, nothing to do — their tags stay as-is.
+          deadIds++;
+          reason = "404 — Google place_id is dead";
+          if (lead) {
+            await supabaseServer
+              .from("sales_leads")
+              .update({
+                business_type: lead.business_type ?? "Activity",
+                type_verified_at: new Date().toISOString(),
+              })
+              .eq("id", lead.id);
+          }
+        } else if (httpStatus === 429) {
+          rateLimited++;
+          rateLimitedHit = true;
+          reason = "429 — Google API rate limit; aborting batch";
+        } else {
+          otherErrors++;
+        }
+
         results.push({
           placeId,
-          leadId: leadByPlace.get(placeId)?.id,
-          businessId: businessByPlace.get(placeId)?.id,
-          leadStatus: leadByPlace.has(placeId) ? "error" : undefined,
-          businessStatus: businessByPlace.has(placeId) ? "error" : undefined,
-          reason: "Google Places API call failed or returned non-OK",
+          leadId: lead?.id,
+          businessId: biz?.id,
+          leadStatus: lead ? "error" : undefined,
+          businessStatus: biz ? "error" : undefined,
+          reason,
         });
         continue;
       }
@@ -285,6 +328,9 @@ export async function POST(req: NextRequest) {
       savedApiCalls,
       naiveCallCount,
       dedupedCallCount,
+      deadIds,
+      rateLimited,
+      otherErrors,
       results,
     });
   } catch (err) {
