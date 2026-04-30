@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
         let googleHours: Record<string, { enabled: boolean; open: string; close: string }> | null = null;
         let extractedTags: string[] = [];
         let editorialSummary: string | null = null;
+        let primaryTypeForLead: string | null = null;
 
         if (placeId) {
           // FieldMask = baseline (photos/hours) + the tag-extraction fields. The
@@ -126,8 +127,9 @@ export async function POST(req: NextRequest) {
               photos = await fetchAndStorePhotos(placeId, photoRefs, apiKey);
             }
             // Tag extraction from the new fields
+            primaryTypeForLead = (detailsData.primaryType as string | null) ?? null;
             const placeForTags: GooglePlaceForTags = {
-              primaryType: detailsData.primaryType ?? null,
+              primaryType: primaryTypeForLead,
               types: Array.isArray(detailsData.types) ? detailsData.types : null,
               servesVegetarianFood: detailsData.servesVegetarianFood ?? null,
               servesVeganFood: detailsData.servesVeganFood ?? null,
@@ -273,9 +275,24 @@ export async function POST(req: NextRequest) {
         }));
         await supabaseServer.from("business_payout_tiers").insert(tierRows);
 
-        // Update sales lead
+        // Update sales lead — also mark its type as verified using the same
+        // Google primaryType we just paid for. Without this, the lead stays
+        // type_verified_at=NULL and Maintenance Run would re-fetch the same
+        // place (double-paying). With it, seeding is a single-call operation.
+        const verifiedBusinessType = (
+          (typeof primaryTypeForLead === "string" && primaryTypeForLead) ||
+          lead.business_type ||
+          subtype ||
+          "Activity"
+        ) as string;
         await supabaseServer.from("sales_leads")
-          .update({ preview_business_id: businessId, seeded_at: new Date().toISOString(), unseeded_at: null })
+          .update({
+            preview_business_id: businessId,
+            seeded_at: new Date().toISOString(),
+            unseeded_at: null,
+            business_type: verifiedBusinessType,
+            type_verified_at: new Date().toISOString(),
+          })
           .eq("id", leadId);
 
         results.push({
