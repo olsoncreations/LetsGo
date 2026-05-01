@@ -124,6 +124,12 @@ export async function GET(req: NextRequest) {
           .gte("latitude", latMin).lte("latitude", latMax)
           .gte("longitude", lngMin).lte("longitude", lngMax);
       }
+    } else if (distance > 0 && userZip) {
+      // Defensive fallback: client passed a zip but we couldn't resolve it to
+      // coords (unknown zip, geocoder failed, etc). Filter to same-zip only
+      // rather than returning every business everywhere — that's worse than
+      // a too-narrow result set the user can correct.
+      query = query.eq("zip", userZip);
     }
 
     // Tag filters (Cuisine, Dietary, Extras, etc.)

@@ -315,9 +315,34 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
       setLocationName(match ? match[0] : `ZIP ${zip}`);
       setLocationState(match ? match[1] : "");
       onLocationZipChange(zip);
-      // Update coords from lookup
+      // Update coords from lookup; if the zip isn't in the static map, geocode
+      // it via Google Maps so the discover API gets real coords. Without this,
+      // typing an unknown zip leaves coords=null and the API silently skips
+      // the distance filter (returns businesses everywhere).
       const coords = ZIP_COORDS[zip];
-      onLocationCoordsChange(coords ? [coords[0], coords[1]] : null);
+      if (coords) {
+        onLocationCoordsChange([coords[0], coords[1]]);
+      } else {
+        onLocationCoordsChange(null);
+        const g = (window as unknown as { google?: { maps?: { Geocoder?: new () => {
+          geocode: (
+            req: Record<string, unknown>,
+            cb: (results: Array<{ geometry: { location: { lat: () => number; lng: () => number } } }> | null, status: string) => void
+          ) => void;
+        } } } }).google;
+        if (g?.maps?.Geocoder) {
+          const geocoder = new g.maps.Geocoder();
+          geocoder.geocode({ address: zip + ", USA" }, (results, status) => {
+            if (status === "OK" && results && results[0]) {
+              const loc = results[0].geometry.location;
+              const lat = loc.lat();
+              const lng = loc.lng();
+              ZIP_COORDS[zip] = [lat, lng];
+              onLocationCoordsChange([lat, lng]);
+            }
+          });
+        }
+      }
     }
     setEditingZip(false);
     setZipInput("");
