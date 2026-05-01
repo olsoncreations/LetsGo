@@ -492,8 +492,8 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
         padding: filtersOpen ? "0 20px 20px" : "0 20px",
         scrollbarWidth: "thin", scrollbarColor: `${COLORS.neonPink}40 transparent`,
       }}>
-        {/* Search bar row */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, marginTop: 4 }}>
+        {/* Location pills row — wraps on narrow viewports so nothing gets clipped */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12, marginTop: 4 }}>
           {editingZip ? (
             <div style={{
               display: "flex", alignItems: "center", gap: 0, flexShrink: 0,
@@ -589,30 +589,33 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
               if (state) setLocationState(state);
             }}
           />
-          <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke={searchFocused ? COLORS.neonPink : "rgba(255,255,255,0.3)"}
-              strokeWidth="2.5" strokeLinecap="round"
-              style={{ position: "absolute", left: 12, zIndex: 1, transition: "stroke 0.3s" }}>
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              type="text"
-              placeholder="Search restaurants, bars, coffee..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              style={{
-                width: "100%", padding: "9px 14px 9px 38px", borderRadius: 2,
-                border: `1px solid ${searchFocused ? COLORS.neonPink + "80" : COLORS.cardBorder}`,
-                background: searchFocused ? `${COLORS.neonPink}08` : "rgba(255,255,255,0.03)",
-                color: "#fff", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-                outline: "none", transition: "all 0.3s",
-                boxShadow: searchFocused ? `0 0 15px ${COLORS.neonPink}15` : "none",
-              }}
-            />
-          </div>
+        </div>
+
+        {/* Search bar — own row so the input gets full width and the
+            location pills above can wrap on narrow viewports */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", marginBottom: 16 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke={searchFocused ? COLORS.neonPink : "rgba(255,255,255,0.3)"}
+            strokeWidth="2.5" strokeLinecap="round"
+            style={{ position: "absolute", left: 12, zIndex: 1, transition: "stroke 0.3s" }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Search restaurants, bars, coffee..."
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            style={{
+              width: "100%", padding: "9px 14px 9px 38px", borderRadius: 2,
+              border: `1px solid ${searchFocused ? COLORS.neonPink + "80" : COLORS.cardBorder}`,
+              background: searchFocused ? `${COLORS.neonPink}08` : "rgba(255,255,255,0.03)",
+              color: "#fff", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+              outline: "none", transition: "all 0.3s",
+              boxShadow: searchFocused ? `0 0 15px ${COLORS.neonPink}15` : "none",
+            }}
+          />
         </div>
 
         {/* Browse From — always visible, at the top */}
