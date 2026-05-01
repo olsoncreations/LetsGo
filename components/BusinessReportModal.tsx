@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 const REPORT_REASONS: { value: string; label: string; priority: "high" | "medium" }[] = [
@@ -95,13 +96,20 @@ export function BusinessReportModal({
     }
   };
 
-  if (!open) return null;
+  // Discovery's swipe carousel renders its slides inside a translateX
+  // transform, which pins position:fixed children to the carousel rather
+  // than the viewport. Portal to <body> so the modal anchors to the actual
+  // viewport regardless of where it's rendered in the tree.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  return (
+  if (!open || !mounted) return null;
+
+  const overlay = (
     <div
       onClick={handleClose}
       style={{
-        position: "fixed", inset: 0, zIndex: 1000,
+        position: "fixed", inset: 0, zIndex: 10000,
         background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
         animation: "fadeIn 0.2s ease",
@@ -243,4 +251,6 @@ export function BusinessReportModal({
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }
