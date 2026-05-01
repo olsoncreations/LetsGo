@@ -977,13 +977,18 @@ function FollowButton({ followed, onToggle }: { followed: boolean; onToggle: () 
 
 // ─── Share Button ───
 
-function ShareButton({ name }: { name: string }) {
+function ShareButton({ name, bizId }: { name: string; bizId?: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const siteUrl = "https://www.useletsgo.com";
+    // Build a deep link to this business's public preview page so the
+    // recipient lands on the actual business, not the LetsGo homepage.
+    // Falls back to the homepage for the rare case bizId is unavailable.
+    const siteUrl = bizId
+      ? `https://www.useletsgo.com/preview/${encodeURIComponent(bizId)}`
+      : "https://www.useletsgo.com";
     const shareText = `Check out ${name} on LetsGo! Discover places and earn cash back.`;
     if (navigator.share) {
       try { await navigator.share({ title: `${name} on LetsGo`, text: shareText, url: siteUrl }); } catch { /* user cancelled */ }
@@ -1199,9 +1204,10 @@ function BusinessDetailPage({ biz, payoutLevels }: { biz: DiscoveryBusiness; pay
 
 // ─── Photo Page (slides 3+) ───
 
-function PhotoPage({ image, label, saved, onToggleSave }: {
+function PhotoPage({ image, label, bizId, saved, onToggleSave }: {
   image: DiscoveryImage;
   label: string;
+  bizId: string;
   saved: boolean;
   onToggleSave: () => void;
 }) {
@@ -1213,7 +1219,7 @@ function PhotoPage({ image, label, saved, onToggleSave }: {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ fontSize: 24, fontWeight: 800, color: "#fff", fontFamily: "'DM Sans', sans-serif", textShadow: "0 2px 12px rgba(0,0,0,0.5)" }}>{label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <ShareButton name={label} />
+            <ShareButton name={label} bizId={bizId} />
             <LikeButton liked={saved} onToggle={onToggleSave} />
           </div>
         </div>
@@ -1260,7 +1266,7 @@ function MainPhotoPage({ biz, saved, onToggleSave, userZip, userCoords, geoReady
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <h2 style={{ fontSize: "clamp(24px, 7vw, 36px)", fontWeight: 900, color: "#fff", margin: 0, lineHeight: 1.05, fontFamily: "'Dela Gothic One', sans-serif", textShadow: "0 2px 20px rgba(0,0,0,0.6)", letterSpacing: -0.5 }}>{biz.name}</h2>
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <ShareButton name={biz.name} />
+            <ShareButton name={biz.name} bizId={biz.id} />
             <LikeButton liked={saved} onToggle={onToggleSave} />
           </div>
         </div>
@@ -1476,7 +1482,7 @@ function BusinessCard({ biz, userZip, userCoords, geoReady, payoutLevels, saved,
         {/* Slides 3+: Additional photos */}
         {extraPhotos.map((img, i) => (
           <div key={i} style={{ width: `${100 / totalPages}%`, height: "100%", flexShrink: 0, overflow: "hidden" }}>
-            <PhotoPage image={img} label={biz.name} saved={saved} onToggleSave={onToggleSave} />
+            <PhotoPage image={img} label={biz.name} bizId={biz.id} saved={saved} onToggleSave={onToggleSave} />
           </div>
         ))}
       </div>
