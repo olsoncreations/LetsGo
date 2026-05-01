@@ -1044,16 +1044,19 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
             Pick one or more categories to narrow down the options for your game.
           </div>
 
-          {/* Type pills (Eat / Drink / Play / Pamper). Toggling a pill filters
-              the card grid below; selecting any clears category card picks so
-              stale selections from a different Type don't linger. Empty
+          {/* Type pills (Eat / Drink / Play / Pamper). 4-column grid keeps
+              all four on one line on every viewport, including narrow phones.
+              Text-only — matches Discovery's Type pills, and the labels are
+              short enough that icons are redundant. Toggling a pill filters
+              the card grid below; selecting any clears category card picks
+              so stale selections from a different Type don't linger. Empty
               selection = show every Business Type subtype. */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
               Type
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {TOP_TYPE_OPTIONS.map(({ value, label, icon }) => {
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              {TOP_TYPE_OPTIONS.map(({ value, label }) => {
                 const active = selectedTopTypes.includes(value);
                 return (
                   <button
@@ -1067,16 +1070,15 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                       setSelectedCategories(prev => prev.filter(c => c === "anything"));
                     }}
                     style={{
-                      padding: "8px 16px", borderRadius: 50,
+                      padding: "8px 6px", borderRadius: 50,
                       border: `1px solid ${active ? NEON : COLORS.cardBorder}`,
                       background: active ? `rgba(${NEON_RGB}, 0.12)` : "rgba(18,18,31,0.85)",
                       color: active ? NEON : COLORS.textSecondary,
                       fontSize: 12, fontWeight: 600, cursor: "pointer",
                       fontFamily: "'DM Sans', sans-serif", transition: "all 0.25s",
-                      display: "flex", alignItems: "center", gap: 6,
+                      textAlign: "center", whiteSpace: "nowrap",
                     }}
                   >
-                    <span aria-hidden style={{ fontSize: 14 }}>{icon}</span>
                     {label}
                   </button>
                 );
