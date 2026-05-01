@@ -384,6 +384,8 @@ export default function SupportPage() {
               <option value="receipt">Receipt</option>
               <option value="account">Account</option>
               <option value="billing">Billing</option>
+              <option value="general">General</option>
+              <option value="report">Business Reports</option>
             </select>
             <select value={ticketFilters.priority} onChange={e => setTicketFilters({ ...ticketFilters, priority: e.target.value })} style={{ padding: "12px 16px", border: "1px solid " + COLORS.cardBorder, borderRadius: 10, fontSize: 13, background: COLORS.cardBg, color: COLORS.textPrimary }}>
               <option value="all">All Priority</option>

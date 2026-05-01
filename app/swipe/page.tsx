@@ -11,6 +11,7 @@ import { SwipeVerticalAnim, SwipeLeftAnim, FilterAnim, HeartAnim, ScrollIndicato
 import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips, getBusinessDistance } from "@/lib/zipUtils";
 import { UseMyLocationButton } from "@/components/UseMyLocationButton";
 import { FriendSharePicker } from "@/components/FriendSharePicker";
+import { BusinessReportModal } from "@/components/BusinessReportModal";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
@@ -1272,6 +1273,7 @@ function MainPhotoPage({ biz, saved, onToggleSave, userZip, userCoords, geoReady
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userZip, userCoords, biz.latitude, biz.longitude, biz.businessZip, geoReady]);
   const heroImage = biz.images[0] ?? null;
+  const [reportOpen, setReportOpen] = useState(false);
 
   return (
     <div style={{ width: "100%", height: "100%", flexShrink: 0, position: "relative", background: COLORS.darkBg, overflow: "hidden" }}>
@@ -1398,6 +1400,33 @@ function MainPhotoPage({ biz, saved, onToggleSave, userZip, userCoords, geoReady
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
         </div>
       </div>
+      {/* Report flag — bottom-right, half the size of the share/like icons.
+          Subtle until tapped so it doesn't compete with the primary actions. */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setReportOpen(true); }}
+        aria-label="Report this business"
+        title="Report this business"
+        style={{
+          position: "absolute", bottom: 10, right: 10, zIndex: 6,
+          width: 24, height: 24, borderRadius: 12, padding: 0,
+          background: "rgba(0,0,0,0.45)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          backdropFilter: "blur(6px)",
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.2s ease",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 22V4M4 16h12l-2-4 2-4H4" />
+        </svg>
+      </button>
+      <BusinessReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        businessId={biz.id}
+        businessName={biz.name}
+      />
     </div>
   );
 }

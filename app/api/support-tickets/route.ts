@@ -43,7 +43,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "Subject must be under 200 characters" }, { status: 400 });
     }
 
-    const validCategories = ["payout", "receipt", "account", "billing", "general"];
+    // "report" is the user-flagged business reports category — populated by
+    // the discovery feed's report flow, surfaced in /admin/support filterable.
+    const validCategories = ["payout", "receipt", "account", "billing", "general", "report"];
     if (!validCategories.includes(category)) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
