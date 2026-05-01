@@ -312,33 +312,50 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
     const zip = zipInput.trim();
     if (zip.length === 5 && /^\d{5}$/.test(zip)) {
       const match = ZIP_LOOKUP[zip];
+      // Optimistic label from the static lookup; the geocoder updates it
+      // below once we get the real city/state for unknown zips.
       setLocationName(match ? match[0] : `ZIP ${zip}`);
       setLocationState(match ? match[1] : "");
       onLocationZipChange(zip);
-      // Update coords from lookup; if the zip isn't in the static map, geocode
-      // it via Google Maps so the discover API gets real coords. Without this,
-      // typing an unknown zip leaves coords=null and the API silently skips
-      // the distance filter (returns businesses everywhere).
       const coords = ZIP_COORDS[zip];
       if (coords) {
         onLocationCoordsChange([coords[0], coords[1]]);
       } else {
         onLocationCoordsChange(null);
-        const g = (window as unknown as { google?: { maps?: { Geocoder?: new () => {
-          geocode: (
-            req: Record<string, unknown>,
-            cb: (results: Array<{ geometry: { location: { lat: () => number; lng: () => number } } }> | null, status: string) => void
-          ) => void;
-        } } } }).google;
+        // Geocode unknown zips via Google Maps so we get coords (for the
+        // distance filter) AND the real city/state (for the label). The Maps
+        // JS script is loaded by this page's <Script> at the bottom.
+        type AddressComp = { long_name: string; short_name: string; types: string[] };
+        type GeocodeResult = {
+          address_components?: AddressComp[];
+          geometry: { location: { lat: () => number; lng: () => number } };
+        };
+        type GeocoderClass = new () => {
+          geocode: (req: Record<string, unknown>, cb: (results: GeocodeResult[] | null, status: string) => void) => void;
+        };
+        const g = (window as unknown as { google?: { maps?: { Geocoder?: GeocoderClass } } }).google;
         if (g?.maps?.Geocoder) {
           const geocoder = new g.maps.Geocoder();
           geocoder.geocode({ address: zip + ", USA" }, (results, status) => {
             if (status === "OK" && results && results[0]) {
-              const loc = results[0].geometry.location;
+              const r = results[0];
+              const loc = r.geometry.location;
               const lat = loc.lat();
               const lng = loc.lng();
               ZIP_COORDS[zip] = [lat, lng];
               onLocationCoordsChange([lat, lng]);
+              // Pull the city + state out of address_components so the pill
+              // shows "Sioux City" instead of "ZIP 51108".
+              let city = "";
+              let st = "";
+              for (const comp of r.address_components ?? []) {
+                if (comp.types.includes("locality")) city = comp.long_name;
+                else if (!city && comp.types.includes("sublocality")) city = comp.long_name;
+                else if (!city && comp.types.includes("postal_town")) city = comp.long_name;
+                if (comp.types.includes("administrative_area_level_1")) st = comp.short_name;
+              }
+              if (city) setLocationName(city);
+              if (st) setLocationState(st);
             }
           });
         }
