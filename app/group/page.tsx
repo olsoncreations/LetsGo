@@ -20,7 +20,7 @@ import { GroupCreateAnim, JoinCodeAnim, GameListAnim } from "@/components/TourIl
 
 // ── Type Definitions ────────────────────────────────────────
 type ViewState = "hub" | "setup" | "selection" | "voting" | "winner";
-type GameStatus = "active" | "completed";
+type GameStatus = "active" | "completed" | "cancelled";
 
 interface Player {
   id: string;
@@ -85,6 +85,11 @@ interface Game {
   createdBy?: string;
   playerActivity: PlayerActivity[];
   totalUniqueSelections: number;
+  // Auto-cancel reinstate fields. Only populated when the cron tick auto-
+  // cancels a game; manual GM cancels leave autoCancelled=false. Used by
+  // the hub to show a Reinstate button within the 14-day window.
+  autoCancelled?: boolean;
+  cancelledAt?: string;
 }
 
 interface Business {
@@ -141,6 +146,7 @@ interface GameHubProps {
   onJoinByCode: (code: string) => void;
   onLeaveGame: (gameId: string) => Promise<void>;
   onDeleteGame: (gameId: string) => Promise<void>;
+  onReinstateGame: (gameId: string) => Promise<void>;
 }
 
 interface GameCardProps {
@@ -148,7 +154,10 @@ interface GameCardProps {
   index: number;
   onClick: () => void;
   onLeave?: () => void;
+  onReinstate?: (gameId: string) => void;
 }
+
+const REINSTATE_WINDOW_DAYS_CLIENT = 14;
 
 interface GameSetupProps {
   friends: Friend[];
@@ -565,7 +574,7 @@ const SectionLabel = ({ text, color = NEON }: SectionLabelProps) => (
 // ═══════════════════════════════════════════════════════════════
 // GAME HUB
 // ═══════════════════════════════════════════════════════════════
-const GameHub = ({ games, loading, onNewGame, onOpenGame, onGoHome, onJoinByCode, onLeaveGame, onDeleteGame }: GameHubProps) => {
+const GameHub = ({ games, loading, onNewGame, onOpenGame, onGoHome, onJoinByCode, onLeaveGame, onDeleteGame, onReinstateGame }: GameHubProps) => {
   const [tab, setTab] = useState("active");
   const [joinCode, setJoinCode] = useState("");
   const [joinFocused, setJoinFocused] = useState(false);
@@ -573,7 +582,9 @@ const GameHub = ({ games, loading, onNewGame, onOpenGame, onGoHome, onJoinByCode
   const [leaveConfirmId, setLeaveConfirmId] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const activeGames = games.filter((g) => g.status === "active");
-  const pastGames = games.filter((g) => g.status === "completed");
+  // "Past" includes cancelled too so GMs can find auto-cancelled games and
+  // reinstate them within the 14-day window.
+  const pastGames = games.filter((g) => g.status === "completed" || g.status === "cancelled");
 
   const handleJoin = async () => {
     if (joinCode.length < 4 || joining) return;
@@ -687,7 +698,7 @@ const GameHub = ({ games, loading, onNewGame, onOpenGame, onGoHome, onJoinByCode
       {/* Game Cards */}
       <div data-tour="group-games" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {(tab === "active" ? activeGames : pastGames).map((game, idx) => (
-          <GameCard key={game.id} game={game} index={idx} onClick={() => onOpenGame(game)} onLeave={game.status === "active" ? () => setLeaveConfirmId(game.id) : undefined} />
+          <GameCard key={game.id} game={game} index={idx} onClick={() => onOpenGame(game)} onLeave={game.status === "active" ? () => setLeaveConfirmId(game.id) : undefined} onReinstate={onReinstateGame} />
         ))}
         {(tab === "active" ? activeGames : pastGames).length === 0 && (
           tab === "active" ? (
@@ -775,10 +786,20 @@ const GameHub = ({ games, loading, onNewGame, onOpenGame, onGoHome, onJoinByCode
   );
 };
 
-const GameCard = ({ game, index, onClick, onLeave }: GameCardProps) => {
+const GameCard = ({ game, index, onClick, onLeave, onReinstate }: GameCardProps) => {
   const [hovered, setHovered] = useState(false);
   const isC = game.status === "completed";
+  const isCancelled = game.status === "cancelled";
+  const isCompleteOrCancelled = isC || isCancelled;
   const isGM = game.players.some((p) => p.name === "You" && p.isGameMaster);
+  // Reinstate is only offered for cron-auto-cancelled games within the
+  // 14-day window. Manual GM cancels are intentional; reinstate would
+  // lose intent. Window check uses cancelledAt if present.
+  const reinstateEligible = isCancelled && game.autoCancelled && isGM && (() => {
+    if (!game.cancelledAt) return true;
+    const ageDays = (Date.now() - new Date(game.cancelledAt).getTime()) / (1000 * 60 * 60 * 24);
+    return ageDays <= REINSTATE_WINDOW_DAYS_CLIENT;
+  })();
   return (
     <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{
       position: "relative", borderRadius: 4, cursor: "pointer",
@@ -799,9 +820,11 @@ const GameCard = ({ game, index, onClick, onLeave }: GameCardProps) => {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <h3 style={{ fontFamily: FONT_DISPLAY, fontSize: 17, fontWeight: 700, color: TEXT_PRIMARY, lineHeight: 1.2 }}>{game.name}</h3>
                   {isC && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 3, background: "rgba(255,255,255,0.06)", color: TEXT_DIM, fontFamily: FONT_BODY }}>Complete</span>}
+                  {isCancelled && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 3, background: "rgba(255,49,49,0.1)", color: PINK, fontFamily: FONT_BODY }}>{game.autoCancelled ? "Auto-Cancelled" : "Cancelled"}</span>}
                 </div>
                 <div style={{ fontFamily: FONT_BODY, fontSize: 11, color: TEXT_DIM }}>
                   {isC ? (<span>Winner: <span style={{ color: NEON, fontWeight: 600 }}>{game.winner?.name}</span></span>)
+                    : isCancelled ? (<span>{game.autoCancelled ? "Stalled out — GM can reinstate within 14 days" : "Cancelled by GM"}</span>)
                     : (<span>Round {game.currentRound} of {game.totalRounds} · {game.currentRound === 1 ? "Selection Phase" : "Voting Phase"}</span>)}
                 </div>
               </div>
@@ -829,19 +852,37 @@ const GameCard = ({ game, index, onClick, onLeave }: GameCardProps) => {
                 </div>
               ) : <div />}
 
-              {/* Right: Play / View button */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 2,
-                border: `1px solid rgba(${isC ? "255,255,255" : NEON_RGB}, ${hovered ? 0.5 : 0.15})`,
-                background: hovered ? `rgba(${isC ? "255,255,255" : NEON_RGB}, 0.06)` : "transparent", transition: "all 0.3s ease",
-              }}>
-                <span style={{ fontFamily: FONT_BODY, fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", color: hovered ? (isC ? TEXT_DIM : NEON) : TEXT_MUTED, textTransform: "uppercase", transition: "color 0.3s ease" }}>
-                  {isC ? "View" : "Play"}
-                </span>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ transition: "transform 0.3s ease", transform: hovered ? "translateX(3px)" : "none" }}>
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke={hovered ? (isC ? TEXT_DIM : NEON) : TEXT_MUTED} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
+              {/* Right: Play / View / Reinstate button */}
+              {reinstateEligible && onReinstate ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onReinstate(game.id); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 2,
+                    border: `1px solid ${NEON}80`, background: `rgba(${NEON_RGB}, 0.12)`,
+                    cursor: "pointer", transition: "all 0.3s ease",
+                  }}
+                >
+                  <span style={{ fontFamily: FONT_BODY, fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", color: NEON, textTransform: "uppercase" }}>
+                    Reinstate
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 8a6 6 0 1112 0M14 4v4h-4M2 12l2-2" stroke={NEON} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ) : (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 2,
+                  border: `1px solid rgba(${isCompleteOrCancelled ? "255,255,255" : NEON_RGB}, ${hovered ? 0.5 : 0.15})`,
+                  background: hovered ? `rgba(${isCompleteOrCancelled ? "255,255,255" : NEON_RGB}, 0.06)` : "transparent", transition: "all 0.3s ease",
+                }}>
+                  <span style={{ fontFamily: FONT_BODY, fontSize: 10, fontWeight: 600, letterSpacing: "0.12em", color: hovered ? (isCompleteOrCancelled ? TEXT_DIM : NEON) : TEXT_MUTED, textTransform: "uppercase", transition: "color 0.3s ease" }}>
+                    {isCancelled ? "View" : isC ? "View" : "Play"}
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ transition: "transform 0.3s ease", transform: hovered ? "translateX(3px)" : "none" }}>
+                    <path d="M3 8h10M9 4l4 4-4 4" stroke={hovered ? (isCompleteOrCancelled ? TEXT_DIM : NEON) : TEXT_MUTED} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3010,6 +3051,7 @@ interface APIGame {
   time_between_rounds_minutes: number; votes_hidden: boolean; allow_invites: boolean;
   round_end_time: string | null; winner_business_ids: string[]; created_at: string;
   completed_at: string | null;
+  auto_cancelled?: boolean; cancelled_at?: string | null;
   players?: APIPlayer[]; playerCount?: number; winnerBusinessNames?: string[];
   selections?: { id: string; businessId: string; businessName: string; businessImage: string | null; businessImages: string[]; selectedBy: string; selectedByName: string }[];
   voteTally?: { businessId: string; businessName: string; votes: number }[];
@@ -3034,7 +3076,8 @@ function transformGame(g: APIGame, userId?: string): Game {
     isGameMaster: p.role === "game_master",
   }));
 
-  const isComplete = g.status === "complete" || g.status === "cancelled";
+  const isComplete = g.status === "complete";
+  const isCancelled = g.status === "cancelled";
   const myVotes = new Set(g.myVotesThisRound || []);
 
   // Build selections from detail API (merge vote tallies)
@@ -3095,7 +3138,7 @@ function transformGame(g: APIGame, userId?: string): Game {
     id: g.id,
     gameCode: g.game_code,
     name: g.name,
-    status: isComplete ? "completed" : "active",
+    status: isCancelled ? "cancelled" : isComplete ? "completed" : "active",
     currentRound: g.current_round,
     totalRounds: g.total_rounds,
     players,
@@ -3111,6 +3154,8 @@ function transformGame(g: APIGame, userId?: string): Game {
     createdBy: g.created_by,
     playerActivity,
     totalUniqueSelections: g.totalUniqueSelections ?? 0,
+    autoCancelled: Boolean(g.auto_cancelled),
+    cancelledAt: g.cancelled_at ?? undefined,
   };
 }
 
@@ -3384,6 +3429,16 @@ export default function GroupVote() {
     } catch (err) { showToast((err as Error).message, "error"); }
   };
 
+  // Reinstate auto-cancelled game (GM only, within 14-day window). Selections
+  // and votes are preserved by the API; only status / round_end_time reset.
+  const handleReinstateGame = async (gameId: string) => {
+    try {
+      await apiFetch(`/api/group-games/${gameId}/reinstate`, token, { method: "POST" });
+      showToast("Game reinstated. Round timer reset.", "success");
+      fetchGames();
+    } catch (err) { showToast((err as Error).message, "error"); }
+  };
+
   const handleCreateGame = async (config: {
     name: string; location: string; totalRounds: number; advancePerRound: number[];
     timeBetweenRounds: string; votesHidden: boolean; allowInvites: boolean;
@@ -3609,7 +3664,7 @@ export default function GroupVote() {
           })()}
 
           <div style={{ paddingBottom: 20 }}>
-            {view === "hub" && <GameHub games={games} loading={gamesLoading} onNewGame={() => updateView("setup")} onOpenGame={openGame} onGoHome={goHome} onJoinByCode={handleJoinByCode} onLeaveGame={handleLeaveGame} onDeleteGame={handleDeleteGame} />}
+            {view === "hub" && <GameHub games={games} loading={gamesLoading} onNewGame={() => updateView("setup")} onOpenGame={openGame} onGoHome={goHome} onJoinByCode={handleJoinByCode} onLeaveGame={handleLeaveGame} onDeleteGame={handleDeleteGame} onReinstateGame={handleReinstateGame} />}
             {view === "setup" && <GameSetup friends={friends} onBack={goHome} onCreateGame={handleCreateGame} />}
             {view === "selection" && <SelectionPhase game={selectedGame} businesses={businesses} friends={friends} token={token} onBack={goHome} onAdvance={handleAdvanceFromSelection} onAddSelection={handleAddSelection} onRemoveSelection={handleRemoveSelection} onRefresh={handleRefresh} />}
             {view === "voting" && selectedGame && <VotingPhase game={selectedGame} friends={friends} token={token} onBack={goHome}

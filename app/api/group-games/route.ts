@@ -87,6 +87,11 @@ export async function POST(req: NextRequest) {
     attempts++;
   }
 
+  // Set the initial selection-phase deadline so the CountdownBadge has
+  // something to render from the start AND the cron tick can auto-advance
+  // (or remind, or auto-cancel) when the timer expires.
+  const initialRoundEndTime = new Date(Date.now() + timeBetweenRounds * 60 * 1000).toISOString();
+
   // Insert the game
   const { data: game, error: insertErr } = await supabaseServer
     .from("group_games")
@@ -100,6 +105,7 @@ export async function POST(req: NextRequest) {
       total_rounds: totalRounds,
       advance_per_round: advancePerRound,
       time_between_rounds_minutes: timeBetweenRounds,
+      round_end_time: initialRoundEndTime,
       votes_hidden: votesHidden,
       allow_invites: allowInvites,
       start_date: startDate,

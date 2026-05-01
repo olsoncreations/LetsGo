@@ -22,6 +22,9 @@ export const NOTIFICATION_TYPES = {
   APPLICATION_APPROVED: "application_approved",
   APPLICATION_REJECTED: "application_rejected",
   BUSINESS_SHARED: "business_shared",
+  GROUP_SELECTION_REMINDER: "group_selection_reminder",
+  GROUP_GAME_STUCK: "group_game_stuck",
+  GROUP_GAME_AUTO_CANCELLED: "group_game_auto_cancelled",
 } as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];
@@ -49,6 +52,9 @@ export const NOTIFICATION_CATEGORIES: Record<string, NotificationType[]> = {
     NOTIFICATION_TYPES.GAME_ADVANCED,
     NOTIFICATION_TYPES.GAME_COMPLETE,
     NOTIFICATION_TYPES.GROUP_ROUND_ENDED,
+    NOTIFICATION_TYPES.GROUP_SELECTION_REMINDER,
+    NOTIFICATION_TYPES.GROUP_GAME_STUCK,
+    NOTIFICATION_TYPES.GROUP_GAME_AUTO_CANCELLED,
     NOTIFICATION_TYPES.DATENIGHT_READY,
   ],
   Social: [NOTIFICATION_TYPES.FRIEND_REQUEST, NOTIFICATION_TYPES.FRIEND_ACCEPTED, NOTIFICATION_TYPES.FRIEND_INVITE, NOTIFICATION_TYPES.BUSINESS_SHARED],
@@ -77,6 +83,9 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   application_approved: "Application approved",
   application_rejected: "Application not approved",
   business_shared: "A friend shared a business with you",
+  group_selection_reminder: "Your group is waiting on you to suggest places",
+  group_game_stuck: "Your group game is stalled",
+  group_game_auto_cancelled: "Your group game was auto-cancelled",
 };
 
 // Deep-link routes for each notification type
@@ -103,6 +112,9 @@ export const NOTIFICATION_HREFS: Record<NotificationType, string> = {
   // Default href; the share endpoint sets metadata.href = "/preview/{bizId}"
   // which the NotificationPanel honors over this fallback.
   business_shared: "/swipe",
+  group_selection_reminder: "/group",
+  group_game_stuck: "/group",
+  group_game_auto_cancelled: "/group",
 };
 
 // Client-side notification row type
