@@ -114,6 +114,7 @@ interface Friend {
 }
 
 interface FilterState {
+  topTypes: string[];
   category: string[];
   price: string[];
   sort: string;
@@ -123,6 +124,13 @@ interface FilterState {
   tags: string[];
   browseFrom: string;
 }
+
+const TOP_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "eat", label: "Eat" },
+  { value: "drink", label: "Drink" },
+  { value: "play", label: "Play" },
+  { value: "pamper", label: "Pamper" },
+];
 
 interface GameHubProps {
   games: Game[];
@@ -1593,7 +1601,6 @@ const PlayerActivityTracker = ({ activity, phase }: { activity: PlayerActivity[]
 const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, onAddSelection, onRemoveSelection, onRefresh }: SelectionPhaseProps) => {
   const [selections, setSelections] = useState<Business[]>([]);
   const [selectionTab, setSelectionTab] = useState<"explore" | "my-picks">("explore");
-  const [activeCategory, setActiveCategory] = useState("all");
   const [userZip, setUserZip] = useState("68102");
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
   useEffect(() => {
@@ -1622,44 +1629,85 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
   const [confirmLockIn, setConfirmLockIn] = useState(false);
   const [suggestionsSubmitted, setSuggestionsSubmitted] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
-    category: [], price: [], sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [], browseFrom: "All Businesses",
+    topTypes: [], category: [], price: [], sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [], browseFrom: "All Businesses",
   });
+  // Snapshot of last-saved filter state — used to revert if the user opens the
+  // panel, tweaks things, then taps "Back" to leave without saving.
+  const [filtersSnapshot, setFiltersSnapshot] = useState<FilterState>({
+    topTypes: [], category: [], price: [], sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [], browseFrom: "All Businesses",
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [savedToast, setSavedToast] = useState<string | null>(null);
 
   // DB-driven tag categories
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
   useEffect(() => { fetchTagsByCategory("business").then(setTagCats).catch(() => {}); }, []);
 
-  // Load saved filter preferences
+  // Load saved filter preferences. Capture as snapshot too so the "Back"
+  // (cancel) button can revert in-panel edits to the last-saved state.
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabaseBrowser.auth.getSession();
       if (!session?.access_token) return;
       const saved = await loadFilterPreferences(session.access_token);
       if (saved) {
-        setFilters(prev => ({
-          ...prev,
-          category: saved.categories.length > 0 ? saved.categories : prev.category,
-          price: saved.price && saved.price !== "Any" ? [saved.price] : prev.price,
-          distance: saved.distance || prev.distance,
-          openNow: saved.openNow ?? prev.openNow,
-          tags: saved.tags.length > 0 ? saved.tags : prev.tags,
-        }));
+        setFilters(prev => {
+          const next: FilterState = {
+            ...prev,
+            topTypes: saved.topTypes.length > 0 ? saved.topTypes : prev.topTypes,
+            category: saved.categories.length > 0 ? saved.categories : prev.category,
+            price: saved.price && saved.price !== "Any" ? [saved.price] : prev.price,
+            distance: saved.distance || prev.distance,
+            openNow: saved.openNow ?? prev.openNow,
+            tags: saved.tags.length > 0 ? saved.tags : prev.tags,
+          };
+          setFiltersSnapshot(next);
+          return next;
+        });
       }
     })();
   }, []);
+  // Subtype list is contextual on the selected Type pills (matching Discovery):
+  //   no Types selected → show every active Business Type tag
+  //   Types selected    → show only tags whose top_type matches
   const FILTER_CATEGORIES = useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
-    return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
-  }, [tagCats]);
-  // Smart visibility: hide Cuisine/Dietary when non-food category selected
+    if (!bt || bt.tags.length === 0) return DEFAULT_FILTER_CATEGORIES;
+    const filtered = filters.topTypes.length === 0
+      ? bt.tags
+      : bt.tags.filter(t => t.top_type && filters.topTypes.includes(t.top_type));
+    return ["All", ...filtered.map(t => t.name)];
+  }, [tagCats, filters.topTypes]);
+  // Smart visibility for food-only categories (Cuisine/Dietary): show them
+  // when the user is filtering for food — either via "Eat" Type or a food-
+  // tagged subtype Category. With no filters at all, default visible.
   const selectedCatIsFood = useMemo(() => {
-    if (filters.category.length === 0) return true;
+    if (filters.topTypes.length === 0 && filters.category.length === 0) return true;
+    if (filters.topTypes.includes("eat")) return true;
     const bt = tagCats.find(c => c.name === "Business Type");
-    return filters.category.some(cat => {
-      const tag = bt?.tags.find(t => t.name === cat);
-      return tag?.is_food ?? true;
-    });
-  }, [filters.category, tagCats]);
+    if (filters.category.length > 0) {
+      return filters.category.some(cat => {
+        const tag = bt?.tags.find(t => t.name === cat);
+        return tag?.is_food ?? true;
+      });
+    }
+    return false;
+  }, [filters.topTypes, filters.category, tagCats]);
+  // Resolve selected Type pills (eat/drink/play/pamper) to the set of Business
+  // Type tag NAMES that carry that top_type, so we can filter businesses
+  // whose `tags` array contains at least one matching name.
+  const allowedTopTypeTagNames = useMemo(() => {
+    if (filters.topTypes.length === 0) return null; // null = no Type filter
+    const bt = tagCats.find(c => c.name === "Business Type");
+    if (!bt) return new Set<string>();
+    const names = new Set<string>();
+    for (const t of bt.tags) {
+      if (t.top_type && filters.topTypes.includes(t.top_type)) {
+        names.add(t.name.toLowerCase());
+      }
+    }
+    return names;
+  }, [filters.topTypes, tagCats]);
 
   // Sync selections from server (private pool — only current user's picks)
   useEffect(() => {
@@ -1681,16 +1729,70 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
     }
   };
 
-  const filtered = businesses.filter((b) => {
-    const matchCat = activeCategory === "all" || b.category === activeCategory;
-    const matchSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.type.toLowerCase().includes(searchQuery.toLowerCase()) || b.tags?.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    // Distance filter — uses GPS coordinates when available, falls back to zip
-    const dist = getBusinessDistance(userCoords, userZip, b.latitude, b.longitude, b.zip);
-    if (dist !== null && dist > filters.distance) return false;
-    // Has Rewards — hide seeded/trial businesses
-    if (filters.hasRewards && b.isTrial) return false;
-    return matchCat && matchSearch;
-  });
+  const filtered = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    const tagsLower = (b: Business) => (b.tags || []).map(t => t.toLowerCase());
+
+    const list = businesses.filter((b) => {
+      // Search — name / type / tags substring match
+      if (q) {
+        const matchSearch = b.name.toLowerCase().includes(q)
+          || b.type.toLowerCase().includes(q)
+          || tagsLower(b).some(t => t.includes(q));
+        if (!matchSearch) return false;
+      }
+
+      // Type (Eat / Drink / Play / Pamper) — biz must have at least one
+      // Business Type tag whose top_type matches a selected Type pill
+      if (allowedTopTypeTagNames && allowedTopTypeTagNames.size > 0) {
+        const lower = tagsLower(b);
+        if (!lower.some(t => allowedTopTypeTagNames.has(t))) return false;
+      }
+
+      // Category subtype (multi-select) — biz tags must contain at least one
+      if (filters.category.length > 0) {
+        const lower = tagsLower(b);
+        const wanted = filters.category.map(c => c.toLowerCase());
+        if (!lower.some(t => wanted.includes(t))) return false;
+      }
+
+      // Price (multi-select)
+      if (filters.price.length > 0 && !filters.price.includes(b.priceLevel)) {
+        return false;
+      }
+
+      // Tag categories (Cuisine, Dietary, Extras, etc.) — ALL must match
+      if (filters.tags.length > 0) {
+        const lower = tagsLower(b);
+        const wanted = filters.tags.map(t => t.toLowerCase());
+        if (!wanted.every(w => lower.includes(w))) return false;
+      }
+
+      // Has Rewards — exclude seeded/trial businesses
+      if (filters.hasRewards && b.isTrial) return false;
+
+      // Distance — uses GPS coordinates when available, falls back to zip
+      const dist = getBusinessDistance(userCoords, userZip, b.latitude, b.longitude, b.zip);
+      if (dist !== null && dist > filters.distance) return false;
+
+      // browseFrom (My Places / New to Me) and openNow are not yet wired —
+      // hours data isn't passed through the Business mapping and follow data
+      // isn't joined. Tracking as a follow-up.
+      return true;
+    });
+
+    // Sort — Nearest by distance, Newest by created_at not available client-side,
+    // others fall back to original order. Discovery handles these server-side via
+    // the discover API; Group fetches all pages then sorts in-memory.
+    if (filters.sort === "Nearest") {
+      return [...list].sort((a, b) => {
+        const da = getBusinessDistance(userCoords, userZip, a.latitude, a.longitude, a.zip) ?? Number.POSITIVE_INFINITY;
+        const db = getBusinessDistance(userCoords, userZip, b.latitude, b.longitude, b.zip) ?? Number.POSITIVE_INFINITY;
+        return da - db;
+      });
+    }
+    return list;
+  }, [businesses, searchQuery, allowedTopTypeTagNames, filters.category, filters.price, filters.tags, filters.hasRewards, filters.distance, filters.sort, userCoords, userZip]);
 
   return (
     <div style={{ animation: "fadeIn 0.5s ease both" }}>
@@ -1797,7 +1899,7 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
             )}
           </div>
         );
-        const activeFilterCount = filters.category.length + filters.price.length + (filters.sort !== "Nearest" ? 1 : 0) + (filters.openNow ? 1 : 0) + filters.tags.length + (filters.browseFrom !== "All Businesses" ? 1 : 0);
+        const activeFilterCount = filters.topTypes.length + filters.category.length + filters.price.length + (filters.sort !== "Nearest" ? 1 : 0) + (filters.openNow ? 1 : 0) + (filters.hasRewards ? 1 : 0) + filters.tags.length + (filters.browseFrom !== "All Businesses" ? 1 : 0);
         return (
           <>
             {/* Toggle button */}
@@ -1838,7 +1940,28 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                   )}
                 </div>
 
-                {/* Category (multi-select) */}
+                {/* Type — primary filter (Eat/Drink/Play/Pamper). Multi-select.
+                    Empty = show all. The Category subtypes below filter
+                    contextually based on what's selected here. */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: TEXT_DIM, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 10, fontFamily: FONT_BODY }}>
+                    Type
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {TOP_TYPE_OPTIONS.map(({ value, label }) => {
+                      const active = filters.topTypes.includes(value);
+                      return glassPill(label, active, () => setFilters(prev => ({
+                        ...prev,
+                        topTypes: active ? prev.topTypes.filter(t => t !== value) : [...prev.topTypes, value],
+                        // Clear subtype picks when toggling Type so stale picks
+                        // from a different Type don't linger filtered out.
+                        category: [],
+                      })), { fontSize: 12, padding: "8px 16px" });
+                    })}
+                  </div>
+                </div>
+
+                {/* Category subtype (multi-select, contextual on Type) */}
                 <div style={{ marginBottom: 16 }}>
                   {sectionLabel("Category")}
                   {openSections["Category"] && (
@@ -1967,6 +2090,93 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                         allow-list cleanup. Active categories load from DB via tagCats. */}
                   </>
                 )}
+
+                {/* Save / Reset / Back actions. Save persists to
+                    profiles.filter_preferences (shared with Discovery). Back
+                    discards in-panel edits and reverts to the last-saved
+                    snapshot. Reset clears every field to defaults but stays
+                    in the panel so the user can build a fresh set. */}
+                <div style={{ display: "flex", gap: 8, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${CARD_BORDER}`, flexWrap: "wrap" }}>
+                  <button
+                    onClick={async () => {
+                      if (savingPrefs) return;
+                      setSavingPrefs(true);
+                      try {
+                        const { data: { session } } = await supabaseBrowser.auth.getSession();
+                        const token = session?.access_token;
+                        if (!token) {
+                          setSavedToast("Sign in to save filters");
+                          setSavingPrefs(false);
+                          setTimeout(() => setSavedToast(null), 2000);
+                          return;
+                        }
+                        const res = await fetch("/api/users/filter-preferences", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({
+                            preferences: {
+                              topTypes: filters.topTypes,
+                              categories: filters.category,
+                              // API stores price as single string ("Any" or one
+                              // level); pick the first selected level so we
+                              // round-trip cleanly across pages that still use
+                              // single-select pricing.
+                              price: filters.price[0] || "Any",
+                              distance: filters.distance,
+                              openNow: filters.openNow,
+                              tags: filters.tags,
+                            },
+                          }),
+                        });
+                        if (res.ok) {
+                          setFiltersSnapshot(filters);
+                          setSavedToast("Filters saved");
+                          setTimeout(() => { setSavedToast(null); setFiltersOpen(false); }, 900);
+                        } else {
+                          setSavedToast("Couldn't save");
+                          setTimeout(() => setSavedToast(null), 2000);
+                        }
+                      } catch {
+                        setSavedToast("Couldn't save");
+                        setTimeout(() => setSavedToast(null), 2000);
+                      } finally {
+                        setSavingPrefs(false);
+                      }
+                    }}
+                    disabled={savingPrefs}
+                    style={{
+                      flex: 2, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                      border: "none", background: NEON, color: "#fff", cursor: savingPrefs ? "wait" : "pointer",
+                      fontFamily: FONT_BODY, opacity: savingPrefs ? 0.7 : 1,
+                      boxShadow: `0 4px 20px rgba(${NEON_RGB}, 0.3)`, transition: "all 0.3s",
+                    }}
+                  >
+                    {savingPrefs ? "Saving..." : savedToast || "Save Filters"}
+                  </button>
+                  <button
+                    onClick={() => setFilters({
+                      topTypes: [], category: [], price: [], sort: "Nearest", openNow: false, hasRewards: false, distance: 15, tags: [], browseFrom: "All Businesses",
+                    })}
+                    style={{
+                      flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                      border: `1px solid ${CARD_BORDER}`, background: "transparent",
+                      color: TEXT_DIM, cursor: "pointer", fontFamily: FONT_BODY,
+                    }}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => { setFilters(filtersSnapshot); setFiltersOpen(false); }}
+                    title="Discard changes and close"
+                    style={{
+                      flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                      border: `1px solid ${CARD_BORDER}`, background: "transparent",
+                      color: TEXT_DIM, cursor: "pointer", fontFamily: FONT_BODY,
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             )}
           </>
