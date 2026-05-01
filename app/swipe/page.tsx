@@ -190,7 +190,7 @@ const PRICE_TOOLTIPS: Record<string, string> = {
 
 // ─── Filter Bar ───
 
-function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZip, onLocationZipChange, onLocationCoordsChange, showMyPlacesOnly, setShowMyPlacesOnly, myPlacesCount, onApply }: {
+function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZip, onLocationZipChange, onLocationCoordsChange, showMyPlacesOnly, setShowMyPlacesOnly, myPlacesCount, onSaveFilters, onCancelFilters, savingPrefs, savedToast }: {
   filtersOpen: boolean;
   setFiltersOpen: (v: boolean) => void;
   filters: FilterState;
@@ -201,7 +201,10 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
   showMyPlacesOnly: boolean;
   setShowMyPlacesOnly: (v: boolean) => void;
   myPlacesCount: number;
-  onApply: () => void;
+  onSaveFilters: () => void | Promise<void>;
+  onCancelFilters: () => void;
+  savingPrefs: boolean;
+  savedToast: string | null;
 }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const [editingZip, setEditingZip] = useState(false);
@@ -736,20 +739,29 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
           </>
         )}
 
-        {/* Apply & Clear buttons */}
-        <div style={{ display: "flex", gap: 12, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12 }}>
+        {/* Save / Reset / Back actions. Save persists to
+            profiles.filter_preferences (shared with Group Vote) and refetches
+            the feed. Back reverts in-panel edits to the last-saved snapshot
+            and closes. Reset clears every field but stays in the panel. */}
+        <div style={{ display: "flex", gap: 8, marginTop: 24, paddingBottom: 8, position: "sticky", bottom: 0, background: "rgba(10,10,20,0.95)", backdropFilter: "blur(12px)", paddingTop: 12, flexWrap: "wrap" }}>
+          <button onClick={onSaveFilters} disabled={savingPrefs} style={{
+            flex: 2, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+            border: "none", background: NEON, color: "#fff", cursor: savingPrefs ? "wait" : "pointer",
+            fontFamily: "'DM Sans', sans-serif", opacity: savingPrefs ? 0.7 : 1,
+            boxShadow: `0 4px 20px rgba(${NEON_RGB}, 0.3)`, transition: "all 0.3s",
+          }}>{savingPrefs ? "Saving..." : savedToast || "Save Filters"}</button>
           <button onClick={() => { setFilters({ search: "", topTypes: [], categories: [], price: "Any", sort: "", openNow: false, hasRewards: false, distance: 15, tags: [] }); setShowMyPlacesOnly(false); }} style={{
             flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
             border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
             color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
             transition: "all 0.3s",
-          }}>Clear All</button>
-          <button onClick={() => { onApply(); setFiltersOpen(false); }} style={{
-            flex: 2, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
-            border: "none", background: NEON,
-            color: "#fff", cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-            boxShadow: `0 4px 20px rgba(${NEON_RGB}, 0.3)`, transition: "all 0.3s",
-          }}>Apply Filters</button>
+          }}>Reset</button>
+          <button onClick={onCancelFilters} title="Discard changes and close" style={{
+            flex: 1, padding: "12px 0", borderRadius: 8, fontSize: 13, fontWeight: 700,
+            border: `1px solid ${COLORS.cardBorder}`, background: "transparent",
+            color: COLORS.textSecondary, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+            transition: "all 0.3s",
+          }}>Back</button>
         </div>
       </div>
     </div>
@@ -1543,6 +1555,13 @@ function DiscoveryPage() {
   const [filters, setFilters] = useState<FilterState>({
     search: "", topTypes: [], categories: [], price: "Any", sort: "", openNow: false, hasRewards: false, distance: 15, tags: [],
   });
+  // Snapshot of last-saved filter state — used to revert in-panel edits when
+  // the user taps "Back" to leave the filter sheet without saving.
+  const [filtersSnapshot, setFiltersSnapshot] = useState<FilterState>({
+    search: "", topTypes: [], categories: [], price: "Any", sort: "", openNow: false, hasRewards: false, distance: 15, tags: [],
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [savedToast, setSavedToast] = useState<string | null>(null);
   // Stable session seed for random ordering of the discovery feed. Generated once
   // per app load — refreshes only when the user revisits, so they don't see the
   // same businesses on top every time they open the app.
@@ -1919,7 +1938,8 @@ function DiscoveryPage() {
     }
   }, [locationCoords, locationZip, getUserId, sessionSeed]);
 
-  // Load saved filter preferences, then do initial fetch
+  // Load saved filter preferences, then do initial fetch. Capture the loaded
+  // state as the "snapshot" so the Back button reverts to last-saved.
   useEffect(() => {
     (async () => {
       const token = await getAuthToken();
@@ -1927,6 +1947,7 @@ function DiscoveryPage() {
       if (saved) {
         const merged = { ...filters, ...saved, search: "" };
         setFilters(merged);
+        setFiltersSnapshot(merged);
         fetchDiscoverPage(1, merged, false, showMyPlacesOnly);
       } else {
         fetchDiscoverPage(1, filters, false, showMyPlacesOnly);
@@ -2051,7 +2072,65 @@ function DiscoveryPage() {
         />
       )}
       <FloatingOrbs />
-      <FilterBar filtersOpen={filtersOpen} setFiltersOpen={setFiltersOpen} filters={filters} setFilters={setFilters} locationZip={locationZip} onLocationZipChange={setLocationZip} onLocationCoordsChange={setLocationCoords} showMyPlacesOnly={showMyPlacesOnly} setShowMyPlacesOnly={setShowMyPlacesOnly} myPlacesCount={savedIds.size} onApply={handleApplyFilters} />
+      <FilterBar
+        filtersOpen={filtersOpen}
+        setFiltersOpen={setFiltersOpen}
+        filters={filters}
+        setFilters={setFilters}
+        locationZip={locationZip}
+        onLocationZipChange={setLocationZip}
+        onLocationCoordsChange={setLocationCoords}
+        showMyPlacesOnly={showMyPlacesOnly}
+        setShowMyPlacesOnly={setShowMyPlacesOnly}
+        myPlacesCount={savedIds.size}
+        savingPrefs={savingPrefs}
+        savedToast={savedToast}
+        onSaveFilters={async () => {
+          if (savingPrefs) return;
+          setSavingPrefs(true);
+          try {
+            const token = await getAuthToken();
+            if (!token) {
+              setSavedToast("Sign in to save filters");
+              setTimeout(() => setSavedToast(null), 2000);
+              setSavingPrefs(false);
+              return;
+            }
+            const res = await fetch("/api/users/filter-preferences", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                preferences: {
+                  topTypes: filters.topTypes,
+                  categories: filters.categories,
+                  price: filters.price,
+                  distance: filters.distance,
+                  openNow: filters.openNow,
+                  tags: filters.tags,
+                },
+              }),
+            });
+            if (res.ok) {
+              setFiltersSnapshot(filters);
+              handleApplyFilters();
+              setSavedToast("Filters saved");
+              setTimeout(() => { setSavedToast(null); setFiltersOpen(false); }, 900);
+            } else {
+              setSavedToast("Couldn't save");
+              setTimeout(() => setSavedToast(null), 2000);
+            }
+          } catch {
+            setSavedToast("Couldn't save");
+            setTimeout(() => setSavedToast(null), 2000);
+          } finally {
+            setSavingPrefs(false);
+          }
+        }}
+        onCancelFilters={() => {
+          setFilters(filtersSnapshot);
+          setFiltersOpen(false);
+        }}
+      />
 
       {/* LaunchBanner is rendered inside MainPhotoPage (page 1 only) */}
 
