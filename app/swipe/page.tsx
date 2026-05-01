@@ -9,6 +9,7 @@ import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { SwipeVerticalAnim, SwipeLeftAnim, FilterAnim, HeartAnim, ScrollIndicatorAnim } from "@/components/TourIllustrations";
 import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips, getBusinessDistance } from "@/lib/zipUtils";
+import { UseMyLocationButton } from "@/components/UseMyLocationButton";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
@@ -577,6 +578,17 @@ function FilterBar({ filtersOpen, setFiltersOpen, filters, setFilters, locationZ
               )}
             </button>
           )}
+          <UseMyLocationButton
+            color={COLORS.neonBlue}
+            rgb="0, 212, 255"
+            compact
+            onLocate={({ lat, lng, zip, city, state }) => {
+              onLocationCoordsChange([lat, lng]);
+              if (zip) onLocationZipChange(zip);
+              if (city) setLocationName(city);
+              if (state) setLocationState(state);
+            }}
+          />
           <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
               stroke={searchFocused ? COLORS.neonPink : "rgba(255,255,255,0.3)"}

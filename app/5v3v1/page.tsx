@@ -8,6 +8,7 @@ import {
   normalizeToDiscoveryBusiness, getBusinessGradient, getBusinessEmoji,
 } from "@/lib/businessNormalize";
 import { getDistanceBetweenZips, getBusinessDistance, ZIP_COORDS } from "@/lib/zipUtils";
+import { UseMyLocationButton } from "@/components/UseMyLocationButton";
 import NotificationBell from "@/components/NotificationBell";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
@@ -624,7 +625,7 @@ function NeonButton({ children, onClick, disabled, color = NEON, size = "normal"
 // ═══════════════════════════════════════════════════
 // STEP 0: SETUP — Category, Filters, Friend
 // ═══════════════════════════════════════════════════
-function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onNext, activeGames, onRejoin, onCancel, locationZip, setLocationZip }: {
+function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onNext, activeGames, onRejoin, onCancel, locationZip, setLocationZip, setLocationCoords }: {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   selectedFriend: GameFriend | null;
@@ -634,6 +635,7 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
   onRejoin: (gameCode: string) => void;
   locationZip: string;
   setLocationZip: (zip: string) => void;
+  setLocationCoords: (coords: [number, number] | null) => void;
   onCancel: (gameId: string) => void;
 }) {
   const setupRouter = useRouter();
@@ -1114,18 +1116,16 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
                   </span>
                 )}
               </div>
-              <button onClick={() => { setLocationName("Omaha"); setLocationState("NE"); setLocationZip("68102"); }} style={{
-                display: "flex", alignItems: "center", gap: 6, padding: "10px 16px",
-                borderRadius: 50, border: `1px solid ${COLORS.neonBlue}30`,
-                background: `${COLORS.neonBlue}08`,
-                color: COLORS.neonBlue, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif", transition: "all 0.3s",
-              }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={COLORS.neonBlue} strokeWidth="2" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4m10-10h-4M6 12H2"/>
-                </svg>
-                Use My Location
-              </button>
+              <UseMyLocationButton
+                color={COLORS.neonBlue}
+                rgb="0, 212, 255"
+                onLocate={({ lat, lng, zip, city, state }) => {
+                  setLocationCoords([lat, lng]);
+                  if (zip) setLocationZip(zip);
+                  if (city) setLocationName(city);
+                  if (state) setLocationState(state);
+                }}
+              />
             </div>
           </div>
 
@@ -3570,7 +3570,7 @@ function FiveThreeOne() {
           selectedFriend={selectedFriend} setSelectedFriend={setSelectedFriend}
           onNext={() => setStep(1)}
           activeGames={activeGames}
-          locationZip={locationZip} setLocationZip={setLocationZip}
+          locationZip={locationZip} setLocationZip={setLocationZip} setLocationCoords={setLocationCoords}
           onRejoin={(code) => {
             const token = getToken();
             if (!token) { showToast("Session expired. Please refresh."); return; }

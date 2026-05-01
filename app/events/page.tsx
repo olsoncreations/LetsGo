@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getDistanceBetweenZips, getBusinessDistance, ZIP_COORDS, haversineDistance } from "@/lib/zipUtils";
+import { UseMyLocationButton } from "@/components/UseMyLocationButton";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
@@ -1026,7 +1027,7 @@ const EventCard = ({
 // FILTERS PANEL
 // ═══════════════════════════════════════════════════════════════
 const FiltersPanel = ({
-  filters, setFilters, filtersOpen, setFiltersOpen, userZip, setUserZip,
+  filters, setFilters, filtersOpen, setFiltersOpen, userZip, setUserZip, onUseMyLocation,
   showSavedOnly, setShowSavedOnly, savedCount,
   showFollowedOnly, setShowFollowedOnly, followedCount,
   EVENT_CATEGORIES, VIBE_FILTERS,
@@ -1037,6 +1038,7 @@ const FiltersPanel = ({
   setFiltersOpen: (v: boolean) => void;
   userZip: string;
   setUserZip: (z: string) => void;
+  onUseMyLocation: (data: { lat: number; lng: number; zip: string; city: string; state: string }) => void;
   showSavedOnly: boolean;
   setShowSavedOnly: (v: boolean) => void;
   savedCount: number;
@@ -1260,6 +1262,14 @@ const FiltersPanel = ({
               {userZip.length === 5 && !ZIP_COORDS[userZip] && (
                 <span style={{ fontFamily: FONT_BODY, fontSize: 9, color: YELLOW }}>Zip not in database</span>
               )}
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <UseMyLocationButton
+                color={NEON}
+                rgb={NEON_RGB}
+                compact
+                onLocate={onUseMyLocation}
+              />
             </div>
           </FilterSection>
           <div style={{ height: 1, background: CARD_BORDER }} />
@@ -1870,6 +1880,10 @@ export default function EventsPage() {
                   setFiltersOpen={setFiltersOpen}
                   userZip={userZip}
                   setUserZip={setUserZip}
+                  onUseMyLocation={({ lat, lng, zip }) => {
+                    setUserCoords([lat, lng]);
+                    if (zip) setUserZip(zip);
+                  }}
                   showSavedOnly={showSavedOnly}
                   setShowSavedOnly={setShowSavedOnly}
                   savedCount={savedEventIds.size}

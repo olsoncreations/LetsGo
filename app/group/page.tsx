@@ -7,6 +7,7 @@ import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, 
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
 import { loadFilterPreferences } from "@/lib/filterPreferences";
 import { getBusinessDistance, ZIP_COORDS } from "@/lib/zipUtils";
+import { UseMyLocationButton } from "@/components/UseMyLocationButton";
 import NotificationBell from "@/components/NotificationBell";
 import OnboardingTooltip from "@/components/OnboardingTooltip";
 import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
@@ -1881,6 +1882,17 @@ const SelectionPhase = ({ game, businesses, friends, token, onBack, onAdvance, o
                   </div>
                   <input type="range" min={1} max={50} value={filters.distance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilters(p => ({ ...p, distance: +e.target.value }))}
                     style={{ width: "100%", accentColor: BLUE, height: 4 }} />
+                  <div style={{ marginTop: 10 }}>
+                    <UseMyLocationButton
+                      color={BLUE}
+                      rgb="0, 212, 255"
+                      compact
+                      onLocate={({ lat, lng, zip }) => {
+                        setUserCoords([lat, lng]);
+                        if (zip) setUserZip(zip);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* Open Now + Has Rewards */}
