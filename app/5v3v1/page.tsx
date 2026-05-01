@@ -105,6 +105,16 @@ const DEFAULT_CATEGORIES: CategoryOption[] = [
 ];
 
 const DEFAULT_FILTER_CATEGORIES = ["All", "Restaurant", "Bar", "Coffee", "Entertainment", "Activity", "Nightclub", "Brewery", "Winery", "Food Truck", "Bakery", "Lounge", "Pub", "Sports Bar", "Karaoke", "Arcade", "Bowling", "Mini Golf", "Escape Room", "Theater", "Comedy Club", "Art Gallery", "Museum", "Spa", "Gym"];
+
+// Top-level Type pills (Eat / Drink / Play / Pamper) shown above the
+// category card grid. Same shape as Discovery + Group so saved filter
+// preferences round-trip cleanly across pages.
+const TOP_TYPE_OPTIONS: { value: string; label: string; icon: string }[] = [
+  { value: "eat",    label: "Eat",    icon: "🍴" },
+  { value: "drink",  label: "Drink",  icon: "🍹" },
+  { value: "play",   label: "Play",   icon: "🎯" },
+  { value: "pamper", label: "Pamper", icon: "💆" },
+];
 const PRICE_FILTERS = ["Any", "$", "$$", "$$$", "$$$$"];
 const DEFAULT_CUISINE_FILTERS = ["American", "Italian", "Mexican", "Chinese", "Japanese", "Thai", "Indian", "Korean", "Vietnamese", "Mediterranean", "Greek", "French", "BBQ", "Seafood", "Sushi", "Ramen", "Pizza", "Burgers", "Tacos", "Farm-to-Table", "Fusion"];
 const DEFAULT_VIBE_FILTERS = ["Romantic", "Chill", "Lively", "Upscale", "Casual", "Trendy", "Cozy", "Retro", "Modern", "Rooftop", "Waterfront", "Hidden Gem", "Instagrammable", "Speakeasy", "Dive Bar", "Sports Vibe", "Artsy"];
@@ -642,6 +652,10 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
   const [activeSection, setActiveSection] = useState("category");
   const [friendSearch, setFriendSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  // Type pills (Eat / Drink / Play / Pamper) above the category card grid.
+  // Matches Discovery + Group: when one or more pills are active, the card
+  // grid filters to Business Type tags whose top_type matches.
+  const [selectedTopTypes, setSelectedTopTypes] = useState<string[]>([]);
 
   // DB-driven tag categories
   const [tagCats, setTagCats] = useState<TagCategory[]>([]);
@@ -649,10 +663,18 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
   const CATEGORIES = useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
     if (!bt || bt.tags.length === 0) return DEFAULT_CATEGORIES;
-    const mapped: CategoryOption[] = bt.tags.map(t => ({ id: t.slug, label: t.name, emoji: t.icon || "🏢" }));
+    // Filter Business Type tags by selected Type pills. Empty selection =
+    // show every active Business Type. With Type pills active, only show
+    // tags whose top_type matches one of the selected pills.
+    const filtered = selectedTopTypes.length === 0
+      ? bt.tags
+      : bt.tags.filter(t => t.top_type && selectedTopTypes.includes(t.top_type));
+    const mapped: CategoryOption[] = filtered.map(t => ({ id: t.slug, label: t.name, emoji: t.icon || "🏢" }));
+    // Surprise Me! always sits at the end as the catch-all opt-out, even
+    // when Type pills are filtering the grid.
     mapped.push({ id: "anything", label: "Surprise Me!", emoji: "🎲" });
     return mapped;
-  }, [tagCats]);
+  }, [tagCats, selectedTopTypes]);
   const FILTER_CATEGORIES = useMemo(() => {
     const bt = tagCats.find(c => c.name === "Business Type");
     return bt && bt.tags.length > 0 ? ["All", ...bt.tags.map(t => t.name)] : DEFAULT_FILTER_CATEGORIES;
@@ -1021,6 +1043,47 @@ function SetupStep({ filters, setFilters, selectedFriend, setSelectedFriend, onN
           <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16, fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
             Pick one or more categories to narrow down the options for your game.
           </div>
+
+          {/* Type pills (Eat / Drink / Play / Pamper). Toggling a pill filters
+              the card grid below; selecting any clears category card picks so
+              stale selections from a different Type don't linger. Empty
+              selection = show every Business Type subtype. */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 8, fontFamily: "'DM Sans', sans-serif" }}>
+              Type
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {TOP_TYPE_OPTIONS.map(({ value, label, icon }) => {
+                const active = selectedTopTypes.includes(value);
+                return (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      setSelectedTopTypes(prev =>
+                        prev.includes(value) ? prev.filter(t => t !== value) : [...prev, value]
+                      );
+                      // Drop category picks on Type change so cards filtered
+                      // out of the new view aren't quietly retained.
+                      setSelectedCategories(prev => prev.filter(c => c === "anything"));
+                    }}
+                    style={{
+                      padding: "8px 16px", borderRadius: 50,
+                      border: `1px solid ${active ? NEON : COLORS.cardBorder}`,
+                      background: active ? `rgba(${NEON_RGB}, 0.12)` : "rgba(18,18,31,0.85)",
+                      color: active ? NEON : COLORS.textSecondary,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif", transition: "all 0.25s",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <span aria-hidden style={{ fontSize: 14 }}>{icon}</span>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {CATEGORIES.map(cat => {
               const isAnything = cat.id === "anything";
