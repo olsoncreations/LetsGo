@@ -21,6 +21,7 @@ export const NOTIFICATION_TYPES = {
   FRIEND_INVITE: "friend_invite",
   APPLICATION_APPROVED: "application_approved",
   APPLICATION_REJECTED: "application_rejected",
+  BUSINESS_SHARED: "business_shared",
 } as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];
@@ -50,7 +51,7 @@ export const NOTIFICATION_CATEGORIES: Record<string, NotificationType[]> = {
     NOTIFICATION_TYPES.GROUP_ROUND_ENDED,
     NOTIFICATION_TYPES.DATENIGHT_READY,
   ],
-  Social: [NOTIFICATION_TYPES.FRIEND_REQUEST, NOTIFICATION_TYPES.FRIEND_ACCEPTED, NOTIFICATION_TYPES.FRIEND_INVITE],
+  Social: [NOTIFICATION_TYPES.FRIEND_REQUEST, NOTIFICATION_TYPES.FRIEND_ACCEPTED, NOTIFICATION_TYPES.FRIEND_INVITE, NOTIFICATION_TYPES.BUSINESS_SHARED],
   Discover: [NOTIFICATION_TYPES.NEW_EVENT],
 };
 
@@ -75,6 +76,7 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   friend_invite: "Friend invite sent",
   application_approved: "Application approved",
   application_rejected: "Application not approved",
+  business_shared: "A friend shared a business with you",
 };
 
 // Deep-link routes for each notification type
@@ -98,6 +100,9 @@ export const NOTIFICATION_HREFS: Record<NotificationType, string> = {
   friend_invite: "/welcome/find-friends",
   application_approved: "/profile",
   application_rejected: "/profile",
+  // Default href; the share endpoint sets metadata.href = "/preview/{bizId}"
+  // which the NotificationPanel honors over this fallback.
+  business_shared: "/swipe",
 };
 
 // Client-side notification row type

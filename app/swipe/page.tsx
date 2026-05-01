@@ -10,6 +10,7 @@ import { useOnboardingTour, type TourStep } from "@/lib/useOnboardingTour";
 import { SwipeVerticalAnim, SwipeLeftAnim, FilterAnim, HeartAnim, ScrollIndicatorAnim } from "@/components/TourIllustrations";
 import { ZIP_COORDS, haversineDistance, getDistanceBetweenZips, getBusinessDistance } from "@/lib/zipUtils";
 import { UseMyLocationButton } from "@/components/UseMyLocationButton";
+import { FriendSharePicker } from "@/components/FriendSharePicker";
 import { fetchPlatformTierConfig, getVisitRangeLabel, DEFAULT_VISIT_THRESHOLDS, type VisitThreshold } from "@/lib/platformSettings";
 import { LaunchBanner } from "@/components/LaunchBanner";
 import { fetchTagsByCategory, type TagCategory } from "@/lib/availableTags";
@@ -982,22 +983,33 @@ function FollowButton({ followed, onToggle }: { followed: boolean; onToggle: () 
 
 function ShareButton({ name, bizId }: { name: string; bizId?: string }) {
   const [toast, setToast] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const showToast = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); }, []);
 
-  const handleClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Build a deep link to this business's public preview page so the
-    // recipient lands on the actual business, not the LetsGo homepage.
-    // Falls back to the homepage for the rare case bizId is unavailable.
+  // Native share / copy-link path. Used as the fallback inside the friend
+  // picker ("Or share another way") and as the only path when bizId is
+  // missing (no friend share possible without one).
+  const fallbackShare = useCallback(async () => {
     const siteUrl = bizId
       ? `https://www.useletsgo.com/preview/${encodeURIComponent(bizId)}`
       : "https://www.useletsgo.com";
     const shareText = `Check out ${name} on LetsGo! Discover places and earn cash back.`;
-    if (navigator.share) {
+    if (typeof navigator !== "undefined" && navigator.share) {
       try { await navigator.share({ title: `${name} on LetsGo`, text: shareText, url: siteUrl }); } catch { /* user cancelled */ }
-    } else {
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
       await navigator.clipboard.writeText(`${shareText} ${siteUrl}`);
       showToast("Link copied to clipboard!");
+    }
+  }, [bizId, name, showToast]);
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Open the friends picker first; user can either send to friends in-app
+    // or fall through to native share via the "Or share another way" button.
+    if (bizId) {
+      setPickerOpen(true);
+    } else {
+      await fallbackShare();
     }
   };
 
@@ -1018,6 +1030,15 @@ function ShareButton({ name, bizId }: { name: string; bizId?: string }) {
         <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", zIndex: 99999, background: "rgba(0,0,0,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "12px 16px", boxShadow: "0 4px 24px rgba(0,0,0,0.5)", fontSize: 14, whiteSpace: "nowrap" }}>
           {toast}
         </div>
+      )}
+      {bizId && (
+        <FriendSharePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          businessId={bizId}
+          businessName={name}
+          onFallbackShare={fallbackShare}
+        />
       )}
     </>
   );
