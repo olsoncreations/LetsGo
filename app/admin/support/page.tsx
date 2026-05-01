@@ -44,6 +44,25 @@ interface StaffMember {
   role: string;
 }
 
+// Extra business fields surfaced for "report" category tickets so admins
+// have enough context to verify the report without leaving the modal.
+interface BusinessDetails {
+  id: string;
+  name: string;
+  street_address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  contact_phone: string | null;
+  website: string | null;
+  is_active: boolean;
+  billing_plan: string | null;
+  seeded_at: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  blurb: string | null;
+}
+
 // ==================== SUPPORT PAGE ====================
 export default function SupportPage() {
   const router = useRouter();
@@ -61,6 +80,7 @@ export default function SupportPage() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [businessDetailsMap, setBusinessDetailsMap] = useState<Map<string, BusinessDetails>>(new Map());
   const [loading, setLoading] = useState(true);
   const [supportTab, setSupportTab] = useState("tickets");
   const [ticketFilters, setTicketFilters] = useState({ search: "", status: "all", category: "all", priority: "all" });
@@ -119,19 +139,40 @@ export default function SupportPage() {
         ]));
       }
 
-      // 5. Fetch business names
+      // 5. Fetch business names + the extra context the report modal needs
+      //    (address, phone, website, is_active, etc.). We pull these for every
+      //    ticket with a business_id, not just reports, so the admin can drill
+      //    in from any category — keeps one query instead of N.
       let businessMap = new Map<string, string>();
+      const detailsMap = new Map<string, BusinessDetails>();
       if (businessIds.length > 0) {
         const { data: businesses } = await supabaseBrowser
           .from("business")
-          .select("id, business_name, public_business_name")
+          .select("id, business_name, public_business_name, street_address, city, state, zip, contact_phone, website, is_active, billing_plan, seeded_at, latitude, longitude, blurb")
           .in("id", businessIds);
 
-        businessMap = new Map((businesses || []).map(b => [
-          b.id,
-          b.public_business_name || b.business_name || "Unknown Business",
-        ]));
+        for (const b of businesses || []) {
+          const name = (b.public_business_name as string | null) || (b.business_name as string | null) || "Unknown Business";
+          businessMap.set(b.id as string, name);
+          detailsMap.set(b.id as string, {
+            id: b.id as string,
+            name,
+            street_address: (b.street_address as string | null) ?? null,
+            city: (b.city as string | null) ?? null,
+            state: (b.state as string | null) ?? null,
+            zip: (b.zip as string | null) ?? null,
+            contact_phone: (b.contact_phone as string | null) ?? null,
+            website: (b.website as string | null) ?? null,
+            is_active: Boolean(b.is_active),
+            billing_plan: (b.billing_plan as string | null) ?? null,
+            seeded_at: (b.seeded_at as string | null) ?? null,
+            latitude: (b.latitude as number | null) ?? null,
+            longitude: (b.longitude as number | null) ?? null,
+            blurb: (b.blurb as string | null) ?? null,
+          });
+        }
       }
+      setBusinessDetailsMap(detailsMap);
 
       // 6. Map tickets with resolved names
       const mappedTickets: Ticket[] = (ticketRows || []).map(t => {
@@ -475,10 +516,10 @@ export default function SupportPage() {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{selectedTicket.user_name}</div>
                 {selectedTicket.user_email && <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{selectedTicket.user_email}</div>}
               </div>
-              <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12 }}>
+              <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12, minWidth: 0 }}>
                 <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Business</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{selectedTicket.business_name || "N/A"}</div>
-                {selectedTicket.business_id && <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "monospace", marginTop: 2 }}>{selectedTicket.business_id.slice(0, 12)}...</div>}
+                <div style={{ fontSize: 14, fontWeight: 600, wordBreak: "break-word" }}>{selectedTicket.business_name || "N/A"}</div>
+                {selectedTicket.business_id && <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "monospace", marginTop: 2, wordBreak: "break-all" }}>{selectedTicket.business_id}</div>}
               </div>
               <div style={{ padding: 16, background: COLORS.darkBg, borderRadius: 12 }}>
                 <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Created</div>
@@ -490,9 +531,76 @@ export default function SupportPage() {
               </div>
             </div>
 
+            {/* Report Context — only for "report" category. Surfaces the
+                business address, status, contact info, and quick links so
+                the admin can verify the report without leaving the modal. */}
+            {selectedTicket.category === "report" && selectedTicket.business_id && (() => {
+              const biz = businessDetailsMap.get(selectedTicket.business_id);
+              if (!biz) return null;
+              const addressParts = [biz.street_address, biz.city, biz.state, biz.zip].filter(Boolean) as string[];
+              const fullAddress = addressParts.join(", ");
+              const isTrial = biz.billing_plan === "trial" && !!biz.seeded_at;
+              const mapsUrl = biz.latitude != null && biz.longitude != null
+                ? `https://www.google.com/maps/search/?api=1&query=${biz.latitude},${biz.longitude}`
+                : fullAddress
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`
+                  : null;
+              return (
+                <div style={{ marginBottom: 24, padding: 20, background: "rgba(255,45,146,0.04)", border: `1px solid rgba(255,45,146,0.2)`, borderRadius: 12 }}>
+                  <div style={{ fontSize: 10, color: COLORS.neonPink, textTransform: "uppercase", fontWeight: 700, letterSpacing: 1.2, marginBottom: 12 }}>Report Context</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, wordBreak: "break-word" }}>{biz.name}</div>
+                  <div style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: "monospace", marginBottom: 12, wordBreak: "break-all" }}>{biz.id}</div>
+
+                  {/* Status badges */}
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                    <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: biz.is_active ? "rgba(57,255,20,0.15)" : "rgba(255,49,49,0.15)", color: biz.is_active ? COLORS.neonGreen : COLORS.neonRed }}>
+                      {biz.is_active ? "Active" : "Inactive"}
+                    </span>
+                    {isTrial && (
+                      <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "rgba(255,255,0,0.15)", color: COLORS.neonYellow }}>Trial / Seeded</span>
+                    )}
+                    {!isTrial && biz.billing_plan && (
+                      <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: "rgba(0,212,255,0.15)", color: COLORS.neonBlue, textTransform: "capitalize" }}>{biz.billing_plan}</span>
+                    )}
+                  </div>
+
+                  {/* Detail rows */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8, fontSize: 13 }}>
+                    {fullAddress && (
+                      <div><span style={{ color: COLORS.textSecondary, marginRight: 8 }}>Address:</span><span style={{ color: COLORS.textPrimary }}>{fullAddress}</span></div>
+                    )}
+                    {biz.contact_phone && (
+                      <div><span style={{ color: COLORS.textSecondary, marginRight: 8 }}>Phone:</span><a href={`tel:${biz.contact_phone}`} style={{ color: COLORS.neonBlue, textDecoration: "none" }}>{biz.contact_phone}</a></div>
+                    )}
+                    {biz.website && (
+                      <div><span style={{ color: COLORS.textSecondary, marginRight: 8 }}>Website:</span><a href={biz.website} target="_blank" rel="noopener noreferrer" style={{ color: COLORS.neonBlue, textDecoration: "none", wordBreak: "break-all" }}>{biz.website}</a></div>
+                    )}
+                    {biz.blurb && (
+                      <div><span style={{ color: COLORS.textSecondary, marginRight: 8 }}>Blurb:</span><span style={{ color: COLORS.textPrimary }}>{biz.blurb}</span></div>
+                    )}
+                  </div>
+
+                  {/* Quick links */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                    <a href={`/preview/${biz.id}`} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.textPrimary, textDecoration: "none" }}>
+                      Open Preview ↗
+                    </a>
+                    <a href={`/businessprofile-v2/${biz.id}`} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.textPrimary, textDecoration: "none" }}>
+                      Business Dashboard ↗
+                    </a>
+                    {mapsUrl && (
+                      <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, background: COLORS.darkBg, border: `1px solid ${COLORS.cardBorder}`, color: COLORS.textPrimary, textDecoration: "none" }}>
+                      View on Google Maps ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Message Body */}
             <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>Message</div>
+              <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>{selectedTicket.category === "report" ? "User-Submitted Details" : "Message"}</div>
               <div style={{ padding: 20, background: COLORS.darkBg, borderRadius: 12, fontSize: 14, lineHeight: 1.7, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>
                 {selectedTicket.body}
               </div>
