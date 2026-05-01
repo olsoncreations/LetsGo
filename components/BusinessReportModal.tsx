@@ -117,6 +117,13 @@ export function BusinessReportModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        // React synthetic events bubble through the React tree even when
+        // portaled, so the swipe carousel's onMouseDown={preventDefault}
+        // would otherwise block the textarea from getting focus. Stop
+        // pointer/touch events here so they never reach the carousel.
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 520,
           background: "#0f0f1a", border: "1px solid #2d2d44",
