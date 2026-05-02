@@ -1415,8 +1415,13 @@ const ManagePlayersPanel = ({ players, isGameMaster, friends, gameId, token, onP
                   width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 15, background: "rgba(255,255,255,0.04)",
                   border: `2px solid ${player.isGameMaster ? NEON : "rgba(255,255,255,0.08)"}`,
+                  overflow: "hidden", flexShrink: 0,
                 }}>
-                  {player.avatar}
+                  {player.avatar && (player.avatar.startsWith("http") || player.avatar.startsWith("/")) ? (
+                    <img src={player.avatar} alt={player.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <span>{player.avatar || getInitial(player.name)}</span>
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: FONT_BODY, fontSize: 12, fontWeight: 600, color: TEXT_PRIMARY, display: "flex", alignItems: "center", gap: 6 }}>
