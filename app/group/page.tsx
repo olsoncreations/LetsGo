@@ -1417,11 +1417,14 @@ const ManagePlayersPanel = ({ players, isGameMaster, friends, gameId, token, onP
                   border: `2px solid ${player.isGameMaster ? NEON : "rgba(255,255,255,0.08)"}`,
                   overflow: "hidden", flexShrink: 0,
                 }}>
-                  {player.avatar && (player.avatar.startsWith("http") || player.avatar.startsWith("/")) ? (
-                    <img src={player.avatar} alt={player.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <span>{player.avatar || getInitial(player.name)}</span>
-                  )}
+                  {(() => {
+                    const av = (player.avatar || "").trim();
+                    const isUrl = /^(https?:|\/|data:|blob:)/.test(av);
+                    if (isUrl) {
+                      return <img src={av} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+                    }
+                    return <span>{av || getInitial(player.name)}</span>;
+                  })()}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: FONT_BODY, fontSize: 12, fontWeight: 600, color: TEXT_PRIMARY, display: "flex", alignItems: "center", gap: 6 }}>
@@ -1591,13 +1594,18 @@ const PlayerActivityTracker = ({ activity, phase }: { activity: PlayerActivity[]
               display: "flex", alignItems: "center", justifyContent: "center",
               background: p.hasContributed ? `rgba(${NEON_RGB}, 0.08)` : "rgba(255,255,255,0.03)",
             }}>
-              {p.avatar ? (
-                <img src={p.avatar} alt={`${p.name} avatar`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : (
-                <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, fontWeight: 700, color: p.hasContributed ? NEON : TEXT_DIM }}>
-                  {getInitial(p.name)}
-                </span>
-              )}
+              {(() => {
+                const av = (p.avatar || "").trim();
+                const isUrl = /^(https?:|\/|data:|blob:)/.test(av);
+                if (isUrl) {
+                  return <img src={av} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />;
+                }
+                return (
+                  <span style={{ fontFamily: FONT_DISPLAY, fontSize: 10, fontWeight: 700, color: p.hasContributed ? NEON : TEXT_DIM }}>
+                    {av || getInitial(p.name)}
+                  </span>
+                );
+              })()}
             </div>
 
             {/* Name + role */}
