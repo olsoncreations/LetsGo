@@ -27,7 +27,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const subject = String(body.subject || "").trim();
     const ticketBody = String(body.body || "").trim();
     const category = String(body.category || "general").trim();
-    const priority = String(body.priority || "normal").trim();
+    const priority = String(body.priority || "medium").trim();
     const businessId = body.business_id ? String(body.business_id).trim() : null;
     const rawAttachmentUrl = body.attachment_url ? String(body.attachment_url).trim() : null;
     const attachmentUrl = rawAttachmentUrl && /^https:\/\/.{3,2000}$/.test(rawAttachmentUrl) ? rawAttachmentUrl : null;
@@ -50,7 +50,13 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
-    const validPriorities = ["urgent", "high", "normal", "low"];
+    // Match the support_tickets.priority CHECK constraint exactly. Earlier
+    // versions of this API listed "normal" — DB has always been "medium".
+    // Both modal callers (BusinessReportModal, business Support.tsx) now
+    // send DB-compatible values; legacy callers still sending "normal"
+    // would have been silently DB-rejected, so accepting them here only
+    // changes the failure mode (cleaner 400 instead of mysterious 500).
+    const validPriorities = ["urgent", "high", "medium", "low"];
     if (!validPriorities.includes(priority)) {
       return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
     }

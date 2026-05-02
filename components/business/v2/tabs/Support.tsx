@@ -257,7 +257,7 @@ export default function Support({ businessId, isPremium }: BusinessTabProps) {
           subject: ticketSubject.trim(),
           body: ticketMessage.trim(),
           category: ticketCategory,
-          priority: "normal",
+          priority: "medium",
           business_id: businessId,
           attachment_url: attachmentUrl,
         }),
