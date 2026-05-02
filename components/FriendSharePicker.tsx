@@ -130,11 +130,10 @@ export function FriendSharePicker({
   // Discovery's swipe carousel renders its slides inside a translateX
   // transform, which pins position:fixed children to the carousel rather
   // than the viewport. Portal to <body> so the modal anchors to the actual
-  // viewport regardless of where it's rendered in the tree.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-
-  if (!open || !mounted) return null;
+  // viewport regardless of where it's rendered in the tree. The
+  // typeof-document guard handles SSR — `open` is false on both server
+  // and client at first render, so there's no hydration mismatch.
+  if (!open || typeof document === "undefined") return null;
 
   const overlay = (
     <div

@@ -52,7 +52,6 @@ export async function GET(req: NextRequest) {
 
   const now = new Date();
   const nowIso = now.toISOString();
-  const cancelCutoff = new Date(now.getTime() - AUTO_CANCEL_HOURS * 60 * 60 * 1000).toISOString();
 
   const summary = {
     advanced: 0,
